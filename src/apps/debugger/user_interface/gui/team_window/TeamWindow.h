@@ -127,6 +127,8 @@ private:
 									const Team::UserBreakpointEvent& event);
 	virtual	void				WatchpointChanged(
 									const Team::WatchpointEvent& event);
+	virtual void				DebugReportChanged(
+									const Team::DebugReportEvent& event);
 
 	// Function::Listener
 	virtual	void				FunctionSourceCodeChanged(Function* function);
@@ -193,7 +195,7 @@ private:
 			BSplitView*			fThreadSplitView;
 			InspectorWindow*	fInspectorWindow;
 			GuiTeamUiSettings	fUiSettings;
-			BFilePanel*			fSourceLocatePanel;
+			BFilePanel*			fFilePanel;
 };
 
 

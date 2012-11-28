@@ -9,8 +9,10 @@
 
 #include <stdio.h>
 
+#include <Alert.h>
 #include <Button.h>
 #include <FilePanel.h>
+#include <FindDirectory.h>
 #include <LayoutBuilder.h>
 #include <Menu.h>
 #include <MenuBar.h>
@@ -42,6 +44,7 @@
 #include "StackTraceView.h"
 #include "Tracing.h"
 #include "TypeComponentPath.h"
+#include "UiUtils.h"
 #include "UserInterface.h"
 #include "Variable.h"
 #include "WatchPromptWindow.h"
@@ -54,6 +57,8 @@ enum {
 
 
 enum {
+	MSG_CHOOSE_DEBUG_REPORT_LOCATION = 'ccrl',
+	MSG_DEBUG_REPORT_SAVED = 'drsa',
 	MSG_LOCATE_SOURCE_IF_NEEDED = 'lsin'
 };
 
@@ -111,7 +116,7 @@ TeamWindow::TeamWindow(::Team* team, UserInterfaceListener* listener)
 	fStepIntoButton(NULL),
 	fStepOutButton(NULL),
 	fInspectorWindow(NULL),
-	fSourceLocatePanel(NULL)
+	fFilePanel(NULL)
 {
 	fTeam->Lock();
 	BString name = fTeam->Name();
@@ -143,7 +148,7 @@ TeamWindow::~TeamWindow()
 	_SetActiveImage(NULL);
 	_SetActiveThread(NULL);
 
-	delete fSourceLocatePanel;
+	delete fFilePanel;
 }
 
 
@@ -215,6 +220,49 @@ void
 TeamWindow::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
+		case MSG_CHOOSE_DEBUG_REPORT_LOCATION:
+		{
+			try {
+				char filename[B_FILE_NAME_LENGTH];
+				UiUtils::ReportNameForTeam(fTeam, filename, sizeof(filename));
+				BMessenger msgr(this);
+				fFilePanel = new BFilePanel(B_SAVE_PANEL, &msgr,
+					NULL, 0, false, new BMessage(MSG_GENERATE_DEBUG_REPORT));
+				fFilePanel->SetSaveText(filename);
+				fFilePanel->Show();
+			} catch (...) {
+				delete fFilePanel;
+				fFilePanel = NULL;
+			}
+			break;
+		}
+		case MSG_GENERATE_DEBUG_REPORT:
+		{
+			delete fFilePanel;
+			fFilePanel = NULL;
+
+			BPath path;
+			entry_ref ref;
+			if (message->FindRef("directory", &ref) == B_OK
+				&& message->HasString("name")) {
+				path.SetTo(&ref);
+				path.Append(message->FindString("name"));
+				if (get_ref_for_path(path.Path(), &ref) == B_OK)
+					fListener->DebugReportRequested(&ref);
+			}
+			break;
+		}
+		case MSG_DEBUG_REPORT_SAVED:
+		{
+			BString data;
+			data.SetToFormat("Debug report successfully saved to '%s'",
+				message->FindString("path"));
+			BAlert *alert = new BAlert("Report saved", data.String(),
+				"OK");
+			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+			alert->Go();
+			break;
+		}
 		case MSG_SHOW_INSPECTOR_WINDOW:
 		{
 			if (fInspectorWindow) {
@@ -284,14 +332,14 @@ TeamWindow::MessageReceived(BMessage* message)
 					->SourceFile() != NULL && fActiveSourceCode != NULL
 				&& fActiveSourceCode->GetSourceFile() == NULL) {
 				try {
-					if (fSourceLocatePanel == NULL) {
-						fSourceLocatePanel = new BFilePanel(B_OPEN_PANEL,
+					if (fFilePanel == NULL) {
+						fFilePanel = new BFilePanel(B_OPEN_PANEL,
 							new BMessenger(this));
 					}
-					fSourceLocatePanel->Show();
+					fFilePanel->Show();
 				} catch (...) {
-					delete fSourceLocatePanel;
-					fSourceLocatePanel = NULL;
+					delete fFilePanel;
+					fFilePanel = NULL;
 				}
 			}
 			break;
@@ -688,6 +736,15 @@ TeamWindow::WatchpointChanged(const Team::WatchpointEvent& event)
 
 
 void
+TeamWindow::DebugReportChanged(const Team::DebugReportEvent& event)
+{
+	BMessage message(MSG_DEBUG_REPORT_SAVED);
+	message.AddString("path", event.GetReportPath());
+	PostMessage(&message);
+}
+
+
+void
 TeamWindow::FunctionSourceCodeChanged(Function* function)
 {
 	TRACE_GUI("TeamWindow::FunctionSourceCodeChanged(%p): source: %p, "
@@ -799,6 +856,10 @@ TeamWindow::_Init()
 	item->SetTarget(this);
 	menu = new BMenu("Tools");
 	fMenuBar->AddItem(menu);
+	item = new BMenuItem("Save Debug Report",
+		new BMessage(MSG_CHOOSE_DEBUG_REPORT_LOCATION));
+	menu->AddItem(item);
+	item->SetTarget(this);
 	item = new BMenuItem("Inspect Memory",
 		new BMessage(MSG_SHOW_INSPECTOR_WINDOW), 'I');
 	menu->AddItem(item);
