@@ -48,33 +48,39 @@ extern "C" {
 #define ERROR(x...) printf("GalliumContext: " x)
 
 
-#if 0
 static void
-hgl_viewport(struct gl_context* glctx, GLint x, GLint y,
+hgl_viewport(struct gl_context* glContext, GLint x, GLint y,
 	GLsizei width, GLsizei height)
 {
-	TRACE("%s(glctx: %p, x: %d, y: %d, width: %d, height: %d\n",
-		__FUNCTION__, glctx, x, y, width, height);
-	struct hgl_context *context = (struct hgl_context*)glctx->DriverCtx;
+	TRACE("%s(glContext: %p, x: %d, y: %d, width: %d, height: %d\n", __func__,
+		glContext, x, y, width, height);
+	struct hgl_context *context = (struct hgl_context*)glContext->DriverCtx;
 
-	int32 w, h;
-	get_bitmap_size(context->bitmap, &w, &h);
+	int32 bitmapWidth;
+	int32 bitmapHeight;
 
-	#if 0
-	// TODO: mesa_resize_framebuffer? Need to investigate where this went
-	if (context->draw)
-		st_resize_framebuffer(context->draw->stfb, w, h);
-	if (context->read)
-		st_resize_framebuffer(context->read->stfb, w, h);
-	#endif
+	get_bitmap_size(context->bitmap, &bitmapWidth, &bitmapHeight);
+
+	if (width != bitmapWidth || height != bitmapHeight) {
+		struct gl_framebuffer *draw = glContext->WinSysDrawBuffer;
+		struct gl_framebuffer *read = glContext->WinSysReadBuffer;
+
+		if (draw)
+			_mesa_resize_framebuffer(glContext, draw, bitmapWidth, bitmapHeight);
+		if (read)
+			_mesa_resize_framebuffer(glContext, read, bitmapWidth, bitmapHeight);
+	}
 }
-#endif
 
 
-static void
-hgl_fill_st_visual(st_visual* stVisual, gl_config* glVisual)
+static st_visual*
+hgl_fill_st_visual(gl_config* glVisual)
 {
-	memset(stVisual, 0, sizeof(*stVisual));
+	struct st_visual* stVisual = CALLOC_STRUCT(st_visual);
+	if (!stVisual) {
+		ERROR("%s: Couldn't allocate st_visual\n", __func__);
+		return NULL;
+	}
 
 	// Determine color format
 	if (glVisual->redBits == 8) {
@@ -127,6 +133,8 @@ hgl_fill_st_visual(st_visual* stVisual, gl_config* glVisual)
 
 	if (glVisual->haveDepthBuffer || glVisual->haveStencilBuffer)
 		stVisual->buffer_mask |= ST_ATTACHMENT_DEPTH_STENCIL_MASK;
+
+	return stVisual;
 }
 
 
@@ -233,7 +241,7 @@ GalliumContext::CreateContext(Bitmap *bitmap)
 		return 0;
 	}
 
-	// Set up the initial things out context needs
+	// Set up the initial things our context needs
 	context->bitmap = bitmap;
 	context->colorSpace = get_bitmap_color_space(bitmap);
 	context->draw = NULL;
@@ -290,8 +298,16 @@ GalliumContext::CreateContext(Bitmap *bitmap)
 	TRACE("stencilBits :\t%d\n", glVisual->stencilBits);
 
 	// Convert Mesa calculated visual into state tracker visual
-	struct st_visual stVisual;
-	hgl_fill_st_visual(&stVisual, glVisual);
+	context->stVisual = hgl_fill_st_visual(glVisual);
+
+	context->draw = new GalliumFramebuffer(context->stVisual);
+	context->read = new GalliumFramebuffer(context->stVisual);
+
+	if (!context->draw || !context->read) {
+		ERROR("%s: Problem allocating framebuffer!\n", __func__);
+		_mesa_destroy_visual(glVisual);
+		return -1;
+	}
 
 	// We need to assign the screen *before* calling st_api create_context
 	context->manager->screen = fScreen;
@@ -301,7 +317,7 @@ GalliumContext::CreateContext(Bitmap *bitmap)
 	memset(&attribs, 0, sizeof(attribs));
 	attribs.options.force_glsl_extensions_warn = false;
 	attribs.profile = ST_PROFILE_DEFAULT;
-	attribs.visual = stVisual;
+	attribs.visual = *context->stVisual;
 	attribs.major = 1;
 	attribs.minor = 0;
 	//attribs.flags |= ST_CONTEXT_FLAG_DEBUG;
@@ -344,12 +360,16 @@ GalliumContext::CreateContext(Bitmap *bitmap)
 		return -1;
 	}
 
+	// Init Gallium3D Post Processing
+	context->postProcess = pp_init(fScreen, context->postProcessEnable);
+
 	assert(!context->st->st_manager_private);
 	context->st->st_manager_private = (void*)context;
 
-	// TODO!
-	//context->st->ctx->DriverCtx = context;
-	//context->st->ctx->Driver.Viewport = hgl_viewport;
+	struct st_context *stContext = (struct st_context*)context->st;
+	
+	stContext->ctx->DriverCtx = context;
+	stContext->ctx->Driver.Viewport = hgl_viewport;
 
 	// TODO: Closely review this next context logic...
 	context_id contextNext = -1;
@@ -394,6 +414,18 @@ GalliumContext::DestroyContext(context_id contextID)
 		fContext[contextID]->st->destroy(fContext[contextID]->st);
 	}
 
+	if (fContext[contextID]->postProcess)
+		pp_free(fContext[contextID]->postProcess);
+
+	// Delete framebuffer objects
+	if (fContext[contextID]->read)
+		delete fContext[contextID]->read;
+	if (fContext[contextID]->draw)
+		delete fContext[contextID]->draw;
+
+	if (fContext[contextID]->stVisual)
+		FREE(fContext[contextID]->stVisual);
+
 	if (fContext[contextID]->manager)
 		FREE(fContext[contextID]->manager);
 
@@ -437,11 +469,20 @@ GalliumContext::SetCurrentContext(Bitmap *bitmap, context_id contextID)
 			ST_FLUSH_FRONT, NULL);
 	}
 
-	// TODO: WinSysDrawBuffer & WinSysReadBuffer?
-	api->make_current(context->api, context->st, context->read, context->draw);
+	// We need to lock and unlock framebuffers before accessing them
+	context->draw->Lock();
+	context->read->Lock();
+	api->make_current(context->api, context->st, context->draw->fBuffer,
+		context->read->fBuffer);
+	context->draw->Unlock();
+	context->read->Unlock();
 
-
-	// TODO: Anything else? st_api_make_current
+	// TODO: Init textures before post-processing them
+	#if 0
+	pp_init_fbos(context->postProcess,
+		context->textures[ST_ATTACHMENT_BACK_LEFT]->width0,
+		context->textures[ST_ATTACHMENT_BACK_LEFT]->height0);
+	#endif
 
 	context->bitmap = bitmap;
 	//context->st->pipe->priv = context;
@@ -464,23 +505,35 @@ GalliumContext::SwapBuffers(context_id contextID)
 		return B_ERROR;
 	}
 
-	//pipe_mutex_lock(context->draw->mutex);
-
 	// TODO: Where did st_notify_swapbuffers go?
 	//st_notify_swapbuffers(context->draw->stfb);
 
-	// TODO: Where did st_get_framebuffer_surface go?
-	//struct pipe_surface *surface;
-	//st_get_framebuffer_surface(context->draw->stfb, ST_SURFACE_BACK_LEFT,
-	//	&surface);
-
 	context->st->flush(context->st, ST_FLUSH_FRONT, NULL);
 
-	// TODO: Flush the frontbuffer!
-	//hsp_dev->hsp_winsys->flush_frontbuffer(hsp_dev->screen, surface,
-	//	context->bitmap);
+	struct st_context *stContext = (struct st_context*)context->st;
 
-	//pipe_mutex_unlock(context->draw->mutex);
+	unsigned nColorBuffers = stContext->state.framebuffer.nr_cbufs;
+	for (unsigned i = 0; i < nColorBuffers; i++) {
+		pipe_surface* surface = stContext->state.framebuffer.cbufs[i];
+		if (!surface) {
+			ERROR("%s: Color buffer %d invalid!\n", __func__, i);
+			continue;
+		}
 
-	return true;
+		TRACE("%s: Flushing color buffer #%d\n", __func__, i);
+
+		// We pass our destination bitmap to flush_fronbuffer which passes it
+		// to the private winsys display call.
+		fScreen->flush_frontbuffer(fScreen, surface->texture, 0, 0,
+			context->bitmap);
+	}
+
+	#if 0
+	// TODO... should we flush the z stencil buffer?
+	pipe_surface* zSurface = stContext->state.framebuffer.zsbuf;
+	fScreen->flush_frontbuffer(fScreen, surface->texture, 0, 0,
+		context->bitmap);
+	#endif
+
+	return B_OK;
 }
