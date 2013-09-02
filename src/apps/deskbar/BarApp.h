@@ -38,6 +38,9 @@ All rights reserved.
 
 #include <Application.h>
 
+#include "BarSettings.h"
+
+
 /* ------------------------------------ */
 // Private app_server defines that I need to use
 
@@ -68,45 +71,17 @@ const uint32 kSuspendSystem = 304;
 const int32 kMinimumIconSize = 16;
 const int32 kMaximumIconSize = 96;
 const int32 kIconSizeInterval = 8;
+const int32 kIconCacheCount = (kMaximumIconSize - kMinimumIconSize)
+	/ kIconSizeInterval + 1;
+
+// update preferences message constant
+const uint32 kUpdatePreferences = 'Pref';
 
 /* --------------------------------------------- */
 
-struct desk_settings {
-	bool vertical;
-	bool left;
-	bool top;
-	uint32 state;
-	float width;
-	BPoint switcherLoc;
-	int32 recentAppsCount;
-	int32 recentDocsCount;
-	bool timeShowSeconds;
-	int32 recentFoldersCount;
-	bool alwaysOnTop;
-	bool timeFullDate;
-	bool trackerAlwaysFirst;
-	bool sortRunningApps;
-	bool superExpando;
-	bool expandNewTeams;
-	bool hideLabels;
-	int32 iconSize;
-	bool autoRaise;
-	bool autoHide;
-	bool recentAppsEnabled;
-	bool recentDocsEnabled;
-	bool recentFoldersEnabled;
-};
-
-struct clock_settings {
-	bool showSeconds;
-	bool showDayOfWeek;
-	bool showTimeZone;
-};
-
-
+class BBitmap;
 class BFile;
 class BList;
-class BBitmap;
 class PreferencesWindow;
 class TBarView;
 class TBarWindow;
@@ -118,11 +93,16 @@ public:
 									BarTeamInfo(const BarTeamInfo &info);
 									~BarTeamInfo();
 
+private:
+			void					_Init();
+
+public:
 			BList*					teams;
 			uint32					flags;
 			char*					sig;
 			BBitmap*				icon;
 			char*					name;
+			BBitmap*				iconCache[kIconCacheCount];
 };
 
 class TBarApp : public BApplication {
@@ -135,6 +115,8 @@ public:
 	virtual	void					RefsReceived(BMessage* refs);
 
 			desk_settings*			Settings() { return &fSettings; }
+			desk_settings*			DefaultSettings()
+										{ return &fDefaultSettings; }
 			clock_settings*			ClockSettings() { return &fClockSettings; }
 
 			TBarView*				BarView() const { return fBarView; }
@@ -155,11 +137,14 @@ private:
 			void					SaveSettings();
 
 			void					ShowPreferencesWindow();
+			void					QuitPreferencesWindow();
+
 			void					ResizeTeamIcons();
-			void					FetchAppIcon(const char* signature,
-										BBitmap* icon);
+			void					FetchAppIcon(BarTeamInfo* barInfo);
 
 			BRect					IconRect();
+
+private:
 			TBarWindow*				fBarWindow;
 			TBarView*				fBarView;
 			BMessenger				fSwitcherMessenger;
@@ -167,6 +152,7 @@ private:
 			BFile*					fSettingsFile;
 			BFile*					fClockSettingsFile;
 			desk_settings			fSettings;
+			desk_settings			fDefaultSettings;
 			clock_settings			fClockSettings;
 			PreferencesWindow*		fPreferencesWindow;
 
@@ -176,4 +162,4 @@ private:
 };
 
 
-#endif	/* BAR_APP_H */
+#endif	// BAR_APP_H

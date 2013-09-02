@@ -1,5 +1,6 @@
 /*
  * Copyright 2009, Ingo Weinhold, ingo_weinhold@gmx.de.
+ * Copyright 2013, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 
@@ -42,9 +43,10 @@ DebuggerImageDebugInfo::Init()
 
 
 status_t
-DebuggerImageDebugInfo::GetFunctions(BObjectList<FunctionDebugInfo>& functions)
+DebuggerImageDebugInfo::GetFunctions(const BObjectList<SymbolInfo>& symbols,
+	BObjectList<FunctionDebugInfo>& functions)
 {
-	return SpecificImageDebugInfo::GetFunctionsFromSymbols(functions,
+	return SpecificImageDebugInfo::GetFunctionsFromSymbols(symbols, functions,
 		fDebuggerInterface, fImageInfo, this);
 }
 
@@ -68,7 +70,7 @@ DebuggerImageDebugInfo::GetAddressSectionType(target_addr_t address)
 status_t
 DebuggerImageDebugInfo::CreateFrame(Image* image,
 	FunctionInstance* functionInstance, CpuState* cpuState,
-	bool getFullFrameInfo, target_addr_t returnFunctionAddress,
+	bool getFullFrameInfo, ReturnValueInfoList* returnValueInfos,
 	StackFrame*& _previousFrame, CpuState*& _previousCpuState)
 {
 	return B_UNSUPPORTED;

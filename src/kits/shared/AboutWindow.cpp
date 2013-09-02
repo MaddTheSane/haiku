@@ -16,11 +16,15 @@
 #include <Alert.h>
 #include <AppFileInfo.h>
 #include <Bitmap.h>
+#include <Button.h>
 #include <File.h>
 #include <Font.h>
 #include <GroupLayoutBuilder.h>
 #include <GroupView.h>
+#include <InterfaceDefs.h>
 #include <LayoutBuilder.h>
+#include <Message.h>
+#include <MessageFilter.h>
 #include <Point.h>
 #include <Roster.h>
 #include <Screen.h>
@@ -49,6 +53,9 @@ class StripeView : public BView {
 
 	virtual	void			Draw(BRect updateRect);
 
+			BBitmap*		Icon() const { return fIcon; };
+			void			SetIcon(BBitmap* icon);
+
  private:
 			BBitmap*		fIcon;
 };
@@ -62,14 +69,24 @@ class AboutView : public BGroupView {
 
 			BTextView*		InfoView() const { return fInfoView; };
 
+			BBitmap*		Icon();
+			status_t		SetIcon(BBitmap* icon);
+
+			const char*		Name();
+			status_t		SetName(const char* name);
+
+			const char*		Version();
+			status_t		SetVersion(const char* version);
+
  protected:
-			const char*		AppVersion(const char* signature);
-			BBitmap*		AppIcon(const char* signature);
+			const char*		_GetVersionFromSignature(const char* signature);
+			BBitmap*		_GetIconFromSignature(const char* signature);
 
  private:
 			BStringView*	fNameView;
 			BStringView*	fVersionView;
 			BTextView*		fInfoView;
+			StripeView*		fStripeView;
 };
 
 
@@ -81,13 +98,14 @@ StripeView::StripeView(BBitmap* icon)
 	BView("StripeView", B_WILL_DRAW),
 	fIcon(icon)
 {
+	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+
 	float width = 0.0f;
 	if (icon != NULL)
 		width += icon->Bounds().Width() + 32.0f;
 
 	SetExplicitMinSize(BSize(width, B_SIZE_UNSET));
 	SetExplicitPreferredSize(BSize(width, B_SIZE_UNLIMITED));
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 }
 
 
@@ -116,7 +134,24 @@ StripeView::Draw(BRect updateRect)
 }
 
 
-//	#pragma mark -
+void
+StripeView::SetIcon(BBitmap* icon)
+{
+	if (fIcon != NULL)
+		delete fIcon;
+
+	fIcon = icon;
+
+	float width = 0.0f;
+	if (icon != NULL)
+		width += icon->Bounds().Width() + 32.0f;
+
+	SetExplicitMinSize(BSize(width, B_SIZE_UNSET));
+	SetExplicitPreferredSize(BSize(width, B_SIZE_UNLIMITED));
+};
+
+
+//	#pragma mark - AboutView
 
 
 AboutView::AboutView(const char* appName, const char* signature)
@@ -131,7 +166,8 @@ AboutView::AboutView(const char* appName, const char* signature)
 	fNameView->SetFont(&font, B_FONT_FAMILY_AND_STYLE | B_FONT_SIZE
 		| B_FONT_FLAGS);
 
-	fVersionView = new BStringView("version", AppVersion(signature));
+	fVersionView = new BStringView("version",
+		_GetVersionFromSignature(signature));
 
 	fInfoView = new BTextView("info", B_WILL_DRAW);
 	fInfoView->SetExplicitMinSize(BSize(210.0, 160.0));
@@ -140,21 +176,30 @@ AboutView::AboutView(const char* appName, const char* signature)
 	fInfoView->SetInsets(5.0, 5.0, 5.0, 5.0);
 	fInfoView->SetViewColor(ui_color(B_DOCUMENT_BACKGROUND_COLOR));
 	fInfoView->SetHighColor(ui_color(B_DOCUMENT_TEXT_COLOR));
+	fInfoView->SetStylable(true);
 
 	BScrollView* infoViewScroller = new BScrollView(
 		"infoViewScroller", fInfoView, B_WILL_DRAW | B_FRAME_EVENTS,
 		false, true, B_PLAIN_BORDER);
 
+	fStripeView = new StripeView(_GetIconFromSignature(signature));
+
+	const char* ok = B_TRANSLATE_MARK("Ok");
+	BButton* closeButton = new BButton("ok",
+		gSystemCatalog.GetString(ok, "AboutWindow"),
+		new BMessage(B_QUIT_REQUESTED));
+
 	GroupLayout()->SetSpacing(0);
 	BLayoutBuilder::Group<>(this)
 		.AddGroup(B_HORIZONTAL, 0)
-			.Add(new StripeView(AppIcon(signature)))
+			.Add(fStripeView)
 			.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
 				.SetInsets(0, B_USE_DEFAULT_SPACING,
 					B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
 				.Add(fNameView)
 				.Add(fVersionView)
 				.Add(infoViewScroller)
+				.Add(closeButton)
 				.End()
 			.AddGlue()
 			.End();
@@ -166,8 +211,11 @@ AboutView::~AboutView()
 }
 
 
+//	#pragma mark - AboutView protected methods
+
+
 const char*
-AboutView::AppVersion(const char* signature)
+AboutView::_GetVersionFromSignature(const char* signature)
 {
 	if (signature == NULL)
 		return NULL;
@@ -228,7 +276,7 @@ AboutView::AppVersion(const char* signature)
 
 
 BBitmap*
-AboutView::AppIcon(const char* signature)
+AboutView::_GetIconFromSignature(const char* signature)
 {
 	if (signature == NULL)
 		return NULL;
@@ -251,21 +299,78 @@ AboutView::AppIcon(const char* signature)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - AboutView public methods
+
+
+const char*
+AboutView::Name()
+{
+	return fNameView->Text();
+}
+
+
+status_t
+AboutView::SetName(const char* name)
+{
+	fNameView->SetText(name);
+
+	return B_OK;
+}
+
+
+const char*
+AboutView::Version()
+{
+	return fVersionView->Text();
+}
+
+
+status_t
+AboutView::SetVersion(const char* version)
+{
+	fVersionView->SetText(version);
+
+	return B_OK;
+}
+
+
+BBitmap*
+AboutView::Icon()
+{
+	if (fStripeView == NULL)
+		return NULL;
+
+	return fStripeView->Icon();
+}
+
+
+status_t
+AboutView::SetIcon(BBitmap* icon)
+{
+	if (fStripeView == NULL)
+		return B_NO_INIT;
+
+	fStripeView->SetIcon(icon);
+
+	return B_OK;
+}
+
+
+//	#pragma mark - BAboutWindow
 
 
 BAboutWindow::BAboutWindow(const char* appName, const char* signature)
-	:	BWindow(BRect(0.0, 0.0, 200.0, 200.0), appName, B_TITLED_WINDOW,
-		B_ASYNCHRONOUS_CONTROLS | B_NOT_ZOOMABLE | B_NOT_RESIZABLE
-			| B_AUTO_UPDATE_SIZE_LIMITS)
+	:	BWindow(BRect(0.0, 0.0, 200.0, 200.0), appName, B_MODAL_WINDOW,
+		B_ASYNCHRONOUS_CONTROLS | B_NOT_ZOOMABLE | B_NOT_RESIZABLE 
+		| B_AUTO_UPDATE_SIZE_LIMITS | B_CLOSE_ON_ESCAPE)
 {
 	SetLayout(new BGroupLayout(B_VERTICAL));
 
-	const char* about = B_TRANSLATE_MARK("About");
+	const char* about = B_TRANSLATE_MARK("About %app%");
 	about = gSystemCatalog.GetString(about, "AboutWindow");
 
 	BString title(about);
-	title << " " << appName;
+	title.ReplaceFirst("%app%", appName);
 	SetTitle(title.String());
 
 	fAboutView = new AboutView(appName, signature);
@@ -283,16 +388,22 @@ BAboutWindow::~BAboutWindow()
 }
 
 
-bool
-BAboutWindow::QuitRequested()
-{
-	Hide();
+//	#pragma mark - BAboutWindow virtual methods
 
-	return false;
+
+void
+BAboutWindow::Show()
+{
+	if (IsHidden()) {
+		// move to current workspace
+		SetWorkspaces(B_CURRENT_WORKSPACE);
+	}
+
+	BWindow::Show();
 }
 
 
-//	#pragma mark -
+//	#pragma mark - BAboutWindow public methods
 
 
 BPoint
@@ -325,16 +436,7 @@ BAboutWindow::AddDescription(const char* description)
 	if (description == NULL)
 		return;
 
-	const char* appDesc = B_TRANSLATE_MARK(description);
-	appDesc = gSystemCatalog.GetString(appDesc, "AboutWindow");
-
-	BString desc("");
-	if (fAboutView->InfoView()->TextLength() > 0)
-		desc << "\n\n";
-
-	desc << appDesc;
-
-	fAboutView->InfoView()->Insert(desc.String());
+	AddText(description);
 }
 
 
@@ -391,16 +493,7 @@ BAboutWindow::AddAuthors(const char** authors)
 	const char* writtenBy = B_TRANSLATE_MARK("Written by:");
 	writtenBy = gSystemCatalog.GetString(writtenBy, "AboutWindow");
 
-	BString text("");
-	if (fAboutView->InfoView()->TextLength() > 0)
-		text << "\n\n";
-
-	text << writtenBy;
-	text << "\n";
-	for (int32 i = 0; authors[i]; i++)
-		text << "    " << authors[i] << "\n";
-
-	fAboutView->InfoView()->Insert(text.String());
+	AddText(writtenBy, authors);
 }
 
 
@@ -413,15 +506,7 @@ BAboutWindow::AddSpecialThanks(const char** thanks)
 	const char* specialThanks = B_TRANSLATE_MARK("Special Thanks:");
 	specialThanks = gSystemCatalog.GetString(specialThanks, "AboutWindow");
 
-	BString text("");
-	if (fAboutView->InfoView()->TextLength() > 0)
-		text << "\n\n";
-
-	text << specialThanks << "\n";
-	for (int32 i = 0; thanks[i]; i++)
-		text << "    " << thanks[i] << "\n";
-
-	fAboutView->InfoView()->Insert(text.String());
+	AddText(specialThanks, thanks);
 }
 
 
@@ -434,15 +519,7 @@ BAboutWindow::AddVersionHistory(const char** history)
 	const char* versionHistory = B_TRANSLATE_MARK("Version history:");
 	versionHistory = gSystemCatalog.GetString(versionHistory, "AboutWindow");
 
-	BString text("");
-	if (fAboutView->InfoView()->TextLength() > 0)
-		text << "\n\n";
-
-	text << versionHistory << "\n";
-	for (int32 i = 0; history[i]; i++)
-		text << "    " << history[i] << "\n";
-
-	fAboutView->InfoView()->Insert(text.String());
+	AddText(versionHistory, history);
 }
 
 
@@ -463,3 +540,79 @@ BAboutWindow::AddExtraInfo(const char* extraInfo)
 
 	fAboutView->InfoView()->Insert(extra.String());
 }
+
+
+void
+BAboutWindow::AddText(const char* header, const char** contents)
+{
+	BTextView* infoView = fAboutView->InfoView();
+	int32 textLength = infoView->TextLength();
+	BString text("");
+
+	if (textLength > 0) {
+		text << "\n\n";
+		textLength += 2;
+	}
+
+	const char* indent = "";
+	if (header != NULL) {
+		indent = "    ";
+		text << header;
+	}
+
+	if (contents != NULL) {
+		text << "\n";
+		for (int32 i = 0; contents[i]; i++)
+			text << indent << contents[i] << "\n";
+	}
+
+	infoView->Insert(text.String());
+
+	if (contents != NULL && header != NULL) {
+		infoView->SetFontAndColor(textLength, textLength + strlen(header),
+			be_bold_font);
+	}
+}
+
+
+const char*
+BAboutWindow::Name()
+{
+	return fAboutView->Name();
+}
+
+
+void
+BAboutWindow::SetName(const char* name)
+{
+	fAboutView->SetName(name);
+}
+
+
+const char*
+BAboutWindow::Version()
+{
+	return fAboutView->Version();
+}
+
+
+void
+BAboutWindow::SetVersion(const char* version)
+{
+	fAboutView->SetVersion(version);
+}
+
+
+BBitmap*
+BAboutWindow::Icon()
+{
+	return fAboutView->Icon();
+}
+
+
+void
+BAboutWindow::SetIcon(BBitmap* icon)
+{
+	fAboutView->SetIcon(icon);
+}
+

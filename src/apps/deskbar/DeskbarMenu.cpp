@@ -88,7 +88,8 @@ using namespace BPrivate;
 
 
 TDeskbarMenu::TDeskbarMenu(TBarView* barView)
-	: BNavMenu("DeskbarMenu", B_REFS_RECEIVED, DefaultTarget()),
+	:
+	BNavMenu("DeskbarMenu", B_REFS_RECEIVED, DefaultTarget()),
 	fAddState(kStart),
 	fBarView(barView)
 {
@@ -379,6 +380,7 @@ TDeskbarMenu::ResetTargets()
 				case kShowSplash:
 				case kToggleDraggers:
 				case kConfigShow:
+				case kConfigQuit:
 				case kAlwaysTop:
 				case kExpandNewTeams:
 				case kHideLabels:

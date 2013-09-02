@@ -1,8 +1,9 @@
-1	dutch; flemish	x-vnd.Haiku-TIFFTranslator	2354712721
+1	dutch; flemish	x-vnd.Haiku-TIFFTranslator	1624888114
 LZW	TIFFView		LZW
 identify_tiff_header: couldn't set directory\n	TIFFTranslator		identify_tiff_header: kan directory niet plaatsen\n
 TIFF image	TIFFTranslator		TIFF afbeelding
 TIFF Library:	TIFFView		TIFF bibliotheek:
+TIFF image translator	TIFFView		TIFF afbeelding vertaler
 None	TIFFView		Geen
 TIFF images	TIFFTranslator		TIFF afbeeldingen
 TIFFTranslator Settings	TIFFTranslator		TIFFTranslator Instellingen
@@ -12,4 +13,3 @@ TIFF Settings	TIFFMain		TIFF Instellingen
 identify_tiff_header: invalid document index\n	TIFFTranslator		identify_tiff_header: ongeldige documentindex\n
 ZIP (Deflate)	TIFFView		ZIP (Deflate)
 Version %d.%d.%d %s	TIFFView		Versie %d.%d.%d %s
-Use Compression:	TIFFView		Gebruik compressie:

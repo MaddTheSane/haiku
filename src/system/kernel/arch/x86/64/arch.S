@@ -118,7 +118,7 @@ FUNCTION(x86_swap_pgdir):
 FUNCTION_END(x86_swap_pgdir)
 
 
-/* thread exit stub - copied to the userspace stack in arch_thread_enter_uspace() */
+/* thread exit stub */
 .align 8
 FUNCTION(x86_userspace_thread_exit):
 	movq	%rax, %rdi
@@ -251,9 +251,12 @@ FUNCTION(arch_cpu_user_strlcpy):
 .L_user_strlcpy_source_count:
 	// Count remaining bytes in src
 	not		%rcx
+		# %rcx was 0 and is now max
 	xor		%al, %al
+	movq	%rsi, %rdi
 	repnz
 	scasb
+	movq	%rdi, %rsi
 
 .L_user_strlcpy_source_done:
 	// Restore the old fault handler

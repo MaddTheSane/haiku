@@ -1552,6 +1552,7 @@ device_node::_GetNextDriverPath(void*& cookie, KPath& _path)
 				switch (subType) {
 					case PCI_scsi:
 						_AddPath(*stack, "busses", "scsi");
+						_AddPath(*stack, "busses", "virtio");
 						break;
 					case PCI_ide:
 						_AddPath(*stack, "busses", "ata");
@@ -1583,6 +1584,7 @@ device_node::_GetNextDriverPath(void*& cookie, KPath& _path)
 				break;
 			case PCI_network:
 				_AddPath(*stack, "drivers", "net");
+				_AddPath(*stack, "busses", "virtio");
 				break;
 			case PCI_display:
 				_AddPath(*stack, "drivers", "graphics");
@@ -1606,6 +1608,7 @@ device_node::_GetNextDriverPath(void*& cookie, KPath& _path)
 					_AddPath(*stack, "busses/pci");
 					_AddPath(*stack, "bus_managers");
 				} else if (!generic) {
+					_AddPath(*stack, "busses", "virtio");
 					_AddPath(*stack, "drivers");
 				} else {
 					// For generic drivers, we only allow busses when the
@@ -1617,6 +1620,8 @@ device_node::_GetNextDriverPath(void*& cookie, KPath& _path)
 						_AddPath(*stack, "busses");
 					}
 					_AddPath(*stack, "drivers", sGenericContextPath);
+					_AddPath(*stack, "busses/scsi");
+					_AddPath(*stack, "busses/random");
 				}
 				break;
 		}
@@ -1733,7 +1738,7 @@ device_node::_AlwaysRegisterDynamic()
 	get_attr_uint16(this, B_DEVICE_TYPE, &type, false);
 	get_attr_uint16(this, B_DEVICE_SUB_TYPE, &subType, false);
 
-	return type == PCI_serial_bus || type == PCI_bridge;
+	return type == PCI_serial_bus || type == PCI_bridge || type == 0;
 		// TODO: we may want to be a bit more specific in the future
 }
 
@@ -2305,4 +2310,3 @@ device_manager_init_post_modules(struct kernel_args* args)
 	RecursiveLocker _(sLock);
 	return sRootNode->Reprobe();
 }
-

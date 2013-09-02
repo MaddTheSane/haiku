@@ -73,12 +73,12 @@ AppearancePrefView::AppearancePrefView(const char* name,
 	fTerminalMessenger(messenger)
 {
 	const char* kColorTable[] = {
-		B_TRANSLATE("Text"),
-		B_TRANSLATE("Background"),
-		B_TRANSLATE("Cursor"),
-		B_TRANSLATE("Text under cursor"),
-		B_TRANSLATE("Selected text"),
-		B_TRANSLATE("Selected background"),
+		B_TRANSLATE_MARK("Text"),
+		B_TRANSLATE_MARK("Background"),
+		B_TRANSLATE_MARK("Cursor"),
+		B_TRANSLATE_MARK("Text under cursor"),
+		B_TRANSLATE_MARK("Selected text"),
+		B_TRANSLATE_MARK("Selected background"),
 		NULL
 	};
 
@@ -104,7 +104,6 @@ AppearancePrefView::AppearancePrefView(const char* name,
 		kColorTable[0]);
 
 	fColorField = new BMenuField(B_TRANSLATE("Color:"), colorsPopUp);
-	fColorField->SetEnabled(false);
 
 	fTabTitle = new BTextControl("tabTitle", B_TRANSLATE("Tab title:"), "",
 		NULL);
@@ -151,7 +150,6 @@ AppearancePrefView::AppearancePrefView(const char* name,
 	fTabTitle->SetText(PrefHandler::Default()->getString(PREF_TAB_TITLE));
 	fWindowTitle->SetText(PrefHandler::Default()->getString(PREF_WINDOW_TITLE));
 
-	fColorControl->SetEnabled(false);
 	fColorControl->SetValue(
 		PrefHandler::Default()->getRGB(PREF_TEXT_FORE_COLOR));
 
@@ -219,16 +217,11 @@ AppearancePrefView::AttachedToWindow()
 		fontSizeMenu->SetTargetForItems(this);
 	}
 
-  	fColorControl->SetTarget(this);
-  	fColorField->Menu()->SetTargetForItems(this);
-  	fColorSchemeField->Menu()->SetTargetForItems(this);
+	fColorControl->SetTarget(this);
+	fColorField->Menu()->SetTargetForItems(this);
+	fColorSchemeField->Menu()->SetTargetForItems(this);
 
-  	_SetCurrentColorScheme(fColorSchemeField);
-  	bool enableCustomColors =
-		strcmp(fColorSchemeField->Menu()->FindMarked()->Label(),
-			gCustomColorScheme.name) == 0;
-
-  	_EnableCustomColors(enableCustomColors);
+	_SetCurrentColorScheme();
 }
 
 
@@ -272,11 +265,23 @@ AppearancePrefView::MessageReceived(BMessage* msg)
 
 		case MSG_COLOR_CHANGED:
 		{
-			rgb_color oldColor = PrefHandler::Default()->getRGB(
-				fColorField->Menu()->FindMarked()->Label());
+			const BMessage* itemMessage
+				= fColorField->Menu()->FindMarked()->Message();
+			const char* label = NULL;
+			if (itemMessage->FindString("label", &label) != B_OK)
+				break;
+			rgb_color oldColor = PrefHandler::Default()->getRGB(label);
 			if (oldColor != fColorControl->ValueAsColor()) {
-				PrefHandler::Default()->setRGB(
-					fColorField->Menu()->FindMarked()->Label(),
+				BMenuItem* item = fColorSchemeField->Menu()->FindMarked();
+				if (strcmp(item->Label(), gCustomColorScheme.name) != 0) {
+					item->SetMarked(false);
+					item = fColorSchemeField->Menu()->FindItem(
+						gCustomColorScheme.name);
+					if (item)
+						item->SetMarked(true);
+				}
+
+				PrefHandler::Default()->setRGB(label,
 					fColorControl->ValueAsColor());
 				modified = true;
 			}
@@ -288,11 +293,6 @@ AppearancePrefView::MessageReceived(BMessage* msg)
 			color_scheme* newScheme = NULL;
 			if (msg->FindPointer("color_scheme",
 					(void**)&newScheme) == B_OK) {
-				if (newScheme == &gCustomColorScheme)
-					_EnableCustomColors(true);
-				else
-					_EnableCustomColors(false);
-
 				_ChangeColorScheme(newScheme);
 				modified = true;
 			}
@@ -300,9 +300,12 @@ AppearancePrefView::MessageReceived(BMessage* msg)
 		}
 
 		case MSG_COLOR_FIELD_CHANGED:
-			fColorControl->SetValue(PrefHandler::Default()->getRGB(
-				fColorField->Menu()->FindMarked()->Label()));
+		{
+			const char* label = NULL;
+			if (msg->FindString("label", &label) == B_OK)
+				fColorControl->SetValue(PrefHandler::Default()->getRGB(label));
 			break;
+		}
 
 		case MSG_BLINK_CURSOR_CHANGED:
 			if (PrefHandler::Default()->getBool(PREF_BLINK_CURSOR)
@@ -360,14 +363,6 @@ AppearancePrefView::MessageReceived(BMessage* msg)
 
 
 void
-AppearancePrefView::_EnableCustomColors(bool enable)
-{
-	fColorField->SetEnabled(enable);
-	fColorControl->SetEnabled(enable);
-}
-
-
-void
 AppearancePrefView::_ChangeColorScheme(color_scheme* scheme)
 {
 	PrefHandler* pref = PrefHandler::Default();
@@ -382,7 +377,7 @@ AppearancePrefView::_ChangeColorScheme(color_scheme* scheme)
 
 
 void
-AppearancePrefView::_SetCurrentColorScheme(BMenuField* field)
+AppearancePrefView::_SetCurrentColorScheme()
 {
 	PrefHandler* pref = PrefHandler::Default();
 
@@ -404,6 +399,8 @@ AppearancePrefView::_SetCurrentColorScheme(BMenuField* field)
 	}
 
 	for (int32 i = 0; i < fColorSchemeField->Menu()->CountItems(); i++) {
+		if (currentSchemeName == NULL)
+			break;
 		BMenuItem* item = fColorSchemeField->Menu()->ItemAt(i);
 		if (strcmp(item->Label(), currentSchemeName) == 0) {
 			item->SetMarked(true);
@@ -514,22 +511,20 @@ AppearancePrefView::_MakeMenu(uint32 msg, const char** items,
 {
 	BPopUpMenu* menu = new BPopUpMenu("");
 
-	int32 i = 0;
 	while (*items) {
 		if (strcmp((*items), "") == 0)
 			menu->AddSeparatorItem();
 		else {
 			BMessage* message = new BMessage(msg);
-			menu->AddItem(new BMenuItem((*items), message));
+			message->AddString("label", *items);
+			BMenuItem* item = new BMenuItem(B_TRANSLATE(*items), message);
+			menu->AddItem(item);
+			if (strcmp(*items, defaultItemName) == 0)
+				item->SetMarked(true);
 		}
 
 		items++;
-		i++;
 	}
-
-	BMenuItem* defaultItem = menu->FindItem(defaultItemName);
-	if (defaultItem)
-		defaultItem->SetMarked(true);
 
 	return menu;
 }

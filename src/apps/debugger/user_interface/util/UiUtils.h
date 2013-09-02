@@ -14,6 +14,7 @@
 
 class BString;
 class BVariant;
+class RangeList;
 class StackFrame;
 class Team;
 class TeamMemoryBlock;
@@ -31,6 +32,10 @@ public:
 									char* buffer, size_t bufferSize);
 	static	const char*			ImageTypeToString(image_type type,
 									char* buffer, size_t bufferSize);
+	static	const char*			AreaLockingFlagsToString(uint32 flags,
+									char* buffer, size_t bufferSize);
+	static	const BString&			AreaProtectionFlagsToString(uint32 protection,
+									BString& _output);
 
 	static	const char*			ReportNameForTeam(::Team* team,
 									char* buffer, size_t bufferSize);
@@ -46,6 +51,12 @@ public:
 									TeamMemoryBlock* block,
 									target_addr_t address, int32 itemSize,
 									int32 displayWidth, int32 count);
+
+	static	status_t			ParseRangeExpression(
+									const BString& rangeString,
+									int32 lowerBound, int32 upperBound,
+									bool fixedRange,
+									RangeList& _output);
 };
 
 

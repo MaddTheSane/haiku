@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-Terminal	3561344903
+1	japanese	x-vnd.Haiku-Terminal	2967760334
 Not found.	Terminal TermWindow		これ以上見つかりません。
 Switch Terminals	Terminal TermWindow		ターミナルを切替える
 Change directory	Terminal TermView		ディレクトリを変更
@@ -21,6 +21,7 @@ Font:	Terminal AppearancePrefView		フォント:
 Copy here	Terminal TermView		カレントディレクトリへコピー
 Really close?	Terminal TermWindow		本当に閉じますか?
 Copy	Terminal TermWindow		コピー
+Terminal	Terminal TermWindow	The title for the main window menubar entry related to terminal sessions	ターミナル
 Color scheme:	Terminal AppearancePrefView		配色:
 Window title:	Terminal TermWindow		ウィンドウタイトル:
 Unrecognized option \"%s\"\n	Terminal arguments parsing		Unrecognized option \"%s\"\n
@@ -61,7 +62,6 @@ Text not found.	Terminal TermWindow		検索テキストが見つかりません�
 Find…	Terminal TermWindow		検索…
 The process \"%1\" is still running.\nIf you close the Terminal, the process will be killed.	Terminal TermWindow		プロセス \"%1\" がまだ実行中です。\nTerminalを閉じると強制終了されます。
 Move here	Terminal TermView		カレントディレクトリへ移動
-\t%d\t-\tThe current working directory of the active process in the\n\t\t\tcurrent tab. Optionally the maximum number of path components\n\t\t\tcan be specified. E.g. '%2d' for at most two components.\n\t%i\t-\tThe index of the window.\n\t%p\t-\tThe name of the active process in the current tab.\n\t%t\t-\tThe title of the current tab.\n\t%%\t-\tThe character '%'.	Terminal ToolTips		\t%d\t-\t現在のタブへの実行中プロセスのカレントワーキングディレクトリ\n\t\t\tの表示。オプションでパス要素の最大値を\n\t\t\t指定できます。 例. '%2d' 最大 2 要素。\n\t%i\t-\tThe index of the window.\n\t%p\t-\t実行中プロセス名の現在のタプへの表示。\n\t%t\t-\t現在のタブのタイトル。\n\t%%\t-\t文字 '%' 。
 Retro	Terminal colors scheme		レトロ
 Error!	Terminal getString		エラー!
 New tab	Terminal TermWindow		新しいタブ
@@ -79,6 +79,7 @@ Clear all	Terminal TermWindow		すべて消去
 Text encoding	Terminal TermWindow		テキストエンコーディング
 size	Terminal TermView		サイズ
 Close window	Terminal TermWindow		ウィンドウを閉じる
+\t%d\t-\tThe current working directory of the active process in the\n\t\t\tcurrent tab. Optionally the maximum number of path components\n\t\t\tcan be specified. E.g. '%2d' for at most two components.\n\t%T\t-\tThe Terminal application name for the current locale.\n\t%e\t-\tThe encoding of the current tab. Not shown for UTF-8.\n\t%i\t-\tThe index of the window.\n\t%p\t-\tThe name of the active process in the current tab.\n\t%t\t-\tThe title of the current tab.\n\t%%\t-\tThe character '%'.	Terminal ToolTips		\t%d\t-\tタブ内で動作中のプロセスの作業中のフォルダー\n\t\t\tオプションでパスの最大要素を指定できます。\n\t\t\t例. '%2d' は2 つの要素を示します。\n\t%T\t-\t現在のロケールでの Terminal アプリケーション名\n\t%e\t-\tタブのエンコーディング。UTF-8 の場合は表示されません。\n\t%i\t-\tウィンドウのインデックス\n\t%p\t-\tタブ内で実行中のプロセス名\n\t%t\t-\tタブのタイトル.\n\t%%\t-\t文字 '%'
 Save as default	Terminal TermWindow		デフォルトとして保存
 Set tab title	Terminal TermWindow		タブのタイトルを設定
 Settings…	Terminal TermWindow		設定…
@@ -87,7 +88,7 @@ Edit	Terminal TermWindow		編集
 Color:	Terminal AppearancePrefView		色:
 The pattern specifying the window title. The following placeholders\ncan be used:\n	Terminal TermWindow		パターンはウィンドウタイトルを指定します。次のプレースホルダーが\n使用できます:\n
 Print	Terminal TermWindow		印刷
-Use text:	Terminal FindWindow		テキスト指定：
+Use text:	Terminal FindWindow		テキスト指定:
 Cancel	Terminal TermWindow		中止
 OK	Terminal TermApp		OK
 Find failed	Terminal TermWindow		見つかりませんでした

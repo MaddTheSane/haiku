@@ -24,7 +24,7 @@
 
 #include <arch/x86/apic.h>
 #include <arch/x86/descriptors.h>
-#include <arch/x86/msi.h>
+#include <arch/x86/msi_priv.h>
 
 #include <stdio.h>
 
@@ -319,8 +319,9 @@ x86_page_fault_exception(struct iframe* frame)
 	enable_interrupts();
 
 	vm_page_fault(cr2, frame->ip,
-		(frame->error_code & 0x2) != 0,	// write access
-		(frame->error_code & 0x4) != 0,	// userland
+		(frame->error_code & 0x2)!= 0,		// write access
+		(frame->error_code & 0x10) != 0,	// instruction fetch
+		(frame->error_code & 0x4) != 0,		// userland
 		&newip);
 	if (newip != 0) {
 		// the page fault handler wants us to modify the iframe to set the
@@ -410,7 +411,7 @@ arch_int_init_post_vm(kernel_args* args)
 status_t
 arch_int_init_io(kernel_args* args)
 {
-	msi_init();
+	msi_init(args);
 	ioapic_init(args);
 	return B_OK;
 }

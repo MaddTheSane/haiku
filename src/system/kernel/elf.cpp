@@ -24,6 +24,7 @@
 #include <algorithm>
 
 #include <AutoDeleter.h>
+#include <commpage.h>
 #include <boot/kernel_args.h>
 #include <debug.h>
 #include <image_defs.h>
@@ -1075,7 +1076,7 @@ elf_resolve_symbol(struct elf_image_info *image, elf_sym *symbol,
 
 /*! Until we have shared library support, just this links against the kernel */
 static int
-elf_relocate(struct elf_image_info *image)
+elf_relocate(struct elf_image_info* image, struct elf_image_info* resolveImage)
 {
 	int status = B_NO_ERROR;
 
@@ -1085,7 +1086,7 @@ elf_relocate(struct elf_image_info *image)
 	if (image->rel) {
 		TRACE(("total %i rel relocs\n", image->rel_len / (int)sizeof(elf_rel)));
 
-		status = arch_elf_relocate_rel(image, sKernelImage, image->rel,
+		status = arch_elf_relocate_rel(image, resolveImage, image->rel,
 			image->rel_len);
 		if (status < B_OK)
 			return status;
@@ -1095,12 +1096,12 @@ elf_relocate(struct elf_image_info *image)
 		if (image->pltrel_type == DT_REL) {
 			TRACE(("total %i plt-relocs\n",
 				image->pltrel_len / (int)sizeof(elf_rel)));
-			status = arch_elf_relocate_rel(image, sKernelImage, image->pltrel,
+			status = arch_elf_relocate_rel(image, resolveImage, image->pltrel,
 				image->pltrel_len);
 		} else {
 			TRACE(("total %i plt-relocs\n",
 				image->pltrel_len / (int)sizeof(elf_rela)));
-			status = arch_elf_relocate_rela(image, sKernelImage,
+			status = arch_elf_relocate_rela(image, resolveImage,
 				(elf_rela *)image->pltrel, image->pltrel_len);
 		}
 		if (status < B_OK)
@@ -1111,7 +1112,7 @@ elf_relocate(struct elf_image_info *image)
 		TRACE(("total %i rel relocs\n",
 			image->rela_len / (int)sizeof(elf_rela)));
 
-		status = arch_elf_relocate_rela(image, sKernelImage, image->rela,
+		status = arch_elf_relocate_rela(image, resolveImage, image->rela,
 			image->rela_len);
 		if (status < B_OK)
 			return status;
@@ -1294,7 +1295,7 @@ insert_preloaded_image(preloaded_elf_image *preloadedImage, bool kernel)
 		if (status != B_OK)
 			goto error1;
 
-		status = elf_relocate(image);
+		status = elf_relocate(image, sKernelImage);
 		if (status != B_OK)
 			goto error1;
 	} else
@@ -1370,6 +1371,7 @@ public:
 		if (!_Read((runtime_loader_debug_area*)area->Base(), fDebugArea))
 			return B_BAD_ADDRESS;
 
+		fTeam = team;
 		return B_OK;
 	}
 
@@ -1388,8 +1390,22 @@ public:
 		// get the image for the address
 		image_t image;
 		status_t error = _FindImageAtAddress(address, image);
-		if (error != B_OK)
+		if (error != B_OK) {
+			// commpage requires special treatment since kernel stores symbol
+			// information
+			addr_t commPageAddress = (addr_t)fTeam->commpage_address;
+			if (address >= commPageAddress
+				&& address < commPageAddress + COMMPAGE_SIZE) {
+				if (*_imageName)
+					*_imageName = "commpage";
+				address -= (addr_t)commPageAddress;
+				error = elf_debug_lookup_symbol_address(address, _baseAddress,
+					_symbolName, NULL, _exactMatch);
+				if (_baseAddress)
+					*_baseAddress += (addr_t)fTeam->commpage_address;
+			}
 			return error;
+		}
 
 		strlcpy(fImageName, image.name, sizeof(fImageName));
 
@@ -1529,6 +1545,7 @@ public:
 		// gcc 2.95.3 doesn't like it defined in-place
 
 private:
+	Team*						fTeam;
 	runtime_loader_debug_area	fDebugArea;
 	char						fImageName[B_OS_NAME_LENGTH];
 	char						fSymbolName[256];
@@ -2006,6 +2023,9 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 	ssize_t length;
 	int fd;
 	int i;
+	addr_t delta = 0;
+	uint32 addressSpec = B_RANDOMIZED_BASE_ADDRESS;
+	area_id* mappedAreas = NULL;
 
 	TRACE(("elf_load: entry path '%s', team %p\n", path, team));
 
@@ -2049,6 +2069,14 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 	if (status < B_OK)
 		goto error;
 
+	struct elf_image_info* image;
+	image = create_image_struct();
+	if (image == NULL) {
+		status = B_NO_MEMORY;
+		goto error;
+	}
+	image->elf_header = &elfHeader;
+
 	// read program header
 
 	programHeaders = (elf_phdr *)malloc(
@@ -2056,7 +2084,7 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 	if (programHeaders == NULL) {
 		dprintf("error allocating space for program headers\n");
 		status = B_NO_MEMORY;
-		goto error;
+		goto error2;
 	}
 
 	TRACE(("reading in program headers at 0x%lx, length 0x%x\n",
@@ -2066,12 +2094,12 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 	if (length < B_OK) {
 		status = length;
 		dprintf("error reading in program headers\n");
-		goto error;
+		goto error2;
 	}
 	if (length != elfHeader.e_phnum * elfHeader.e_phentsize) {
 		dprintf("short read while reading in program headers\n");
 		status = -1;
-		goto error;
+		goto error2;
 	}
 
 	// construct a nice name for the region we have to create below
@@ -2091,7 +2119,14 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 			strcpy(baseName, leaf);
 	}
 
-	// map the program's segments into memory
+	// map the program's segments into memory, initially with rw access
+	// correct area protection will be set after relocation
+
+	mappedAreas = (area_id*)malloc(sizeof(area_id) * elfHeader.e_phnum);
+	if (mappedAreas == NULL) {
+		status = B_NO_MEMORY;
+		goto error2;
+	}
 
 	image_info imageInfo;
 	memset(&imageInfo, 0, sizeof(image_info));
@@ -2099,13 +2134,23 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 	for (i = 0; i < elfHeader.e_phnum; i++) {
 		char regionName[B_OS_NAME_LENGTH];
 		char *regionAddress;
+		char *originalRegionAddress;
 		area_id id;
+
+		mappedAreas[i] = -1;
+
+		if (programHeaders[i].p_type == PT_DYNAMIC) {
+			image->dynamic_section = programHeaders[i].p_vaddr;
+			continue;
+		}
 
 		if (programHeaders[i].p_type != PT_LOAD)
 			continue;
 
-		regionAddress = (char *)ROUNDDOWN(programHeaders[i].p_vaddr,
-			B_PAGE_SIZE);
+		regionAddress = (char *)(ROUNDDOWN(programHeaders[i].p_vaddr,
+			B_PAGE_SIZE) + delta);
+		originalRegionAddress = regionAddress;
+
 		if (programHeaders[i].p_flags & PF_WRITE) {
 			// rw/data segment
 			size_t memUpperBound = (programHeaders[i].p_vaddr % B_PAGE_SIZE)
@@ -2121,17 +2166,21 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 			sprintf(regionName, "%s_seg%drw", baseName, i);
 
 			id = vm_map_file(team->id, regionName, (void **)&regionAddress,
-				B_EXACT_ADDRESS, fileUpperBound,
+				addressSpec, fileUpperBound,
 				B_READ_AREA | B_WRITE_AREA, REGION_PRIVATE_MAP, false,
 				fd, mapOffset);
 			if (id < B_OK) {
 				dprintf("error mapping file data: %s!\n", strerror(id));
 				status = B_NOT_AN_EXECUTABLE;
-				goto error;
+				goto error2;
 			}
+			mappedAreas[i] = id;
 
 			imageInfo.data = regionAddress;
 			imageInfo.data_size = memUpperBound;
+
+			image->data_region.start = (addr_t)regionAddress;
+			image->data_region.size = memUpperBound;
 
 			// clean garbage brought by mmap (the region behind the file,
 			// at least parts of it are the bss and have to be zeroed)
@@ -2162,7 +2211,7 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 				if (id < B_OK) {
 					dprintf("error allocating bss area: %s!\n", strerror(id));
 					status = B_NOT_AN_EXECUTABLE;
-					goto error;
+					goto error2;
 				}
 			}
 		} else {
@@ -2175,18 +2224,62 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 				ROUNDDOWN(programHeaders[i].p_offset, B_PAGE_SIZE);
 
 			id = vm_map_file(team->id, regionName, (void **)&regionAddress,
-				B_EXACT_ADDRESS, segmentSize,
-				B_READ_AREA | B_EXECUTE_AREA, REGION_PRIVATE_MAP, false,
+				addressSpec, segmentSize,
+				B_READ_AREA | B_EXECUTE_AREA, REGION_PRIVATE_MAP, false, 
 				fd, mapOffset);
 			if (id < B_OK) {
 				dprintf("error mapping file text: %s!\n", strerror(id));
 				status = B_NOT_AN_EXECUTABLE;
-				goto error;
+				goto error2;
 			}
+
+			mappedAreas[i] = id;
 
 			imageInfo.text = regionAddress;
 			imageInfo.text_size = segmentSize;
+
+			image->text_region.start = (addr_t)regionAddress;
+			image->text_region.size = segmentSize;
 		}
+
+		if (addressSpec != B_EXACT_ADDRESS) {
+			addressSpec = B_EXACT_ADDRESS;
+			delta = regionAddress - originalRegionAddress;
+		}
+	}
+
+	image->data_region.delta = delta;
+	image->text_region.delta = delta;
+
+	// modify the dynamic ptr by the delta of the regions
+	image->dynamic_section += image->text_region.delta;
+
+	status = elf_parse_dynamic_section(image);
+	if (status != B_OK)
+		goto error2;
+
+	status = elf_relocate(image, image);
+	if (status != B_OK)
+		goto error2;
+
+	// set correct area protection
+	for (i = 0; i < elfHeader.e_phnum; i++) {
+		if (mappedAreas[i] == -1)
+			continue;
+
+		uint32 protection = 0;
+
+		if (programHeaders[i].p_flags & PF_EXECUTE)
+			protection |= B_EXECUTE_AREA;
+		if (programHeaders[i].p_flags & PF_WRITE)
+			protection |= B_WRITE_AREA;
+		if (programHeaders[i].p_flags & PF_READ)
+			protection |= B_READ_AREA;
+
+		status = vm_set_area_protection(team->id, mappedAreas[i], protection,
+			true);
+		if (status != B_OK)
+			goto error2;
 	}
 
 	// register the loaded image
@@ -2208,8 +2301,14 @@ elf_load_user_image(const char *path, Team *team, int flags, addr_t *entry,
 
 	TRACE(("elf_load: done!\n"));
 
-	*entry = elfHeader.e_entry;
+	*entry = elfHeader.e_entry + delta;
 	status = B_OK;
+
+error2:
+	free(mappedAreas);
+
+	image->elf_header = NULL;
+	delete_elf_image(image);
 
 error:
 	free(programHeaders);
@@ -2471,7 +2570,7 @@ load_kernel_add_on(const char *path)
 	if (status != B_OK)
 		goto error5;
 
-	status = elf_relocate(image);
+	status = elf_relocate(image, sKernelImage);
 	if (status < B_OK)
 		goto error5;
 

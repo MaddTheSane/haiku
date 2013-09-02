@@ -821,19 +821,10 @@ create_thread_user_stack(Team* team, Thread* thread, void* _stackBase,
 		snprintf(nameBuffer, B_OS_NAME_LENGTH, "%s_%" B_PRId32 "_stack",
 			thread->name, thread->id);
 
-		virtual_address_restrictions virtualRestrictions = {};
-		if (thread->id == team->id) {
-			// The main thread gets a fixed position at the top of the stack
-			// address range.
-			stackBase = (uint8*)(USER_STACK_REGION + USER_STACK_REGION_SIZE
-				- areaSize);
-			virtualRestrictions.address_specification = B_EXACT_ADDRESS;
+		stackBase = (uint8*)USER_STACK_REGION;
 
-		} else {
-			// not a main thread
-			stackBase = (uint8*)(addr_t)USER_STACK_REGION;
-			virtualRestrictions.address_specification = B_BASE_ADDRESS;
-		}
+		virtual_address_restrictions virtualRestrictions = {};
+		virtualRestrictions.address_specification = B_RANDOMIZED_BASE_ADDRESS;
 		virtualRestrictions.address = (void*)stackBase;
 
 		physical_address_restrictions physicalRestrictions = {};
@@ -1024,18 +1015,37 @@ thread_create_thread(const ThreadCreationAttributes& attributes, bool kernel)
 	}
 
 	// We're going to make the thread live, now. The thread itself will take
-	// over a reference to its Thread object. We acquire another reference for
-	// our own use (and threadReference remains armed).
-	thread->AcquireReference();
+	// over a reference to its Thread object. We'll acquire another reference
+	// for our own use (and threadReference remains armed).
 
 	ThreadLocker threadLocker(thread);
 	InterruptsSpinLocker schedulerLocker(gSchedulerLock);
 	SpinLocker threadHashLocker(sThreadHashLock);
 
+	// check the thread limit
+	if (sUsedThreads >= sMaxThreads) {
+		// Clean up the user_thread structure. It's a bit unfortunate that the
+		// Thread destructor cannot do that, so we have to do that explicitly.
+		threadHashLocker.Unlock();
+		schedulerLocker.Unlock();
+
+		user_thread* userThread = thread->user_thread;
+		thread->user_thread = NULL;
+
+		threadLocker.Unlock();
+
+		if (userThread != NULL)
+			team_free_user_thread(team, userThread);
+
+		return B_NO_MORE_THREADS;
+	}
+
 	// make thread visible in global hash/list
 	thread->visible = true;
 	sUsedThreads++;
 	scheduler_on_thread_init(thread);
+
+	thread->AcquireReference();
 
 	// Debug the new thread, if the parent thread required that (see above),
 	// or the respective global team debug flag is set. But only, if a
@@ -2746,6 +2756,8 @@ thread_init(kernel_args *args)
 
 	// init the notification service
 	new(&sNotificationService) ThreadNotificationService();
+
+	sNotificationService.Register();
 
 	// start the undertaker thread
 	new(&sUndertakerEntries) DoublyLinkedList<UndertakerEntry>();

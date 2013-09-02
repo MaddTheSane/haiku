@@ -1,5 +1,5 @@
 /*
- * Copyright 2011, Rene Gollent, rene@gollent.com. All rights reserved.
+ * Copyright 2011-2013, Rene Gollent, rene@gollent.com. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 
@@ -27,8 +27,9 @@
 
 
 enum {
-	MSG_NAVIGATE_PREVIOUS_BLOCK = 'npbl',
-	MSG_NAVIGATE_NEXT_BLOCK		= 'npnl'
+	MSG_NAVIGATE_PREVIOUS_BLOCK 		= 'npbl',
+	MSG_NAVIGATE_NEXT_BLOCK				= 'npnl',
+	MSG_MEMORY_BLOCK_RETRIEVED			= 'mbre',
 };
 
 
@@ -52,8 +53,7 @@ InspectorWindow::InspectorWindow(::Team* team, UserInterfaceListener* listener,
 
 InspectorWindow::~InspectorWindow()
 {
-	if (fCurrentBlock != NULL)
-	{
+	if (fCurrentBlock != NULL) {
 		fCurrentBlock->RemoveListener(this);
 		fCurrentBlock->ReleaseReference();
 	}
@@ -125,8 +125,8 @@ InspectorWindow::_Init()
 	textMenu->AddItem(item);
 
 	BLayoutBuilder::Group<>(this, B_VERTICAL)
-		.SetInsets(4.0f, 4.0f, 4.0f, 4.0f)
-		.AddGroup(B_HORIZONTAL, 4.0f)
+		.SetInsets(B_USE_DEFAULT_SPACING)
+		.AddGroup(B_HORIZONTAL)
 			.Add(fAddressInput = new BTextControl("addrInput",
 			"Target Address:", "",
 			new BMessage(MSG_INSPECT_ADDRESS)))
@@ -135,7 +135,7 @@ InspectorWindow::_Init()
 			.Add(fNextBlockButton = new BButton("navNext", ">",
 				new BMessage(MSG_NAVIGATE_NEXT_BLOCK)))
 		.End()
-		.AddGroup(B_HORIZONTAL, 4.0f)
+		.AddGroup(B_HORIZONTAL)
 			.Add(fHexMode = new BMenuField("hexMode", "Hex Mode:",
 				hexMenu))
 			.AddGlue()
@@ -156,7 +156,7 @@ InspectorWindow::_Init()
 	int32 targetEndian = fTeam->GetArchitecture()->IsBigEndian()
 		? EndianModeBigEndian : EndianModeLittleEndian;
 
-	scrollView->SetTarget(fMemoryView = MemoryView::Create(fTeam));
+	scrollView->SetTarget(fMemoryView = MemoryView::Create(fTeam, this));
 
 	fAddressInput->SetTarget(this);
 	fPreviousBlockButton->SetTarget(this);
@@ -186,15 +186,14 @@ InspectorWindow::_Init()
 
 
 void
-InspectorWindow::MessageReceived(BMessage* msg)
+InspectorWindow::MessageReceived(BMessage* message)
 {
-	switch (msg->what) {
+	switch (message->what) {
 		case MSG_INSPECT_ADDRESS:
 		{
 			target_addr_t address = 0;
 			bool addressValid = false;
-			if (msg->FindUInt64("address", &address) != B_OK)
-			{
+			if (message->FindUInt64("address", &address) != B_OK) {
 				ExpressionParser parser;
 				parser.SetSupportHexInput(true);
 				const char* addressExpression = fAddressInput->Text();
@@ -221,31 +220,21 @@ InspectorWindow::MessageReceived(BMessage* msg)
 			}
 
 			if (addressValid) {
-				if (fCurrentBlock != NULL
-					&& !fCurrentBlock->Contains(address)) {
-					fCurrentBlock->ReleaseReference();
-					fCurrentBlock = NULL;
-				}
-
-				if (fCurrentBlock == NULL)
-					fListener->InspectRequested(address, this);
-				else
-					fMemoryView->SetTargetAddress(fCurrentBlock, address);
-
 				fCurrentAddress = address;
-				BString computedAddress;
-				computedAddress.SetToFormat("0x%" B_PRIx64, address);
-				fAddressInput->SetText(computedAddress.String());
+				if (fCurrentBlock == NULL
+					|| !fCurrentBlock->Contains(address)) {
+					fListener->InspectRequested(address, this);
+				} else
+					fMemoryView->SetTargetAddress(fCurrentBlock, address);
 			}
 			break;
 		}
 		case MSG_NAVIGATE_PREVIOUS_BLOCK:
 		case MSG_NAVIGATE_NEXT_BLOCK:
 		{
-			if (fCurrentBlock != NULL)
-			{
+			if (fCurrentBlock != NULL) {
 				target_addr_t address = fCurrentBlock->BaseAddress();
-				if (msg->what == MSG_NAVIGATE_PREVIOUS_BLOCK)
+				if (message->what == MSG_NAVIGATE_PREVIOUS_BLOCK)
 					address -= fCurrentBlock->Size();
 				else
 					address += fCurrentBlock->Size();
@@ -256,9 +245,47 @@ InspectorWindow::MessageReceived(BMessage* msg)
 			}
 			break;
 		}
+		case MSG_MEMORY_BLOCK_RETRIEVED:
+		{
+			TeamMemoryBlock* block = NULL;
+			status_t result;
+			if (message->FindPointer("block",
+					reinterpret_cast<void **>(&block)) != B_OK
+				|| message->FindInt32("result", &result) != B_OK) {
+				break;
+			}
+
+			{
+				AutoLocker< ::Team> teamLocker(fTeam);
+				block->RemoveListener(this);
+			}
+
+			if (result == B_OK) {
+				if (fCurrentBlock != NULL)
+					fCurrentBlock->ReleaseReference();
+
+				fCurrentBlock = block;
+				fMemoryView->SetTargetAddress(block, fCurrentAddress);
+				fPreviousBlockButton->SetEnabled(true);
+				fNextBlockButton->SetEnabled(true);
+			} else {
+				BString errorMessage;
+				errorMessage.SetToFormat("Unable to read address 0x%" B_PRIx64
+					": %s", block->BaseAddress(), strerror(result));
+
+				BAlert* alert = new(std::nothrow) BAlert("Inspect address",
+					errorMessage.String(), "Close");
+				if (alert == NULL)
+					break;
+
+				alert->Go(NULL);
+				block->ReleaseReference();
+			}
+			break;
+		}
 		default:
 		{
-			BWindow::MessageReceived(msg);
+			BWindow::MessageReceived(message);
 			break;
 		}
 	}
@@ -279,12 +306,33 @@ InspectorWindow::QuitRequested()
 void
 InspectorWindow::MemoryBlockRetrieved(TeamMemoryBlock* block)
 {
+	BMessage message(MSG_MEMORY_BLOCK_RETRIEVED);
+	message.AddPointer("block", block);
+	message.AddInt32("result", B_OK);
+	PostMessage(&message);
+}
+
+
+void
+InspectorWindow::MemoryBlockRetrievalFailed(TeamMemoryBlock* block,
+	status_t result)
+{
+	BMessage message(MSG_MEMORY_BLOCK_RETRIEVED);
+	message.AddPointer("block", block);
+	message.AddInt32("result", result);
+	PostMessage(&message);
+}
+
+
+void
+InspectorWindow::TargetAddressChanged(target_addr_t address)
+{
 	AutoLocker<BLooper> lock(this);
 	if (lock.IsLocked()) {
-		fCurrentBlock = block;
-		fMemoryView->SetTargetAddress(block, fCurrentAddress);
-		fPreviousBlockButton->SetEnabled(true);
-		fNextBlockButton->SetEnabled(true);
+		fCurrentAddress = address;
+		BString computedAddress;
+		computedAddress.SetToFormat("0x%" B_PRIx64, address);
+		fAddressInput->SetText(computedAddress.String());
 	}
 }
 

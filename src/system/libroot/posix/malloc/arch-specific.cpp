@@ -24,6 +24,8 @@
 #include <Debug.h>
 #include <syscalls.h>
 
+#include <libroot_private.h>
+
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -99,13 +101,16 @@ __init_heap(void)
 	// size of the heap is guaranteed until the space is really needed.
 	sHeapBase = (void *)kHeapReservationBase;
 	status_t status = _kern_reserve_address_range((addr_t *)&sHeapBase,
-		B_EXACT_ADDRESS, kHeapReservationSize);
+		B_RANDOMIZED_BASE_ADDRESS, kHeapReservationSize);
 	if (status != B_OK)
 		sHeapBase = NULL;
 
+	uint32 protection = B_READ_AREA | B_WRITE_AREA;
+	if (__gABIVersion < B_HAIKU_ABI_GCC_2_HAIKU)
+		protection |= B_EXECUTE_AREA;
 	sHeapArea = create_area("heap", (void **)&sHeapBase,
-		status == B_OK ? B_EXACT_ADDRESS : B_BASE_ADDRESS,
-		kInitialHeapSize, B_NO_LOCK, B_READ_AREA | B_WRITE_AREA);
+		status == B_OK ? B_EXACT_ADDRESS : B_RANDOMIZED_BASE_ADDRESS,
+		kInitialHeapSize, B_NO_LOCK, protection);
 	if (sHeapArea < B_OK)
 		return sHeapArea;
 
@@ -163,6 +168,11 @@ hoardSbrk(long size)
 
 	// align size request
 	size = (size + hoardHeap::ALIGNMENT - 1) & ~(hoardHeap::ALIGNMENT - 1);
+
+	// choose correct protection flags
+	uint32 protection = B_READ_AREA | B_WRITE_AREA;
+	if (__gABIVersion < B_HAIKU_ABI_GCC_2_HAIKU)
+		protection |= B_EXECUTE_AREA;
 
 	hoardLock(sHeapLock);
 
@@ -259,7 +269,7 @@ hoardSbrk(long size)
 			&& (addr_t)base + newHeapSize
 				<= (addr_t)sHeapBase + kHeapReservationSize) {
 			area = create_area("heap", &base, B_EXACT_ADDRESS, newHeapSize,
-				B_NO_LOCK, B_READ_AREA | B_WRITE_AREA);
+				B_NO_LOCK, protection);
 
 			if (area == B_NO_MEMORY) {
 				hoardUnlock(sHeapLock);
@@ -271,8 +281,8 @@ hoardSbrk(long size)
 		// allocation.
 		if (area < 0) {
 			base = (void*)(sFreeHeapBase + sHeapAreaSize);
-			area = create_area("heap", &base, B_BASE_ADDRESS, newHeapSize,
-				B_NO_LOCK, B_READ_AREA | B_WRITE_AREA);
+			area = create_area("heap", &base, B_RANDOMIZED_BASE_ADDRESS,
+				newHeapSize, B_NO_LOCK, protection);
 		}
 
 		if (area < 0) {

@@ -1,5 +1,6 @@
 /*
  * Copyright 2009, Ingo Weinhold, ingo_weinhold@gmx.de.
+ * Copyright 2013, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 #ifndef SPECIFIC_IMAGE_DEBUG_INFO_H
@@ -10,6 +11,7 @@
 #include <Referenceable.h>
 
 #include "AddressSectionTypes.h"
+#include "ReturnValueInfo.h"
 #include "Types.h"
 
 
@@ -40,6 +42,7 @@ public:
 	virtual						~SpecificImageDebugInfo();
 
 	virtual	status_t			GetFunctions(
+									const BObjectList<SymbolInfo>& symbols,
 									BObjectList<FunctionDebugInfo>& functions)
 										= 0;
 									// returns references
@@ -56,7 +59,7 @@ public:
 									FunctionInstance* functionInstance,
 									CpuState* cpuState,
 									bool getFullFrameInfo,
-									target_addr_t returnFunctionAddress,
+									ReturnValueInfoList* returnValueInfos,
 									StackFrame*& _Frame,
 									CpuState*& _previousCpuState) = 0;
 										// returns reference to previous frame
@@ -86,14 +89,12 @@ public:
 
 protected:
 	static	status_t			GetFunctionsFromSymbols(
+									const BObjectList<SymbolInfo>& symbols,
 									BObjectList<FunctionDebugInfo>& functions,
 									DebuggerInterface* interface,
 									const ImageInfo& imageInfo,
 									SpecificImageDebugInfo* info);
 
-private:
-	static	int					_CompareSymbols(const SymbolInfo* a,
-									const SymbolInfo* b);
 };
 
 

@@ -675,6 +675,8 @@ TFilePanel::Init(const BMessage*)
 	fDirMenuField = new BMenuField(rect, "DirMenuField", "", fDirMenu);
 	fDirMenuField->MenuBar()->SetFont(be_plain_font);
 	fDirMenuField->SetDivider(0);
+	fDirMenuField->MenuBar()->SetMaxContentWidth(rect.Width() - 26.0f);
+		// Make room for the icon
 
 	fDirMenuField->MenuBar()->RemoveItem((int32)0);
 	fDirMenu->SetMenuBar(fDirMenuField->MenuBar());
@@ -885,9 +887,9 @@ TFilePanel::AddFileContextMenus(BMenu* menu)
 		new BMessage(kGetInfo), 'I'));
 	menu->AddItem(new BMenuItem(B_TRANSLATE("Edit name"),
 		new BMessage(kEditItem), 'E'));
-	menu->AddItem(new BMenuItem(TrackerSettings().MoveFilesToTrash()
-		? B_TRANSLATE("Move to Trash")
-		: B_TRANSLATE("Delete"),
+	menu->AddItem(new BMenuItem(TrackerSettings().DontMoveFilesToTrash()
+		? B_TRANSLATE("Delete")
+		: B_TRANSLATE("Move to Trash"),
 		new BMessage(kMoveToTrash), 'T'));
 	menu->AddSeparatorItem();
 	menu->AddItem(new BMenuItem(B_TRANSLATE("Cut"),

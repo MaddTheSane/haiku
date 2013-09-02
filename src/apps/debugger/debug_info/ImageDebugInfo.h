@@ -1,6 +1,6 @@
 /*
  * Copyright 2009, Ingo Weinhold, ingo_weinhold@gmx.de.
- * Copyright 2010, Rene Gollent, rene@gollent.com.
+ * Copyright 2010-2013, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 #ifndef IMAGE_DEBUG_INFO_H
@@ -25,6 +25,7 @@ class FunctionInstance;
 class GlobalTypeCache;
 class LocatableFile;
 class SpecificImageDebugInfo;
+class SymbolInfo;
 class Type;
 class TypeLookupConstraints;
 
@@ -37,7 +38,7 @@ public:
 			const ImageInfo&	GetImageInfo() const	{ return fImageInfo; }
 
 			bool				AddSpecificInfo(SpecificImageDebugInfo* info);
-			status_t			FinishInit();
+			status_t			FinishInit(DebuggerInterface* interface);
 
 			status_t			GetType(GlobalTypeCache* cache,
 									const BString& name,
@@ -52,6 +53,9 @@ public:
 			FunctionInstance*	FunctionAtAddress(target_addr_t address) const;
 			FunctionInstance*	FunctionByName(const char* name) const;
 
+			FunctionInstance*	MainFunction() const
+									{ return fMainFunction; }
+
 			status_t			AddSourceCodeInfo(LocatableFile* file,
 									FileSourceCode* sourceCode) const;
 
@@ -65,11 +69,14 @@ private:
 	static	int					_CompareAddressFunction(
 									const target_addr_t* address,
 									const FunctionInstance* function);
+	static	int					_CompareSymbols(const SymbolInfo* a,
+									const SymbolInfo* b);
 
 private:
 			ImageInfo			fImageInfo;
 			SpecificInfoList	fSpecificInfos;
 			FunctionList		fFunctions;
+			FunctionInstance*	fMainFunction;
 };
 
 

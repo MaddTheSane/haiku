@@ -6,6 +6,7 @@
  *		John Scipione <jscipione@gmail.com>
  */
 
+
 #include "ClockView.h"
 
 #include <Alignment.h>
@@ -24,9 +25,8 @@
 #include "TimeMessages.h"
 
 
-static const char*	kDeskbarSignature		= "application/x-vnd.Be-TSKB";
-
-static const float	kIndentSpacing
+static const char* kDeskbarSignature = "application/x-vnd.Be-TSKB";
+static const float kIndentSpacing
 	= be_control_look->DefaultItemSpacing() * 2.3;
 
 
@@ -52,6 +52,7 @@ ClockView::ClockView(const char* name)
 		new BMessage(kShowTimeZone));
 
 	BView* view = BLayoutBuilder::Group<>(B_VERTICAL, 0)
+		.SetExplicitMaxSize(BSize(B_SIZE_UNLIMITED, B_SIZE_UNSET))
 		.Add(fShowSeconds)
 		.Add(fShowDayOfWeek)
 		.Add(fShowTimeZone)

@@ -1,4 +1,4 @@
-1	finnish	x-vnd.Haiku-libtracker	2580969822
+1	finnish	x-vnd.Haiku-libtracker	1762695842
 common	B_COMMON_DIRECTORY		yhteinen
 OK	WidgetAttributeText		Valmis
 Icon view	VolumeWindow		Kuvakenäkymä
@@ -74,6 +74,7 @@ Arrange by	ContainerWindow		Järjestä:
 Mount server error	AutoMounterSettings		Liittämispalvelinvirhe
 Search	FindPanel		Haku
 Preparing to empty Trash…	StatusWindow		Valmistaudutaan tyhjentämään roskakori...
+You cannot put the selected item(s) into the trash.	FSUtils		Et voi laittaa valittuja kohteita roskakoriin.
 Disks	Model		Levyt
 Create link	ContainerWindow		Luo linkki
 develop	B_COMMON_DEVELOP_DIRECTORY		kehitys
@@ -81,7 +82,6 @@ Decrease size	DeskWindow		Pienennä kokoa
 Size	ContainerWindow		Koko
 All disks	AutoMounterSettings		Kaikki levyt
 Would you like to find some other suitable application?	FSUtils		Haluaisitko etsiä jonkun toisen sopivan sovelluksen?
-Ask before deleting for good	SettingsView		Kysy ennen kuin poistetaan pysyvästi
 Finish: %time - %finishtime left	StatusWindow		Loppuu: %time - %finishtime jäljellä
 Could not open \"%document\" with application \"%app\" (Missing libraries: %library). \n	FSUtils		Asiakirjan ”%document” avaus sovelluksella ”%app” epäonnistui (Puuttuvat kirjastot: %library). \n
 no items	CountView		ei kohteita
@@ -102,7 +102,6 @@ New folder	FilePanelPriv		Uusi kansio
 %name info	InfoWindow	InfoWindow Title	%name-tiedot
 Favorites	FavoritesMenu		Suosikit
 Add-ons	VolumeWindow		Lisäosat
-Move deleted files to Trash first	SettingsView		Siirrä poistetut tiedostot ensin Roskakoriin
 Sorry, you can't copy items to the Trash.	PoseView		Et voi kopioida kohteita roskakoriin.
 List view	VolumeWindow		Luettelonäkymä
 matches wildcard expression	SelectionWindow		täsmää jokerilausekkeeseen
@@ -144,6 +143,7 @@ Add-ons	ContainerWindow		Lisäosat
 Edit templates…	TemplatesMenu		Muokkaa mallinteita...
 Finish: %time - Over %finishtime left	StatusWindow		Loppuu: %time - Yli %finistime jäljellä
 An item named \"%name\" already exists in this folder. Would you like to replace it with the symbolic link you are creating?	FSUtils		Kohde nimeltä ”%name” on jo olemassa tässä kansiossa. Haluaisitko korvata sen symbolisella linkillä, jota olet luomassa?
+Fewer options	FindPanel		Vähemmän valitsimia
 Sorry, there is not enough free space on the destination volume to copy the selection.	FSUtils		Kohdetaltiolla ei ole tarpeeksi tilaa valinnan kopioimiseksi.
 Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Asiakirjan ”%document” avaaminen sovelluksella ”%app” epäonnistui (%error). 
 Sorry, saving more than one item is not allowed.	FilePanelPriv		Useamman kuin yhden kohteen tallentaminen ei ole sallittua.
@@ -213,7 +213,6 @@ Resize to fit	VolumeWindow		Muunna koko sopimaan
 Could not find application \"%appname\"	OpenWithWindow		Ei voitu löytää sovellusta ”%appname”
 The selected item cannot be moved to the Trash. Would you like to delete it instead? (This operation cannot be reverted.)	PoseView		Valittua kohdetta ei voida siirtää roskakoriin. Haluaisitko sen sijaan poistaa sen? (Tätä toimintoa ei voida palauttaa.)
 Invert	SelectionWindow		Käänteinen
-Save Query as template…	FindPanel		Tallenna kysely mallinteena...
 rename	InfoWindow	As in 'if you rename this folder...' (en) 'Wird dieser Ordner umbenannt...' (de)	nimeä uudelleen
 Find	FindPanel		Haku
 Move	FSUtils	Button label, 'Move' (en), 'Verschieben' (de)	Siirrä
@@ -238,6 +237,7 @@ Temporary	FindPanel		Tilapäinen
 Version	OpenWithWindow		Versio
 Default application	InfoWindow		Oletussovellus
 Preparing to copy items…	StatusWindow		Valmistaudutaan kopioimaan kohteita...
+Save query as template…	FindPanel		Tallenna kysely mallinteena...
 Show folder location in title tab	SettingsView		Näytä kansion sijainti otsikkovälilehdessä
 Proceed	FSUtils		Jatketaan
 Some items already exist in this folder with the same names as the items you are %verb.\n \nWould you like to replace them with the ones you are %verb or be prompted for each one?	FSUtils		Tässä kansiossa on jo joitakin kohteita, joilla on samat nimet kuin kohteilla, joille haluat suorittaa toiminnon ”%verb”.\n \nHaluaisitko korvata ne niillä kohteilla, jotka joille haluat suorittaa toiminnon ”%verb” vai haluatko kysymyskehotteen jokaiselle?
@@ -258,7 +258,6 @@ TiB	WidgetAttributeText		tebitavua
 The file \"%name\" already exists in the specified folder. Do you want to replace it?	FilePanelPriv		Tiedosto ”%name” on jo olemassa määritellyssä kansiossa. Haluatko korvata sen?
 Cancel	ContainerWindow		Peru
 Only the boot disk	AutoMounterSettings		Vain alkulatauslevy
-Trash	TrackerSettingsWindow		Roskakori
 If you %ifYouDoAction the config folder, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Jos kohdistat toiminnon ”%ifYouDoAction” asetuskansioon, ”%osName” ei ehkä toimi oikein!\n\nOletko varma, että haluat tehdä tämän?
 Unmount	ContainerWindow		Irrota
 Copy layout	ContainerWindow		Kopioi sijoittelu
@@ -337,6 +336,7 @@ The specified name is already used as the name of a folder. Please choose anothe
 Clean up	ContainerWindow		Tyhjennä
 after	FindPanel		jälkeen
 Select…	QueryContainerWindow		Valitse...
+More options	FindPanel		Lisää valitsimia
 link	FSUtils	filename link	linkki
 At %func \nfind_directory() failed. \nReason: %error	TrackerInitialState		Funktio %func kohteessa\nfind_directory() epäonnistui. \nSyy: %error
 The specified name is illegal. Please choose another name.	FilePanelPriv		Määritelty nimi on virheellinen. Valitse toinen nimi.
@@ -394,7 +394,6 @@ Icon view	DeskWindow		Kuvakenäkymä
 Select all	QueryContainerWindow		Valitse kaikki
 Files cannot be moved or deleted from a read-only volume.	PoseView		Tiedostoja ei voi siirtää tai poistaa kirjoitussuojatulta taltiolta.
 There was a problem trying to replace \"%name\". The item might be open or busy.	FSUtils		Kohteen ”%name” korvaaminen epäonnistui. Kohde on ehkä avattu tai se on varattu.
-You cannot put the Trash, home or Desktop directory into the trash.	FSUtils		Et voi laittaa roskakoria, kotihakemistoa tai työpöytähakemistoa roskakoriin.
 Owner	FilePermissionsView		Omistaja
 There was a problem trying to save in the folder you specified. Please try another one.	FilePanelPriv		Tallentaminen haluamaasi kansioon epäonnistui. Kokeile jotain toista kansiota.
 Restore	ContainerWindow		Palauta
@@ -449,6 +448,7 @@ contains	FindPanel		sisältää
 Relation	OpenWithWindow		Suhde
 Open	FilePanelPriv		Avaa
 Mount	DeskWindow		Liitä
+Recent queries	FindPanel		Äskettäiset kyselyt
 Mount	ContainerWindow		Liitä
 %capacity (%used used -- %free free)	InfoWindow		%capacity (%used käytetty -- %free vapaana)
 Cancel	FSClipBoard		Peru

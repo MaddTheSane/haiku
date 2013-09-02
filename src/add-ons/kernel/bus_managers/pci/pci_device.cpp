@@ -66,14 +66,14 @@ pci_device_write_io_32(pci_device* device, addr_t mappedIOAddress, uint32 value)
 
 
 static uint32
-pci_device_read_pci_config(pci_device* device, uint8 offset, uint8 size)
+pci_device_read_pci_config(pci_device* device, uint16 offset, uint8 size)
 {
 	return gPCI->ReadConfig(device->device, offset, size);
 }
 
 
 static void
-pci_device_write_pci_config(pci_device* device, uint8 offset, uint8 size,
+pci_device_write_pci_config(pci_device* device, uint16 offset, uint8 size,
 	uint32 value)
 {
 	gPCI->WriteConfig(device->device, offset, size, value);
@@ -94,6 +94,14 @@ pci_device_find_capability(pci_device* device, uint8 capID, uint8* offset)
 }
 
 
+static status_t
+pci_device_find_extended_capability(pci_device* device, uint16 capID,
+	uint16* offset)
+{
+	return gPCI->FindExtendedCapability(device->device, capID, offset);
+}
+
+
 static void
 pci_device_get_pci_info(pci_device* device, struct pci_info* info)
 {
@@ -107,9 +115,9 @@ pci_device_get_pci_info(pci_device* device, struct pci_info* info)
 static status_t
 pci_device_init_driver(device_node* node, void** _cookie)
 {
-	uint32 domain;
+	uint8 domain;
 	uint8 bus, deviceNumber, function;
-	if (gDeviceManager->get_attr_uint32(node, B_PCI_DEVICE_DOMAIN, &domain,
+	if (gDeviceManager->get_attr_uint8(node, B_PCI_DEVICE_DOMAIN, &domain,
 			false) != B_OK
 		|| gDeviceManager->get_attr_uint8(node, B_PCI_DEVICE_BUS, &bus,
 			false) != B_OK
@@ -187,5 +195,6 @@ pci_device_module_info gPCIDeviceModule = {
 	pci_device_read_pci_config,
 	pci_device_write_pci_config,
 	pci_device_find_capability,
-	pci_device_get_pci_info
+	pci_device_get_pci_info,
+	pci_device_find_extended_capability
 };

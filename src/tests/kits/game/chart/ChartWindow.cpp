@@ -58,9 +58,9 @@ enum {
 	H_BORDER		= 5,
 	V_BORDER		= 2,
 	ANIM_LABEL		= 52,
-	ANIM_POPUP		= 42,
+	ANIM_POPUP		= 125,
 	DISP_LABEL		= 40,
-	DISP_POPUP		= 42,
+	DISP_POPUP		= 122,
 	BUTTON_WIDTH	= 50,
 	BUTTON_OFFSET	= -100,
 	SPACE_LABEL		= 40,
@@ -518,12 +518,10 @@ ChartWindow::ChartWindow(BRect frame, const char *name)
 		popup->SetFont(&font);
 		popup->MenuBar()->SetFont(&font);
 		popup->Menu()->SetFont(&font);
-		popup->ResizeToPreferred();
 		popup->SetDivider(popup->StringWidth(popup->Label()) + 4.0f);
 		fTopView->AddChild(popup);
 
-	h += ANIM_LABEL + ANIM_POPUP +
-		 popup->StringWidth(B_TRANSLATE("Slow rotation"));
+	h += ANIM_LABEL + ANIM_POPUP + H_BORDER;
 
 		/* display mode popup */
 		menu = new BPopUpMenu(B_TRANSLATE("Off"));
@@ -551,12 +549,10 @@ ChartWindow::ChartWindow(BRect frame, const char *name)
 		popup->SetFont(&font);
 		popup->MenuBar()->SetFont(&font);
 		popup->Menu()->SetFont(&font);
-		popup->ResizeToPreferred();
 		popup->SetDivider(popup->StringWidth(popup->Label()) + 4.0f);
 		fTopView->AddChild(popup);
 
-	h += DISP_LABEL + DISP_POPUP +
-		popup->StringWidth(B_TRANSLATE("DirectWindow")) + H_BORDER;
+	h += DISP_LABEL + DISP_POPUP + H_BORDER;
 
 		/* create the offwindow (invisible) button on the left side.
 		   this will be used to record the content of the Picture
@@ -1125,7 +1121,8 @@ ChartWindow::GetAppWindow(const char *name)
 		if (window == NULL)
 			break;
 		if (window->LockWithTimeout(200000) == B_OK) {
-			if (strcmp(window->Name(), name) == 0) {
+			// skip the w> prefix in window's name.
+			if (strcmp(window->Name() + 2, name) == 0) {
 				window->Unlock();
 				break;
 			}
@@ -1170,7 +1167,7 @@ ChartWindow::ButtonPicture(bool active, int32 button_type)
 		   than what a standard BButton would allow) with the current value
 		   of the star density pourcentage. */
 		value = (fCurrentSettings.star_density*100 + STAR_DENSITY_MAX/2) / STAR_DENSITY_MAX;
-		sprintf(word, "%3ld", value);
+		sprintf(word, "%3" B_PRId32, value);
 	draw_string:
 		fOffwindowButton->SetFont(be_bold_font);
 		fOffwindowButton->SetFontSize(14.0);
@@ -2134,7 +2131,7 @@ ChartWindow::SetPatternBits(buffer *buf)
 	That's the main thread controling the animation and synchronising
 	the engine state with the changes coming from the UI.
 */
-long
+int32
 ChartWindow::Animation(void *data)
 {
 	int32			i, cur_4_frames_index, cur_last_fps, count_fps;
@@ -2252,7 +2249,7 @@ ChartWindow::Animation(void *data)
    slave of the Animation thread. It's directly synchronised with its
    master, and will only do some star animation processing whenever
    its master allows him to do so. */
-long
+int32
 ChartWindow::Animation2(void *data)
 {
 	ChartWindow *w = (ChartWindow*)data;

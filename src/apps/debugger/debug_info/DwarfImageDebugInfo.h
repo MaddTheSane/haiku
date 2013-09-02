@@ -1,6 +1,6 @@
 /*
  * Copyright 2009, Ingo Weinhold, ingo_weinhold@gmx.de.
- * Copyright 2010-2012, Rene Gollent, rene@gollent.com.
+ * Copyright 2010-2013, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 #ifndef DWARF_IMAGE_DEBUG_INFO_H
@@ -52,6 +52,7 @@ public:
 									{ return fRelocationDelta; }
 
 	virtual	status_t			GetFunctions(
+									const BObjectList<SymbolInfo>& symbols,
 									BObjectList<FunctionDebugInfo>& functions);
 	virtual	status_t			GetType(GlobalTypeCache* cache,
 									const BString& name,
@@ -64,7 +65,7 @@ public:
 									FunctionInstance* functionInstance,
 									CpuState* cpuState,
 									bool getFullFrameInfo,
-									target_addr_t returnFunctionAddress,
+									ReturnValueInfoList* returnValueInfos,
 									StackFrame*& _frame,
 									CpuState*& _previousCpuState);
 	virtual	status_t			GetStatement(FunctionDebugInfo* function,
@@ -104,8 +105,8 @@ private:
 									const EntryListWrapper& variableEntries,
 									const EntryListWrapper& blockEntries);
 
-			status_t			_CreateReturnValue(
-									target_addr_t returnFunctionAddress,
+			status_t			_CreateReturnValues(
+									ReturnValueInfoList* returnValueInfos,
 									Image* image,
 									StackFrame* frame,
 									DwarfStackFrameDebugInfo& factory);

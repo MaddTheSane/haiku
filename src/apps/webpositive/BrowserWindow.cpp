@@ -39,6 +39,8 @@
 #include <Catalog.h>
 #include <CheckBox.h>
 #include <Clipboard.h>
+#include <ControlLook.h>
+#include <Debug.h>
 #include <Directory.h>
 #include <Entry.h>
 #include <File.h>
@@ -56,6 +58,7 @@
 #include <Roster.h>
 #include <Screen.h>
 #include <SeparatorView.h>
+#include <Size.h>
 #include <SpaceLayoutItem.h>
 #include <StatusBar.h>
 #include <StringView.h>
@@ -83,6 +86,7 @@
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "WebPositive Window"
+
 
 enum {
 	OPEN_LOCATION								= 'open',
@@ -237,6 +241,81 @@ private:
 };
 
 
+class CloseButton : public BButton {
+public:
+	CloseButton(BMessage* message)
+		:
+		BButton("close button", NULL, message),
+		fOverCloseRect(false)
+	{
+		// Button is 16x16 regardless of font size
+		SetExplicitMinSize(BSize(15, 15));
+		SetExplicitMaxSize(BSize(15, 15));
+	}
+
+	virtual void Draw(BRect updateRect)
+	{
+		BRect frame = Bounds();
+		BRect closeRect(frame.InsetByCopy(4, 4));
+		rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
+		float tint = B_DARKEN_1_TINT;
+
+		if (fOverCloseRect)
+			tint *= 1.4;
+		else
+			tint *= 1.2;
+
+		if (Value() == B_CONTROL_ON && fOverCloseRect) {
+			// Draw the button frame
+			be_control_look->DrawButtonFrame(this, frame, updateRect,
+				base, base, BControlLook::B_ACTIVATED
+					| BControlLook::B_BLEND_FRAME);
+			be_control_look->DrawButtonBackground(this, frame,
+				updateRect, base, BControlLook::B_ACTIVATED);
+			closeRect.OffsetBy(1, 1);
+			tint *= 1.2;
+		} else {
+			SetHighColor(base);
+			FillRect(updateRect);
+		}
+
+		// Draw the ×
+		base = tint_color(base, tint);
+		SetHighColor(base);
+		SetPenSize(2);
+		StrokeLine(closeRect.LeftTop(), closeRect.RightBottom());
+		StrokeLine(closeRect.LeftBottom(), closeRect.RightTop());
+		SetPenSize(1);
+	}
+
+	virtual void MouseMoved(BPoint where, uint32 transit,
+		const BMessage* dragMessage)
+	{
+		switch (transit) {
+			case B_ENTERED_VIEW:
+				fOverCloseRect = true;
+				Invalidate();
+				break;
+			case B_EXITED_VIEW:
+				fOverCloseRect = false;
+				Invalidate();
+				break;
+			case B_INSIDE_VIEW:
+				fOverCloseRect = true;
+				break;
+			case B_OUTSIDE_VIEW:
+				fOverCloseRect = false;
+				break;
+		}
+
+		BButton::MouseMoved(where, transit, dragMessage);
+	}
+
+private:
+	bool fOverCloseRect;
+};
+
+
 // #pragma mark - BrowserWindow
 
 
@@ -383,19 +462,19 @@ BrowserWindow::BrowserWindow(BRect frame, SettingsMessage* appSettings,
 	}
 
 	// Back, Forward, Stop & Home buttons
-	fBackButton = new IconButton("Back", 0, NULL, new BMessage(GO_BACK));
+	fBackButton = new BIconButton("Back", NULL, new BMessage(GO_BACK));
 	fBackButton->SetIcon(201);
 	fBackButton->TrimIcon();
 
-	fForwardButton = new IconButton("Forward", 0, NULL, new BMessage(GO_FORWARD));
+	fForwardButton = new BIconButton("Forward", NULL, new BMessage(GO_FORWARD));
 	fForwardButton->SetIcon(202);
 	fForwardButton->TrimIcon();
 
-	fStopButton = new IconButton("Stop", 0, NULL, new BMessage(STOP));
+	fStopButton = new BIconButton("Stop", NULL, new BMessage(STOP));
 	fStopButton->SetIcon(204);
 	fStopButton->TrimIcon();
 
-	fHomeButton = new IconButton("Home", 0, NULL, new BMessage(HOME));
+	fHomeButton = new BIconButton("Home", NULL, new BMessage(HOME));
 	fHomeButton->SetIcon(206);
 	fHomeButton->TrimIcon();
 	if (!fAppSettings->GetValue(kSettingsKeyShowHomeButton, true))
@@ -424,25 +503,29 @@ BrowserWindow::BrowserWindow(BRect frame, SettingsMessage* appSettings,
 	const float kElementSpacing = 5;
 
 	// Find group
+	fFindCloseButton = new CloseButton(new BMessage(EDIT_HIDE_FIND_GROUP));
 	fFindTextControl = new BTextControl("find", B_TRANSLATE("Find:"), "",
 		new BMessage(EDIT_FIND_NEXT));
 	fFindTextControl->SetModificationMessage(new BMessage(FIND_TEXT_CHANGED));
 	fFindPreviousButton = new BButton(B_TRANSLATE("Previous"),
 		new BMessage(EDIT_FIND_PREVIOUS));
+	fFindPreviousButton->SetToolTip(
+		B_TRANSLATE_COMMENT("Find previous occurrence of search terms",
+			"find bar previous button tooltip"));
 	fFindNextButton = new BButton(B_TRANSLATE("Next"),
 		new BMessage(EDIT_FIND_NEXT));
-	fFindCloseButton = new BButton(B_TRANSLATE("Close"),
-		new BMessage(EDIT_HIDE_FIND_GROUP));
+	fFindNextButton->SetToolTip(
+		B_TRANSLATE_COMMENT("Find next occurrence of search terms",
+			"find bar next button tooltip"));
 	fFindCaseSensitiveCheckBox = new BCheckBox(B_TRANSLATE("Match case"));
 	BGroupLayout* findGroup = BLayoutBuilder::Group<>(B_VERTICAL, 0.0)
 		.Add(new BSeparatorView(B_HORIZONTAL, B_PLAIN_BORDER))
-		.Add(BGroupLayoutBuilder(B_HORIZONTAL, kElementSpacing)
+		.Add(BGroupLayoutBuilder(B_HORIZONTAL, B_USE_SMALL_SPACING)
+			.Add(fFindCloseButton)
 			.Add(fFindTextControl)
 			.Add(fFindPreviousButton)
 			.Add(fFindNextButton)
 			.Add(fFindCaseSensitiveCheckBox)
-			.Add(BSpaceLayoutItem::CreateGlue())
-			.Add(fFindCloseButton)
 			.SetInsets(kInsetSpacing, kInsetSpacing,
 				kInsetSpacing, kInsetSpacing)
 		)
@@ -2332,5 +2415,3 @@ BrowserWindow::_HandlePageSourceResult(const BMessage* message)
 		alert->Go(NULL);
 	}
 }
-
-

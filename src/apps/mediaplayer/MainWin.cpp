@@ -1092,7 +1092,7 @@ MainWin::OpenPlaylistItem(const PlaylistItemRef& item)
 			"The file could not be opened.");
 		message.ReplaceFirst("%app%", kApplicationName);
 		BAlert* alert = new BAlert(kApplicationName, message.String(),
-			B_TRANSLATE("OK"));
+			B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
 		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 		alert->Go();
 		_PlaylistItemOpened(item, ret);
@@ -1341,7 +1341,7 @@ MainWin::_PlaylistItemOpened(const PlaylistItemRef& item, status_t result)
 				message << B_TRANSLATE("Error: ") << strerror(result);
 			}
 			BAlert* alert = new BAlert("error", message.String(),
-				B_TRANSLATE("OK"));
+				B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
 			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 			alert->Go();
 			fControls->SetDisabledString(kDisabledSeekMessage);
@@ -1529,7 +1529,7 @@ MainWin::_CreateMenu()
 	fAttributesMenu->AddItem(fRatingMenu);
 	for (int32 i = 1; i <= 10; i++) {
 		char label[16];
-		snprintf(label, sizeof(label), "%ld", i);
+		snprintf(label, sizeof(label), "%" B_PRId32, i);
 		BMessage* setRatingMsg = new BMessage(M_SET_RATING);
 		setRatingMsg->AddInt32("rating", i);
 		fRatingMenu->AddItem(new BMenuItem(label, setRatingMsg));
@@ -1541,7 +1541,7 @@ void
 MainWin::_SetupVideoAspectItems(BMenu* menu)
 {
 	BMenuItem* item;
-	while ((item = menu->RemoveItem(0L)) != NULL)
+	while ((item = menu->RemoveItem((int32)0)) != NULL)
 		delete item;
 
 	int width;
@@ -1626,7 +1626,7 @@ MainWin::_SetupTrackMenus(BMenu* audioTrackMenu, BMenu* videoTrackMenu,
 			"Audio track menu"), new BMessage(M_DUMMY)));
 		audioTrackMenu->ItemAt(0)->SetMarked(true);
 	}
-
+	audioTrackMenu->SetEnabled(count > 1);
 
 	count = fController->VideoTrackCount();
 	current = fController->CurrentVideoTrack();
@@ -1641,6 +1641,7 @@ MainWin::_SetupTrackMenus(BMenu* audioTrackMenu, BMenu* videoTrackMenu,
 		videoTrackMenu->AddItem(new BMenuItem("none", new BMessage(M_DUMMY)));
 		videoTrackMenu->ItemAt(0)->SetMarked(true);
 	}
+	videoTrackMenu->SetEnabled(count > 1);
 
 	count = fController->SubTitleTrackCount();
 	if (count > 0) {
@@ -1670,6 +1671,7 @@ MainWin::_SetupTrackMenus(BMenu* audioTrackMenu, BMenu* videoTrackMenu,
 			new BMessage(M_DUMMY)));
 		subTitleTrackMenu->ItemAt(0)->SetMarked(true);
 	}
+	subTitleTrackMenu->SetEnabled(count > 1);
 }
 
 
@@ -2440,7 +2442,7 @@ MainWin::_UpdatePlaylistItemFile()
 				int32 bitrate = (int32)(format.u.encoded_audio.bit_rate
 					/ 1000);
 				char text[256];
-				snprintf(text, sizeof(text), "%ld kbit", bitrate);
+				snprintf(text, sizeof(text), "%" B_PRId32 " kbit", bitrate);
 				node.WriteAttr("Audio:Bitrate", B_STRING_TYPE, 0, text,
 					strlen(text) + 1);
 			}
@@ -2457,7 +2459,7 @@ MainWin::_UpdatePlaylistItemFile()
 				int32 bitrate = (int32)(format.u.encoded_video.avg_bit_rate
 					/ 1000);
 				char text[256];
-				snprintf(text, sizeof(text), "%ld kbit", bitrate);
+				snprintf(text, sizeof(text), "%" B_PRId32 " kbit", bitrate);
 				node.WriteAttr("Video:Bitrate", B_STRING_TYPE, 0, text,
 					strlen(text) + 1);
 			}

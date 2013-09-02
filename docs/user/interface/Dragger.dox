@@ -1,17 +1,19 @@
 /*
- * Copyright 2012 Haiku inc.
+ * Copyright 2011 Haiku Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
- * Documentation by:
+ * Authors:
  *		John Scipione, jscipione@gmail.com
  *
  * Corresponds to:
- *		/trunk/headers/os/interface/Dragger.h	 hrev45050
- *		/trunk/src/kits/interface/Dragger.cpp	 hrev45050
+ *		headers/os/interface/Dragger.h	 hrev45050
+ *		src/kits/interface/Dragger.cpp	 hrev45050
 
 
 /*!
 	\file Dragger.h
+	\ingroup interface
+	\ingroup libbe
 	\brief Provides the BDragger class.
 */
 

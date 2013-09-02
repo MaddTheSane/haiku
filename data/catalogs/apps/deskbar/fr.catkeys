@@ -1,18 +1,19 @@
-1	french	x-vnd.Be-TSKB	1210725923
+1	french	x-vnd.Be-TSKB	2335730970
 Power off	DeskbarMenu		Éteindre
-Edit menu…	PreferencesWindow		Éditer le menu…
+Sort applications by name	PreferencesWindow		Trier les applications par nom
 Suspend	DeskbarMenu		Mettre en veille
 Hide clock	TimeView		Masquer l'horloge
 Applications	PreferencesWindow		Applications
 Time preferences…	TimeView		Préférences de l'heure…
 About Haiku	DeskbarMenu		À propos de Haiku
+Edit in Tracker…	PreferencesWindow		Éditer dans le Tracker…
 Recent documents:	PreferencesWindow		Documents récents :
 Recent applications	DeskbarMenu		Applications récentes
-Sort running applications	PreferencesWindow		Trier les applications lancées
 Applications	B_USER_DESKBAR_DIRECTORY/Applications		Applications
 Find…	DeskbarMenu		Rechercher…
 Show clock	Tray		Afficher l'horloge
 Window	PreferencesWindow		Fenêtre
+Defaults	PreferencesWindow		Valeurs par défaut
 Menu	PreferencesWindow		Menu
 Recent documents	DeskbarMenu		Documents récents
 Auto-hide	PreferencesWindow		Masquer automatiquement
@@ -30,6 +31,7 @@ Restart Tracker	DeskbarMenu		Redémarrer le Tracker
 Close all	WindowMenu		Tout fermer
 Deskbar preferences	PreferencesWindow		Réglages de la Deskbar
 Mount	DeskbarMenu		Monter
+Revert	PreferencesWindow		Rétablir
 Small	PreferencesWindow		Petite
 Recent applications:	PreferencesWindow		Applications récentes :
 Shutdown…	DeskbarMenu		Arrêter…

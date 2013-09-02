@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2013 Haiku Inc. All rights reserved.
+ * Copyright 2008-2013 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT license.
  *
  * Authors:
@@ -37,19 +37,17 @@ enum {
 	MSG_SIZE_TEXTCONTROL		= 'stct'
 };
 
+static const uint32 kMegaByte = 0x100000;
+
 
 CreateParametersPanel::CreateParametersPanel(BWindow* window,
 	BPartition* partition, off_t offset, off_t size)
 	:
-	AbstractParametersPanel(window)
+	ChangeParametersPanel(window)
 {
-	Init(B_CREATE_PARAMETER_EDITOR, "", partition);
+	_CreateCreateControls(partition, offset, size);
 
-	// Scale offset, and size from bytes to megabytes (2^20)
-	// so that we do not run over a signed int32.
-	offset /= kMegaByte;
-	size /= kMegaByte;
-	_CreateViewControls(partition, offset, size);
+	Init(B_CREATE_PARAMETER_EDITOR, "", partition);
 }
 
 
@@ -62,25 +60,67 @@ status_t
 CreateParametersPanel::Go(off_t& offset, off_t& size, BString& name,
 	BString& type, BString& parameters)
 {
-	// The object will be deleted in Go(), so we need to get the values before
+	// The object will be deleted in Go(), so we need to get the values via
+	// a BMessage
+
+	BMessage storage;
+	status_t status = ChangeParametersPanel::Go(name, type, parameters,
+		storage);
+	if (status != B_OK)
+		return status;
 
 	// Return the value back as bytes.
-	size = (off_t)fSizeSlider->Size() * kMegaByte;
-	offset = (off_t)fSizeSlider->Offset() * kMegaByte;
+	size = storage.GetInt64("size", 0);
+	offset = storage.GetInt64("offset", 0);
 
-	// get name
-	name.SetTo(fNameTextControl->Text());
+	return B_OK;
+}
 
-	// get type
-	if (BMenuItem* item = fTypeMenuField->Menu()->FindMarked()) {
-		const char* _type;
-		BMessage* message = item->Message();
-		if (!message || message->FindString("type", &_type) < B_OK)
-			_type = kPartitionTypeBFS;
-		type << _type;
+
+void
+CreateParametersPanel::MessageReceived(BMessage* message)
+{
+	switch (message->what) {
+		case MSG_SIZE_SLIDER:
+			_UpdateSizeTextControl();
+			break;
+
+		case MSG_SIZE_TEXTCONTROL:
+		{
+			off_t size = strtoll(fSizeTextControl->Text(), NULL, 10) * kMegaByte;
+			if (size >= 0 && size <= fSizeSlider->MaxPartitionSize())
+				fSizeSlider->SetSize(size);
+			else
+				_UpdateSizeTextControl();
+			break;
+		}
+
+		default:
+			ChangeParametersPanel::MessageReceived(message);
 	}
+}
 
-	return AbstractParametersPanel::Go(parameters);
+
+bool
+CreateParametersPanel::NeedsEditor() const
+{
+	return false;
+}
+
+
+status_t
+CreateParametersPanel::ParametersReceived(const BString& parameters,
+	BMessage& storage)
+{
+	// Return the value back as bytes.
+	status_t status = storage.SetInt64("size", fSizeSlider->Size());
+	if (status == B_OK)
+		status = storage.SetInt64("offset", fSizeSlider->Offset());
+
+	if (status != B_OK)
+		return status;
+
+	return ChangeParametersPanel::ParametersReceived(parameters, storage);
 }
 
 
@@ -90,24 +130,21 @@ CreateParametersPanel::AddControls(BLayoutBuilder::Group<>& builder,
 {
 	builder
 		.Add(fSizeSlider)
-		.Add(fSizeTextControl)
-		.AddGrid(0.0, 5.0)
-			.Add(fNameTextControl->CreateLabelLayoutItem(), 0, 0)
-			.Add(fNameTextControl->CreateTextViewLayoutItem(), 1, 0)
-			.Add(fTypeMenuField->CreateLabelLayoutItem(), 0, 1)
-			.Add(fTypeMenuField->CreateMenuBarLayoutItem(), 1, 1)
-		.End()
-		.Add(editorView);
+		.Add(fSizeTextControl);
+
+	ChangeParametersPanel::AddControls(builder, editorView);
 }
 
 
 void
-CreateParametersPanel::_CreateViewControls(BPartition* parent, off_t offset,
+CreateParametersPanel::_CreateCreateControls(BPartition* parent, off_t offset,
 	off_t size)
 {
 	// Setup the controls
+	// TODO: use a lower granularity for smaller disks -- but this would
+	// require being able to parse arbitrary size strings with unit
 	fSizeSlider = new SizeSlider("Slider", B_TRANSLATE("Partition size"), NULL,
-		offset, offset + size);
+		offset, size, kMegaByte);
 	fSizeSlider->SetPosition(1.0);
 	fSizeSlider->SetModificationMessage(new BMessage(MSG_SIZE_SLIDER));
 
@@ -120,61 +157,9 @@ CreateParametersPanel::_CreateViewControls(BPartition* parent, off_t offset,
 	fSizeTextControl->SetModificationMessage(
 		new BMessage(MSG_SIZE_TEXTCONTROL));
 
-	fNameTextControl = new BTextControl("Name Control",
-		B_TRANSLATE("Partition name:"),	"", NULL);
-	if (!parent->SupportsChildName())
-		fNameTextControl->SetEnabled(false);
-
-	fTypePopUpMenu = new BPopUpMenu("Partition Type");
-
-	int32 cookie = 0;
-	BString supportedType;
-	while (parent->GetNextSupportedChildType(&cookie, &supportedType) == B_OK) {
-		BMessage* message = new BMessage(MSG_PARTITION_TYPE);
-		message->AddString("type", supportedType);
-		BMenuItem* item = new BMenuItem(supportedType, message);
-		fTypePopUpMenu->AddItem(item);
-
-		if (strcmp(supportedType, kPartitionTypeBFS) == 0)
-			item->SetMarked(true);
-	}
-
-	fTypeMenuField = new BMenuField(B_TRANSLATE("Partition type:"),
-		fTypePopUpMenu);
+	CreateChangeControls(parent);
 
 	fOkButton->SetLabel(B_TRANSLATE("Create"));
-}
-
-
-void
-CreateParametersPanel::MessageReceived(BMessage* message)
-{
-	switch (message->what) {
-		case MSG_PARTITION_TYPE:
-			if (fEditor != NULL) {
-				const char* type;
-				if (message->FindString("type", &type) == B_OK)
-					fEditor->ParameterChanged("type", BVariant(type));
-			}
-			break;
-
-		case MSG_SIZE_SLIDER:
-			_UpdateSizeTextControl();
-			break;
-
-		case MSG_SIZE_TEXTCONTROL:
-		{
-			int32 size = atoi(fSizeTextControl->Text());
-			if (size >= 0 && size <= fSizeSlider->MaxPartitionSize())
-				fSizeSlider->SetValue(size + fSizeSlider->Offset());
-			else
-				_UpdateSizeTextControl();
-			break;
-		}
-
-		default:
-			AbstractParametersPanel::MessageReceived(message);
-	}
 }
 
 
@@ -182,6 +167,6 @@ void
 CreateParametersPanel::_UpdateSizeTextControl()
 {
 	BString sizeString;
-	sizeString << fSizeSlider->Value() - fSizeSlider->Offset();
+	sizeString << fSizeSlider->Size() / kMegaByte;
 	fSizeTextControl->SetText(sizeString.String());
 }

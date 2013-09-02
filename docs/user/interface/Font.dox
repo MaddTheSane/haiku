@@ -1,17 +1,20 @@
 /*
- * Copyright 2013 Haiku inc.
+ * Copyright 2013 Haiku Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
- * Documentation by:
- *		John Scipione <jscipione@gmail.com>
+ * Authors:
+ *		John Scipione, jscipione@gmail.com
+ *
  * Corresponds to:
- *		/trunk/headers/os/interface/Font.h	 hrev45178
- *		/trunk/src/kits/interface/Font.cpp	 hrev45178
+ *		headers/os/interface/Font.h	 hrev45178
+ *		src/kits/interface/Font.cpp	 hrev45178
  */
 
 
 /*!
 	\file Font.h
+	\ingroup interface
+	\ingroup libbe
 	\brief BFont class definition, unicode_block class definition, and
 		font-related struct and enum definitions.
 */
@@ -19,12 +22,14 @@
 
 /*!
 	\var B_CHAR_SPACING
+
 	Position each character without adjustment. Best mode for printing.
 */
 
 
 /*!
 	\var B_STRING_SPACING
+
 	Optimizes the position of each character within it's space. Collisions
 	are unlikely but characters may touch each other. Best mode to use when
 	the screen needs to match what appears on the printed page.
@@ -33,6 +38,7 @@
 
 /*!
 	\var B_BITMAP_SPACING
+
 	The widths of the characters are chosen so that they never collide and
 	rarely touch. Best mode for drawing small amounts of text.
 */
@@ -40,225 +46,266 @@
 
 /*!
 	\var B_FIXED_SPACING
+
 	Positions characters at a constant width. Best mode for fixed-width fonts.
 */
 
 
 /*!
 	\enum font_direction
+	\ingroup interface
+
 	Determines the direction of the text rendered by the font,
 	left-to-right or right-to-left.
 */
 
+
 /*!
 	\var font_direction B_FONT_LEFT_TO_RIGHT
+
 	Left to right.
 */
 
 /*!
 	\var font_direction B_FONT_RIGHT_TO_LEFT
+
 	Right to left.
 */
 
 
 /*!
 	\var B_DISABLE_ANTIALIASING
+
 	Disable antialiasing. Used by BFont::Flags() and BFont::SetFlags().
 */
 
 
 /*!
 	\var B_FORCE_ANTIALIASING
+
 	Force antialiasing. Used by BFont::Flags() and BFont::SetFlags().
 */
 
 
 /*!
 	\var B_TRUNCATE_END
+
 	Truncate from the end of the string.
 */
 
 
 /*!
 	\var B_TRUNCATE_BEGINNING
+
 	Truncate from the beginning of the string.
 */
 
 
 /*!
 	\var B_TRUNCATE_MIDDLE
+
 	Truncate from the middle of the string.
 */
 
 
 /*!
 	\var B_TRUNCATE_SMART
+
 	Truncate while keeping each string unique.
 */
 
 
 /*!
 	\var B_UNICODE_UTF8
+
 	UTF-8 font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_1
+
 	ISO 8859-1 aka Latin 1 "Western European" font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_2
+
 	ISO 8859-2 aka Latin 2 "Eastern European" font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_3
+
 	ISO 8859-3 aka Latin 3 "South European" font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_4
+
 	ISO 8859-4 aka Latin 4 "Northern European" font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_5
+
 	ISO 8859-5 "Latin/Cyrillic" font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_6
+
 	ISO 8859-6 "Latin/Arabic" font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_7
+
 	ISO 8859-7 "Latin/Greek" font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_8
+
 	ISO 8859-8 "Latin/Hebrew" font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_9
+
 	ISO 8859-9 aka Latin 5 "Latin/Turkish" font encoding.
 */
 
 
 /*!
 	\var B_ISO_8859_10
+
 	ISO 8859-10 aka Latin 6 "Nordic" font encoding.
 */
 
 
 /*!
 	\var B_MACINTOSH_ROMAN
+
 	Macintosh Roman font encoding.
 */
 
 
 /*!
 	\var B_HAS_TUNED_FONT
-	flags for get_font_family() and get_font_style()
+
+	Flags for get_font_family() and get_font_style()
 */
 
 
 /*!
 	\var B_IS_FIXED
+
 	flags for get_font_family() and get_font_style()
 */
 
 
 /*!
 	\var B_ITALIC_FACE
+
 	Italic font face flag.
 */
 
 
 /*!
 	\var B_UNDERSCORE_FACE
+
 	Underscore font face flag.
 */
 
 
 /*!
 	\var B_NEGATIVE_FACE
+
 	Negative font face flag.
 */
 
 
 /*!
 	\var B_OUTLINED_FACE
+
 	Outline font face flag.
 */
 
 
 /*!
 	\var B_STRIKEOUT_FACE
+
 	Strikeout font face flag.
 */
 
 
 /*!
 	\var B_BOLD_FACE
+
 	Bold font face flag.
 */
 
 
 /*!
 	\var B_REGULAR_FACE
+
 	Regular font face flag.
 */
 
 
 /*!
 	\var B_CONDENSED_FACE
+
 	Condensed font face flag. Not in BeOS 5.
 */
 
 
 /*!
 	\var B_LIGHT_FACE
+
 	Light font face flag. Not in BeOS 5.
 */
 
 
 /*!
 	\var B_HEAVY_FACE
+
 	Heavy font face flag. Not in BeOS 5.
 */
 
 
 /*!
 	\enum font_metric_mode
+
 	Font metric mode, screen or printing.
 */
 
 /*!
 	\var font_metric_mode B_SCREEN_METRIC
+
 	Screen font metric mode.
 */
 
 /*!
 	\var font_metric_mode B_PRINTING_METRIC
+
 	Printing font metric mode.
 */
 
 
 /*!
 	\enum font_file_format
+	\ingroup interface
+
 	Font file format, TrueType™ or PostScript™ Type1.
 
 	\see BFont::FileFormat()
@@ -266,17 +313,21 @@
 
 /*!
 	\var font_file_format B_TRUETYPE_WINDOWS
+
 	TrueType™ font file format.
 */
 
 /*!
 	\var font_file_format B_POSTSCRIPT_TYPE1_WINDOWS
+
 	PostScript™ Type1 font file format.
 */
 
 
 /*!
 	\class unicode_block
+	\ingroup interface
+	\ingroup libbe
 	\brief Describes the blocks of Unicode characters supported by a font.
 
 	\see BFont::Blocks()
@@ -392,6 +443,8 @@
 
 /*!
 	\struct edge_info
+	\ingroup interface
+	\ingroup libbe
 	\brief The distance that a character outline is inset from its escapement
 		boundaries.
 
@@ -404,20 +457,24 @@
 
 /*!
 	\var edge_info::left
-	\brief The distance that the character outline is inset from the left
-		escapement boundary.
+
+	The distance that the character outline is inset from the left
+	escapement boundary.
 */
 
 
 /*!
 	\var edge_info::right
-	\brief The distance that the character outline is inset from the right
-		escapement boundary.
+
+	The distance that the character outline is inset from the right
+	escapement boundary.
 */
 
 
 /*!
 	\struct font_height
+	\ingroup interface
+	\ingroup libbe
 	\brief The amount of vertical space surrounding a character.
 
 	\see BFont::GetHeight()
@@ -426,25 +483,31 @@
 
 /*!
 	\var font_height::ascent
-	\brief The distance characters can ascend above the baseline.
+
+	The distance characters can ascend above the baseline.
 */
 
 
 /*!
 	\var font_height::descent
-	\brief The distance characters can descend below the baseline.
+
+	The distance characters can descend below the baseline.
 */
 
 
 /*!
 	\var font_height::leading
-	\brief The distance between lines, descent above to ascent below.
+
+	The distance between lines, descent above to ascent below.
 */
 
 
 /*!
 	\struct escapement_delta
-	\brief The amount of horizontal space surrounding a character.
+	\ingroup interface
+	\ingroup libbe
+	\brief A struct that allows you to specify extra horizontal space to surround
+		each character with.
 
 	Escapements need to be multiplied by the font size to get the correct
 	value for the font.
@@ -455,60 +518,72 @@
 
 /*!
 	\var escapement_delta::nonspace
-	\brief The amount of space surrounding a character with a visible glyph.
+
+	The amount of horizontal space to surround a visible glyph character with.
 */
 
 
 /*!
 	\var escapement_delta::space
-	\brief The amount of space surrounding a whitespace character, for example
-		\c B_TAB and \c B_SPACE.
+
+	The amount of horizontal space to surround a whitespace character with, for
+	example \c B_TAB or \c B_SPACE.
 */
 
 
 /*!
 	\struct font_cache_info
+	\ingroup interface
+	\ingroup libbe
 	\brief Font cache parameters.
 */
 
 
 /*!
 	\var font_cache_info::sheared_font_penalty
-	\brief Sheared font penalty.
+
+	Sheared font penalty.
 */
 
 
 /*!
 	\var font_cache_info::rotated_font_penalty
-	\brief Rotated font penalty.
+
+	Rotated font penalty.
 */
 
 
 /*!
 	\var font_cache_info::oversize_threshold
-	\brief Oversize threshold.
+
+	Oversize threshold.
 */
 
 
 /*!
 	\var font_cache_info::oversize_penalty
-	\brief Oversize penalty.
+
+	Oversize penalty.
 */
 
 /*!
 	\var font_cache_info::cache_size
-	\brief Cache size.
+
+	Cache size.
 */
 
 
 /*!
 	\var font_cache_info::spacing_size_threshold
-	\brief Spacing size threshold.
+
+	Spacing size threshold.
 */
 
 
 /*!
 	\struct tuned_font_info
+	\ingroup interface
+	\ingroup libbe
 	\brief Tuning information of fonts used to make it look better when
 		displayed on-screen.
 
@@ -519,30 +594,35 @@
 
 /*!
 	\var tuned_font_info::size
-	\brief Font size.
+
+	Font size.
 */
 
 
 /*!
 	\var tuned_font_info::shear
-	\brief Font shear.
+
+	Font shear.
 */
 
 
 /*!
 	\var tuned_font_info::rotation
-	\brief Font rotation.
+
+	Font rotation.
 */
 
 
 /*!
 	\var tuned_font_info::flags
-	\brief Font flags.
+
+	Font flags.
 */
 
 /*!
 	\var tuned_font_info::face
-	\brief Font face.
+
+	Font face.
 */
 
 
@@ -835,6 +915,28 @@
 	- \c B_ISO_8859_9 aka Latin 5 aka "Latin/Turkish".
 	- \c B_ISO_8859_10 aka Latin 6 aka "Nordic".
 	- \c B_MACINTOSH_ROMAN
+
+	UTF-8 is the standard encoding used by classes in the Interface Kit. It
+	is part of the Unicode® standard and allows Haiku to represent characters
+	from all over the world while maintaining backwards compatibility with
+	7-bit ASCII codes.
+
+	Each of the encodings extend the ASCII codes and differ from each other
+	only when the highest bit is set to 1, in other words, the value is
+	greater than 127. Furthermore each of the encodings except for UTF-8
+	are represented by a single byte and consequently encompass a limited set
+	of characters. Most of the encodings are in the ISO/IEC 8859 family of
+	character codes with the notable exception of Macintosh Roman which is
+	the standard encoding used by the classic Mac OS®.
+
+	If the value of the first byte of a UTF-8 character is greater than 127
+	it indicates that the character is a multibyte character and therefore you
+	must look at the next byte (and possibly the third byte, or rarely even
+	forth byte) to get the whole character.
+
+	Setting the character encoding on a view determines how BView::DrawString()
+	interprets the values passed to it and also how BView::KeyDown() interprets
+	the values representing the keys that the user presses.
 
 	\param encoding The character encoding to set the font to.
 */
@@ -1174,14 +1276,14 @@
 	\fn void BFont::GetEscapements(const char charArray[], int32 numChars,
 		escapement_delta *delta, float escapementArray[]) const
 	\brief Determines the escapements for each char in \a charArray and writes
-		the result in \a escapementArray with consideration to the provided
-		escapement \a delta.
+		the result in \a escapementArray with consideration to the horizontal
+		space provided by the escapement \a delta.
 
 	The escapement_delta structure contains the following values:
-	- \c nonspace The amount of space surrounding a character with a visible
-		glyph.
-	- \c space The amount of space surrounding a whitespace character, for
-		example \c B_TAB and \c B_SPACE.
+	- \c nonspace The amount of horizontal space to surround a visible glyph
+		character with.
+	- \c space The amount of horizontal space to surround a whitespace character
+		with, for example \c B_TAB or \c B_SPACE.
 
 	\param charArray The source character array.
 	\param numChars The number of characters to consider in \a charArray.
@@ -1195,13 +1297,14 @@
 		escapement_delta *delta, BPoint escapementArray[]) const
 	\brief Determines the escapements for each char in \a charArray and writes
 		the result in \a escapementArray as an array of BPoint objects
-		with consideration to the provided escapement \a delta.
+		with consideration to the horizontal space provided by the escapement
+		\a delta.
 
 	The escapement_delta structure contains the following values:
-	- \c nonspace The amount of space surrounding a character with a visible
-		glyph.
-	- \c space The amount of space surrounding a whitespace character, for
-		example \c B_TAB and \c B_SPACE.
+	- \c nonspace The amount of horizontal space to surround a visible glyph
+		character with.
+	- \c space The amount of horizontal space to surround a whitespace character
+		with, for example \c B_TAB or \c B_SPACE.
 
 	\param charArray The source character array.
 	\param numChars The number of characters to consider in \a charArray.
@@ -1217,14 +1320,14 @@
 		BPoint offsetArray[]) const
 	\brief Determines the escapements for each char in \a charArray and writes
 		the result in \a escapementArray as an array of BPoint objects
-		with consideration to the provided escapement \a delta
-		and writes offsets to \a offsetArray.
+		with consideration to the horizontal space provided by the escapement
+		\a delta and writes the offsets to \a offsetArray.
 
 	The escapement_delta structure contains the following values:
-	- \c nonspace The amount of space surrounding a character with a visible
-		glyph.
-	- \c space The amount of space surrounding a whitespace character, for
-		example \c B_TAB and \c B_SPACE.
+	- \c nonspace The amount of horizontal space to surround a visible glyph
+		character with.
+	- \c space The amount of horizontal space to surround a whitespace character
+		with, for example \c B_TAB or \c B_SPACE.
 
 	\param charArray The source character array.
 	\param numChars The number of characters to consider in \a charArray.
@@ -1291,9 +1394,9 @@
 	\fn void BFont::GetBoundingBoxesAsString(const char charArray[],
 		int32 numChars, font_metric_mode mode, escapement_delta *delta,
 		BRect boundingBoxArray[]) const
-	\brief Writes an array of BRect objects to \a boundingBoxArray
-		representing the bounding rectangles of each character in
-		\a charArray with consideration to the provided escapement
+	\brief Writes an array of BRect objects to \a boundingBoxArray representing
+		the bounding rectangles of each character in \a charArray with
+		consideration to the horizontal space provided by the escapement
 		\a delta.
 
 	Each BRect object corresponds to the glyph of one character.
@@ -1302,15 +1405,15 @@
 	- \c B_SCREEN_METRIC The bounding boxes should use the screen metric.
 	- \c B_PRINTING_METRIC The bounding boxes should use the print metric.
 
-	Escapement deltas are applied as part of the bounding box calculations.
-	This lets you specify a character spacing is looser or tighter than
-	normal.
+	The provided escapement \a delta is applied as part of the bounding box
+	calculations. This lets you specify a character spacing is looser or
+	tighter than normal.
 
 	The escapement_delta structure contains the following values:
-	- \c nonspace The amount of space surrounding a character with a visible
-		glyph.
-	- \c space The amount of space surrounding a whitespace character, for
-		example \c B_TAB and \c B_SPACE.
+	- \c nonspace The amount of horizontal space to surround a visible glyph
+		character with.
+	- \c space The amount of horizontal space to surround a whitespace character
+		with, for example \c B_TAB or \c B_SPACE.
 
 	\param charArray The source character array.
 	\param numChars The number of characters to consider in \a charArray.
@@ -1324,10 +1427,10 @@
 	\fn void BFont::GetBoundingBoxesForStrings(const char *stringArray[],
 		int32 numStrings, font_metric_mode mode, escapement_delta deltas[],
 		BRect boundingBoxArray[]) const
-	\brief Writes an array of BRect objects to \a boundingBoxArray
-		representing the bounding rectangles of each string in
-		\a stringArray with consideration to the provided escapement
-		\a delta.
+	\brief Writes an array of BRect objects to \a boundingBoxArray representing
+		the bounding rectangles of each string in \a stringArray with
+		consideration to the horizontal space provided by the escapement
+		\a deltas.
 
 	Each BRect object corresponds to the bounding box of the entire string.
 
@@ -1335,15 +1438,15 @@
 	- \c B_SCREEN_METRIC The bounding boxes should use the screen metric.
 	- \c B_PRINTING_METRIC The bounding boxes should use the print metric.
 
-	Escapement deltas are applied as part of the bounding box calculations.
-	This lets you specify a character spacing is looser or tighter than
-	normal.
+	The provided escapement \a deltas are applied as part of the bounding box
+	calculations. This lets you specify a character spacing is looser or tighter
+	than normal.
 
-	The escapement_delta structures should contain the following values:
-	- \c nonspace The amount of space surrounding a character with a visible
-		glyph.
-	- \c space The amount of space surrounding a whitespace character, for
-		example \c B_TAB and \c B_SPACE.
+	The escapement_delta structure contains the following values:
+	- \c nonspace The amount of horizontal space to surround a visible glyph
+		character with.
+	- \c space The amount of horizontal space to surround a whitespace character
+		with, for example \c B_TAB or \c B_SPACE.
 
 	\param stringArray The source string array.
 	\param numStrings The number of strings to consider in \a stringArray.

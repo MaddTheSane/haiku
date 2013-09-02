@@ -409,9 +409,10 @@ print_extended_features(uint32 features)
 {
 	static const char *kFeatures[32] = {
 		"SSE3", "PCLMULDQ", "DTES64", "MONITOR", "DS-CPL", "VMX", "SMX", "EST",
-		"TM2", "SSSE3", "CNTXT-ID", NULL, NULL, "CX16", "xTPR", "PDCM",
-		NULL, NULL, "DCA", "SSE4.1", "SSE4.2", "x2APIC", "MOVEB", "POPCNT",
-		NULL, "AES", "XSAVE", "OSXSAVE", NULL, NULL, NULL, NULL
+		"TM2", "SSSE3", "CNTXT-ID", NULL, "FMA", "CX16", "xTPR", "PDCM",
+		NULL, "PCID", "DCA", "SSE4.1", "SSE4.2", "x2APIC", "MOVEB", "POPCNT",
+		"TSC-DEADLINE", "AES", "XSAVE", "OSXSAVE", "AVX", "F16C", "RDRND",
+		"HYPERVISOR"
 	};
 	int32 found = 0;
 
@@ -685,13 +686,13 @@ dump_cpus(system_info *info)
 static void
 dump_mem(system_info *info)
 {
-	printf("%10" B_PRIu32 " bytes free      (used/max %10" B_PRIu32 " / %10"
-		B_PRIu32 ")\n",
-		B_PAGE_SIZE * (uint32)(info->max_pages - info->used_pages),
-		B_PAGE_SIZE * (uint32)info->used_pages,
-		B_PAGE_SIZE * (uint32)info->max_pages);
-	printf("                           (cached   %10" B_PRIu32 ")\n",
-		B_PAGE_SIZE * (uint32)info->cached_pages);
+	printf("%10" B_PRIu64 " bytes free      (used/max %10" B_PRIu64 " / %10"
+		B_PRIu64 ")\n",
+		B_PAGE_SIZE * (uint64)(info->max_pages - info->used_pages),
+		B_PAGE_SIZE * (uint64)info->used_pages,
+		B_PAGE_SIZE * (uint64)info->max_pages);
+	printf("                           (cached   %10" B_PRIu64 ")\n",
+		B_PAGE_SIZE * (uint64)info->cached_pages);
 }
 
 

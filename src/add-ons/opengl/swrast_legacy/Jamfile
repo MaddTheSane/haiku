@@ -21,8 +21,7 @@ if $(TARGET_PLATFORM) != haiku {
 		defines += USE_SPARC_ASM ;
 	}
 
-	# For GCC2, GL headers produce warnings
-	SubDirC++Flags [ FDefines $(defines) ] --no-warnings ;
+	SubDirC++Flags [ FDefines $(defines) ] ;
 }
 
 

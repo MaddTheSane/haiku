@@ -13,6 +13,7 @@
 #include <Referenceable.h>
 #include <Variant.h>
 
+#include "ReturnValueInfo.h"
 #include "Types.h"
 
 
@@ -105,12 +106,16 @@ public:
 	virtual	status_t			GetInstructionInfo(target_addr_t address,
 									InstructionInfo& _info,
 									CpuState* state) = 0;
+	virtual	status_t			ResolvePICFunctionAddress(target_addr_t
+									instructionAddress,
+									CpuState* state,
+									target_addr_t& _targetAddress) = 0;
 
 			status_t			CreateStackTrace(Team* team,
 									ImageDebugInfoProvider* imageInfoProvider,
 									CpuState* cpuState,
 									StackTrace*& _stackTrace,
-									target_addr_t returnFunctionAddress,
+									ReturnValueInfoList* returnValueInfos,
 									int32 maxStackDepth = -1,
 									bool useExistingTrace = false,
 									bool getFullFrameInfo = true);

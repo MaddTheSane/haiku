@@ -1,5 +1,6 @@
 /*
  * Copyright 2008-2010, Ingo Weinhold, ingo_weinhold@gmx.de.
+ * Copyright 2013, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 
@@ -467,7 +468,9 @@ private:
 
 				error = sharedImage->Init(name.String());
 			}
-		} else
+		} else if (strcmp(imageInfo.name, "commpage") == 0)
+			error = sharedImage->Init(teamID, imageInfo.id);
+		else
 			error = sharedImage->Init(imageInfo.name);
 		if (error != B_OK)
 			return error;
@@ -540,7 +543,8 @@ process_event_buffer(ThreadManager& threadManager, uint8* buffer,
 				system_profiler_team_added* event
 					= (system_profiler_team_added*)buffer;
 
-				threadManager.AddTeam(event);
+				if (threadManager.AddTeam(event) != B_OK)
+					exit(1);
 				break;
 			}
 
@@ -573,8 +577,10 @@ process_event_buffer(ThreadManager& threadManager, uint8* buffer,
 				system_profiler_thread_added* event
 					= (system_profiler_thread_added*)buffer;
 
-				threadManager.AddThread(event->team, event->thread,
-					event->name);
+				if (threadManager.AddThread(event->team, event->thread,
+						event->name) != B_OK) {
+					exit(1);
+				}
 				break;
 			}
 

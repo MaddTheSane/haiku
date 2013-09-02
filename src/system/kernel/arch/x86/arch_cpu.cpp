@@ -523,6 +523,7 @@ detect_cpu(int currentCPU)
 
 	// print some fun data
 	get_current_cpuid(&cpuid, 0);
+	uint32 maxBasicLeaf = cpuid.eax_0.max_eax;
 
 	// build the vendor string
 	memset(vendorString, 0, sizeof(vendorString));
@@ -561,7 +562,8 @@ detect_cpu(int currentCPU)
 
 	// see if we can get the model name
 	get_current_cpuid(&cpuid, 0x80000000);
-	if (cpuid.eax_0.max_eax >= 0x80000004) {
+	uint32 maxExtendedLeaf = cpuid.eax_0.max_eax;
+	if (maxExtendedLeaf >= 0x80000004) {
 		// build the model string (need to swap ecx/edx data before copying)
 		unsigned int temp;
 		memset(cpu->arch.model_name, 0, sizeof(cpu->arch.model_name));
@@ -605,13 +607,19 @@ detect_cpu(int currentCPU)
 	get_current_cpuid(&cpuid, 1);
 	cpu->arch.feature[FEATURE_COMMON] = cpuid.eax_1.features; // edx
 	cpu->arch.feature[FEATURE_EXT] = cpuid.eax_1.extended_features; // ecx
-	if (cpu->arch.vendor == VENDOR_AMD) {
+
+	if (maxExtendedLeaf >= 0x80000001) {
 		get_current_cpuid(&cpuid, 0x80000001);
 		cpu->arch.feature[FEATURE_EXT_AMD] = cpuid.regs.edx; // edx
+		if (cpu->arch.vendor != VENDOR_AMD)
+			cpu->arch.feature[FEATURE_EXT_AMD] &= IA32_FEATURES_INTEL_EXT;
 	}
-	get_current_cpuid(&cpuid, 6);
-	cpu->arch.feature[FEATURE_6_EAX] = cpuid.regs.eax;
-	cpu->arch.feature[FEATURE_6_ECX] = cpuid.regs.ecx;
+
+	if (maxBasicLeaf >= 6) {
+		get_current_cpuid(&cpuid, 6);
+		cpu->arch.feature[FEATURE_6_EAX] = cpuid.regs.eax;
+		cpu->arch.feature[FEATURE_6_ECX] = cpuid.regs.ecx;
+	}
 
 #if DUMP_FEATURE_STRING
 	dump_feature_string(currentCPU, cpu);
@@ -745,6 +753,15 @@ arch_cpu_init_percpu(kernel_args* args, int cpu)
 		}
 	}
 
+	// If availalbe enable NX-bit (No eXecute). Boot CPU can not enable
+	// NX-bit here since PAE should be enabled first.
+	if (cpu != 0) {
+		if (x86_check_feature(IA32_FEATURE_AMD_EXT_NX, FEATURE_EXT_AMD)) {
+			x86_write_msr(IA32_MSR_EFER, x86_read_msr(IA32_MSR_EFER)
+				| IA32_MSR_EFER_NX);
+		}
+	}
+
 	return B_OK;
 }
 
@@ -862,21 +879,26 @@ arch_cpu_init_post_modules(kernel_args* args)
 	// put the optimized functions into the commpage
 	size_t memcpyLen = (addr_t)gOptimizedFunctions.memcpy_end
 		- (addr_t)gOptimizedFunctions.memcpy;
-	fill_commpage_entry(COMMPAGE_ENTRY_X86_MEMCPY,
+	addr_t memcpyPosition = fill_commpage_entry(COMMPAGE_ENTRY_X86_MEMCPY,
 		(const void*)gOptimizedFunctions.memcpy, memcpyLen);
 	size_t memsetLen = (addr_t)gOptimizedFunctions.memset_end
 		- (addr_t)gOptimizedFunctions.memset;
-	fill_commpage_entry(COMMPAGE_ENTRY_X86_MEMSET,
+	addr_t memsetPosition = fill_commpage_entry(COMMPAGE_ENTRY_X86_MEMSET,
 		(const void*)gOptimizedFunctions.memset, memsetLen);
+	size_t threadExitLen = (addr_t)x86_end_userspace_thread_exit
+		- (addr_t)x86_userspace_thread_exit;
+	addr_t threadExitPosition = fill_commpage_entry(
+		COMMPAGE_ENTRY_X86_THREAD_EXIT, (const void*)x86_userspace_thread_exit,
+		threadExitLen);
 
 	// add the functions to the commpage image
 	image_id image = get_commpage_image();
-	elf_add_memory_image_symbol(image, "commpage_memcpy",
-		((addr_t*)USER_COMMPAGE_ADDR)[COMMPAGE_ENTRY_X86_MEMCPY], memcpyLen,
-		B_SYMBOL_TYPE_TEXT);
-	elf_add_memory_image_symbol(image, "commpage_memset",
-		((addr_t*)USER_COMMPAGE_ADDR)[COMMPAGE_ENTRY_X86_MEMSET], memsetLen,
-		B_SYMBOL_TYPE_TEXT);
+	elf_add_memory_image_symbol(image, "commpage_memcpy", memcpyPosition,
+		memcpyLen, B_SYMBOL_TYPE_TEXT);
+	elf_add_memory_image_symbol(image, "commpage_memset", memsetPosition,
+		memsetLen, B_SYMBOL_TYPE_TEXT);
+	elf_add_memory_image_symbol(image, "commpage_thread_exit",
+		threadExitPosition, threadExitLen, B_SYMBOL_TYPE_TEXT);
 
 	return B_OK;
 }
@@ -995,3 +1017,14 @@ arch_cpu_memory_write_barrier(void)
 #endif
 }
 
+
+void
+arch_cpu_memory_read_write_barrier(void)
+{
+#ifdef __x86_64__
+	asm volatile("mfence" : : : "memory");
+#else
+	asm volatile ("lock;" : : : "memory");
+	asm volatile ("addl $0, 0(%%esp);" : : : "memory");
+#endif
+}

@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-WebPositive	1513721873
+1	english	x-vnd.Haiku-WebPositive	2633177086
 Show home button	Settings Window		显示 home 按钮
 Username:	Authentication Panel		用户名：
 Copy URL to clipboard	Download Window		复制 URL 到剪贴板
@@ -16,6 +16,7 @@ Start page:	Settings Window		开始页面：
 History	WebPositive Window		历史
 Error opening downloads folder	Download Window		打开下载目录出错
 Paste	WebPositive Window		粘贴
+Proxy username:	Settings Window		代理服务器 用户名：
 Settings	Settings Window		设置
 %seconds seconds left	Download Window		剩余 %seconds 秒
 Confirmation	WebPositive Window		确认
@@ -58,6 +59,7 @@ Cut	WebPositive Window		剪切
 Bookmark this page	WebPositive Window		添为书签页
 There was an error trying to show the Bookmarks folder.\n\nError: %error	WebPositive Window	Don't translate variable %error	书签页目录显示出错。\n\n错误：%error
 Open downloads folder	Download Window		打开下载目录
+Proxy password:	Settings Window		代理服务器密码：
 Number of days to keep links in History menu:	Settings Window		历史菜单链接保留天数：
 Hide	Download Window		隐藏
 Reset size	WebPositive Window		重设大小
@@ -67,6 +69,7 @@ There was an error retrieving the bookmark folder.\n\nError: %error	WebPositive 
 Over 1 day left	Download Window		剩余 1 天
 Downloads	WebPositive Window		下载
 Requesting %url	WebPositive Window		请求 %url
+Find next occurrence of search terms	WebPositive Window	find bar next button tooltip	查找搜索项出现的下个位置
 Apply	Settings Window		应用
 Bookmark info	WebPositive Window		书签信息
 Size:	Font Selection view		大小：
@@ -74,13 +77,13 @@ Show tabs if only one page is open	Settings Window		只有单页则显示标签�
 About	WebPositive Window		关于
 Finish: 	Download Window	Finishing time	完成：
 Fonts	Settings Window		字体
-Close	WebPositive Window		关闭
 OK	Download Window		确定
 Page source error	WebPositive Window		页面源码出错
 Open blank page	Settings Window		打开空白页
 New tabs:	Settings Window		新建标签页：
 Cancel	WebPositive Window		取消
 Open all	WebPositive Window		打开所有
+Proxy server requires authentication	Settings Window		代理服务器需要认证
 Clear	URL Bar		清除
 Cut	URL Bar		剪切
 Clear	WebPositive Window		清除

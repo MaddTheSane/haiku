@@ -41,7 +41,8 @@ public:
 			// All Handle*() methods are invoked in team debugger thread,
 			// looper lock held.
 			bool				HandleThreadDebugged(
-									ThreadDebuggedEvent* event);
+									ThreadDebuggedEvent* event,
+									const BString& stoppedReason = BString());
 			bool				HandleDebuggerCall(
 									DebuggerCallEvent* event);
 			bool				HandleBreakpointHit(
@@ -53,7 +54,8 @@ public:
 			bool				HandleExceptionOccurred(
 									ExceptionOccurredEvent* event);
 
-			void				HandleThreadAction(uint32 action);
+			void				HandleThreadAction(uint32 action,
+									target_addr_t address);
 
 			void				HandleThreadStateChanged();
 			void				HandleCpuStateChanged();
@@ -68,6 +70,9 @@ private:
 									uint32 stoppedReason,
 									const BString& stoppedReasonInfo
 										= BString());
+
+			bool				_HandleSetAddress(CpuState* cpuState,
+									target_addr_t address);
 
 			void				_SetThreadState(uint32 state,
 									CpuState* cpuState, uint32 stoppedReason,
@@ -91,6 +96,9 @@ private:
 			bool				_HandleBreakpointHitStep(CpuState* cpuState);
 			bool				_HandleSingleStepStep(CpuState* cpuState);
 
+			bool				_HasExitedFrame(target_addr_t framePointer)
+									const;
+
 private:
 			Thread*				fThread;
 			Worker*				fWorker;
@@ -99,6 +107,7 @@ private:
 			uint32				fStepMode;
 			Statement*			fStepStatement;
 			target_addr_t		fBreakpointAddress;
+			target_addr_t		fSteppedOverFunctionAddress;
 			target_addr_t		fPreviousInstructionPointer;
 			target_addr_t		fPreviousFrameAddress;
 			bool				fSingleStepping;

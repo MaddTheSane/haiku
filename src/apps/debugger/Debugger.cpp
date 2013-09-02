@@ -1,6 +1,6 @@
 /*
  * Copyright 2009-2012, Ingo Weinhold, ingo_weinhold@gmx.de.
- * Copyright 2011, Rene Gollent, rene@gollent.com.
+ * Copyright 2011-2013, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 
@@ -15,6 +15,8 @@
 #include <Application.h>
 #include <Message.h>
 
+#include <ArgumentVector.h>
+#include <AutoDeleter.h>
 #include <AutoLocker.h>
 #include <ObjectList.h>
 
@@ -98,6 +100,8 @@ struct Options {
 struct DebuggedProgramInfo {
 	team_id		team;
 	thread_id	thread;
+	int			commandLineArgc;
+	const char* const* commandLineArgv;
 	bool		stopInMain;
 };
 
@@ -264,6 +268,8 @@ get_debugged_program(const Options& options, DebuggedProgramInfo& _info)
 	}
 	printf("team: %" B_PRId32 ", thread: %" B_PRId32 "\n", team, thread);
 
+	_info.commandLineArgc = options.commandLineArgc;
+	_info.commandLineArgv = options.commandLineArgv;
 	_info.team = team;
 	_info.thread = thread;
 	_info.stopInMain = stopInMain;
@@ -279,7 +285,9 @@ get_debugged_program(const Options& options, DebuggedProgramInfo& _info)
 static TeamDebugger*
 start_team_debugger(team_id teamID, SettingsManager* settingsManager,
 	TeamDebugger::Listener* listener, thread_id threadID = -1,
-	bool stopInMain = false, UserInterface* userInterface = NULL)
+	int commandLineArgc = 0, const char* const* commandLineArgv = NULL,
+	bool stopInMain = false, UserInterface* userInterface = NULL,
+	status_t* _result = NULL)
 {
 	if (teamID < 0)
 		return NULL;
@@ -300,18 +308,22 @@ start_team_debugger(team_id teamID, SettingsManager* settingsManager,
 
 	TeamDebugger* debugger = new(std::nothrow) TeamDebugger(listener,
 		userInterface, settingsManager);
-	if (debugger)
-		error = debugger->Init(teamID, threadID, stopInMain);
+	if (debugger) {
+		error = debugger->Init(teamID, threadID, commandLineArgc,
+			commandLineArgv, stopInMain);
+	}
 
 	if (error != B_OK) {
 		printf("Error: debugger for team %" B_PRId32 " failed to init: %s!\n",
 			teamID, strerror(error));
 		delete debugger;
-		return NULL;
+		debugger = NULL;
 	} else
 		printf("debugger for team %" B_PRId32 " created and initialized "
 			"successfully!\n", teamID);
 
+	if (_result != NULL)
+		*_result = error;
 	return debugger;
 }
 
@@ -335,12 +347,17 @@ private:
 private:
 	// TeamDebugger::Listener
 	virtual void 				TeamDebuggerStarted(TeamDebugger* debugger);
+	virtual	void				TeamDebuggerRestartRequested(
+									TeamDebugger* debugger);
 	virtual void 				TeamDebuggerQuit(TeamDebugger* debugger);
 
 	virtual bool 				QuitRequested();
 	virtual void 				Quit();
 
 			TeamDebugger* 		_FindTeamDebugger(team_id teamID) const;
+
+			status_t			_StartNewTeam(const char* path, const char* args);
+			status_t			_StartOrFindTeam(Options& options);
 
 private:
 			SettingsManager		fSettingsManager;
@@ -363,6 +380,8 @@ public:
 private:
 	// TeamDebugger::Listener
 	virtual void 				TeamDebuggerStarted(TeamDebugger* debugger);
+	virtual	void				TeamDebuggerRestartRequested(
+									TeamDebugger* debugger);
 	virtual void 				TeamDebuggerQuit(TeamDebugger* debugger);
 };
 
@@ -433,6 +452,39 @@ Debugger::MessageReceived(BMessage* message)
 			start_team_debugger(teamID, &fSettingsManager, this);
 			break;
 		}
+		case MSG_START_NEW_TEAM:
+		{
+			const char* teamPath = NULL;
+			const char* args = NULL;
+
+			message->FindString("path", &teamPath);
+			message->FindString("arguments", &args);
+
+			status_t result = _StartNewTeam(teamPath, args);
+			BMessage reply;
+			reply.AddInt32("status", result);
+			message->SendReply(&reply);
+			break;
+		}
+		case MSG_TEAM_RESTART_REQUESTED:
+		{
+			int32 teamID;
+			if (message->FindInt32("team", &teamID) != B_OK)
+				break;
+			TeamDebugger* debugger = _FindTeamDebugger(teamID);
+			if (debugger == NULL)
+				break;
+
+			Options options;
+			options.commandLineArgc = debugger->ArgumentCount();
+			options.commandLineArgv = debugger->Arguments();
+
+			status_t result = _StartOrFindTeam(options);
+			if (result == B_OK)
+				debugger->PostMessage(B_QUIT_REQUESTED);
+
+			break;
+		}
 		case MSG_TEAM_DEBUGGER_QUIT:
 		{
 			int32 threadID;
@@ -467,20 +519,8 @@ Debugger::ArgvReceived(int32 argc, char** argv)
 		return;
 	}
 
-	DebuggedProgramInfo programInfo;
-	if (!get_debugged_program(options, programInfo))
-		return;
+	_StartOrFindTeam(options);
 
-	TeamDebugger* debugger = _FindTeamDebugger(programInfo.team);
-	if (debugger != NULL) {
-		printf("There's already a debugger for team: %" B_PRId32 "\n",
-			programInfo.team);
-		debugger->Activate();
-		return;
-	}
-
-	start_team_debugger(programInfo.team, &fSettingsManager, this,
-		programInfo.thread, programInfo.stopInMain);
 }
 
 
@@ -515,6 +555,15 @@ Debugger::TeamDebuggerQuit(TeamDebugger* debugger)
 		message.AddInt32("thread", debugger->Thread());
 		PostMessage(&message);
 	}
+}
+
+
+void
+Debugger::TeamDebuggerRestartRequested(TeamDebugger* debugger)
+{
+	BMessage message(MSG_TEAM_RESTART_REQUESTED);
+	message.AddInt32("team", debugger->TeamID());
+	PostMessage(&message);
 }
 
 
@@ -554,6 +603,58 @@ Debugger::_FindTeamDebugger(team_id teamID) const
 	}
 
 	return NULL;
+}
+
+
+status_t
+Debugger::_StartNewTeam(const char* path, const char* args)
+{
+	if (path == NULL)
+		return B_BAD_VALUE;
+
+	BString data;
+	data.SetToFormat("\"%s\" %s", path, args);
+	if (data.Length() == 0)
+		return B_NO_MEMORY;
+
+	ArgumentVector argVector;
+	argVector.Parse(data.String());
+
+	Options options;
+	options.commandLineArgc = argVector.ArgumentCount();
+	if (options.commandLineArgc <= 0)
+		return B_BAD_VALUE;
+
+	char** argv = argVector.DetachArguments();
+
+	options.commandLineArgv = argv;
+	MemoryDeleter deleter(argv);
+
+	return _StartOrFindTeam(options);
+}
+
+
+status_t
+Debugger::_StartOrFindTeam(Options& options)
+{
+	DebuggedProgramInfo programInfo;
+	if (!get_debugged_program(options, programInfo))
+		return B_BAD_VALUE;
+
+	TeamDebugger* debugger = _FindTeamDebugger(programInfo.team);
+	if (debugger != NULL) {
+		printf("There's already a debugger for team: %" B_PRId32 "\n",
+			programInfo.team);
+		debugger->Activate();
+		return B_OK;
+	}
+
+	status_t result;
+	start_team_debugger(programInfo.team, &fSettingsManager, this,
+		programInfo.thread, programInfo.commandLineArgc,
+		programInfo.commandLineArgv, programInfo.stopInMain, NULL, &result);
+
+	return result;
 }
 
 
@@ -610,8 +711,9 @@ CliDebugger::Run(const Options& options)
 		return false;
 
 	TeamDebugger* teamDebugger = start_team_debugger(programInfo.team,
-		&settingsManager, this, programInfo.thread, programInfo.stopInMain,
-		userInterface);
+		&settingsManager, this, programInfo.thread,
+		programInfo.commandLineArgc, programInfo.commandLineArgv,
+		programInfo.stopInMain, userInterface);
 	if (teamDebugger == NULL)
 		return false;
 
@@ -630,6 +732,13 @@ CliDebugger::Run(const Options& options)
 void
 CliDebugger::TeamDebuggerStarted(TeamDebugger* debugger)
 {
+}
+
+
+void
+CliDebugger::TeamDebuggerRestartRequested(TeamDebugger* debugger)
+{
+	// TODO: implement
 }
 
 

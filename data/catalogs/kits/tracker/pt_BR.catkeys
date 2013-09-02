@@ -1,4 +1,4 @@
-1	portuguese (brazil)	x-vnd.Haiku-libtracker	2580969822
+1	portuguese (brazil)	x-vnd.Haiku-libtracker	1762695842
 common	B_COMMON_DIRECTORY		comum
 OK	WidgetAttributeText		OK
 Icon view	VolumeWindow		Em ícones
@@ -74,6 +74,7 @@ Arrange by	ContainerWindow		Ordenar por
 Mount server error	AutoMounterSettings		Erro do servidor de montagem
 Search	FindPanel		Localizar
 Preparing to empty Trash…	StatusWindow		Preparando para limpar a Lixeira...
+You cannot put the selected item(s) into the trash.	FSUtils		Não é possível colocar o(s) item(ns) selecionados na lixeira.
 Disks	Model		Discos
 Create link	ContainerWindow		Criar atalho
 develop	B_COMMON_DEVELOP_DIRECTORY		desenvolvimento
@@ -81,7 +82,6 @@ Decrease size	DeskWindow		Diminuir tamanho
 Size	ContainerWindow		Tamanho
 All disks	AutoMounterSettings		Todos os discos
 Would you like to find some other suitable application?	FSUtils		Você gostaria de encontrar outro aplicativo que possa servir?
-Ask before deleting for good	SettingsView		Perguntar antes de eliminar para sempre
 Finish: %time - %finishtime left	StatusWindow		Término: %time - %finishtime restante
 Could not open \"%document\" with application \"%app\" (Missing libraries: %library). \n	FSUtils		Não foi possível abrir \"%document\" com o aplicativo \"%app\" (Bibliotecas faltantes: %library). \n
 no items	CountView		sem itens
@@ -102,7 +102,6 @@ New folder	FilePanelPriv		Nova pasta
 %name info	InfoWindow	InfoWindow Title	Informações de %name
 Favorites	FavoritesMenu		Favoritos
 Add-ons	VolumeWindow		Adicionais
-Move deleted files to Trash first	SettingsView		Mover arquivos eliminados para a Lixeira primeiro
 Sorry, you can't copy items to the Trash.	PoseView		Desculpe, você não pode copiar itens para a Lixeira.
 List view	VolumeWindow		Em lista
 matches wildcard expression	SelectionWindow		encaixa na expressão coringa
@@ -144,6 +143,7 @@ Add-ons	ContainerWindow		Adicionais
 Edit templates…	TemplatesMenu		Editar modelos...
 Finish: %time - Over %finishtime left	StatusWindow		Término: %time - Mais de %finishtime restante
 An item named \"%name\" already exists in this folder. Would you like to replace it with the symbolic link you are creating?	FSUtils		Um item chamado \"%name\" já existe nesta pasta. Gostaria de substituí-lo pelo link simbólico que está sendo criado?
+Fewer options	FindPanel		Menos opções
 Sorry, there is not enough free space on the destination volume to copy the selection.	FSUtils		Desculpe, não existe espaço livre suficiente no volume de destino para para copiar a seleção.
 Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Não foi possível abrir \"%document\" com a aplicativo \"%app\" (%error).
 Sorry, saving more than one item is not allowed.	FilePanelPriv		Desculpe, salvar mais de um item não é permitido.
@@ -213,7 +213,6 @@ Resize to fit	VolumeWindow		Reduzir para caber
 Could not find application \"%appname\"	OpenWithWindow		Não foi possível encontrar o aplicativo \"%appname\"
 The selected item cannot be moved to the Trash. Would you like to delete it instead? (This operation cannot be reverted.)	PoseView		O item selecionado não pode ser movido para a Lixeira. Ao invés disso, você deseja apagá-lo? (Esta operação não pode ser desfeita.)
 Invert	SelectionWindow		Inverter
-Save Query as template…	FindPanel		Salvar como modelo de Consulta...
 rename	InfoWindow	As in 'if you rename this folder...' (en) 'Wird dieser Ordner umbenannt...' (de)	renomear
 Find	FindPanel		Pesquisar
 Move	FSUtils	Button label, 'Move' (en), 'Verschieben' (de)	Mover
@@ -238,6 +237,7 @@ Temporary	FindPanel		Temporário
 Version	OpenWithWindow		Versão
 Default application	InfoWindow		Aplicativo padrão
 Preparing to copy items…	StatusWindow		Preparando para copiar itens...
+Save query as template…	FindPanel		Salvar consulta como modelo…
 Show folder location in title tab	SettingsView		Mostrar local da pasta na barra de títulos
 Proceed	FSUtils		Prosseguir
 Some items already exist in this folder with the same names as the items you are %verb.\n \nWould you like to replace them with the ones you are %verb or be prompted for each one?	FSUtils		Alguns itens já existem nesta pasta com os mesmos nomes dos itens que você quer %verb.\n \nVocê gostaria de substituí-los com aqueles que você vai %verb ou ser perguntado em cada um?
@@ -258,7 +258,6 @@ TiB	WidgetAttributeText		TiB
 The file \"%name\" already exists in the specified folder. Do you want to replace it?	FilePanelPriv		O arquivo \"%name\" já existe na pasta especificada. Deseja substituí-lo?
 Cancel	ContainerWindow		Cancelar
 Only the boot disk	AutoMounterSettings		Somente o disco de inicialização
-Trash	TrackerSettingsWindow		Lixeira
 If you %ifYouDoAction the config folder, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Se %ifYouDoAction a pasta config, %osName pode não se comportar apropriadamente!\n\nEstá seguro de que quer fazer isto?
 Unmount	ContainerWindow		Desmontar
 Copy layout	ContainerWindow		Copiar layout
@@ -337,6 +336,7 @@ The specified name is already used as the name of a folder. Please choose anothe
 Clean up	ContainerWindow		Limpeza
 after	FindPanel		após
 Select…	QueryContainerWindow		Selecionar…
+More options	FindPanel		Mais opções
 link	FSUtils	filename link	vínculo
 At %func \nfind_directory() failed. \nReason: %error	TrackerInitialState		Em %func \nfind_directory() falhou. \nRazão: %error
 The specified name is illegal. Please choose another name.	FilePanelPriv		O nome especificado é ilegal. Por favor escolha outro nome.
@@ -394,7 +394,6 @@ Icon view	DeskWindow		Visualização de ícone
 Select all	QueryContainerWindow		Selecionar tudo
 Files cannot be moved or deleted from a read-only volume.	PoseView		Arquivos não podem ser movidos ou excluídos de um volume em modo somente leitura.
 There was a problem trying to replace \"%name\". The item might be open or busy.	FSUtils		Ocorreu um problema tentando substituir \"%name\". O item deve estar aberto ou ocupado.
-You cannot put the Trash, home or Desktop directory into the trash.	FSUtils		Não é possível colocar a Lixeira ou os diretórios home ou Desktop no lixo.
 Owner	FilePermissionsView		Proprietário
 There was a problem trying to save in the folder you specified. Please try another one.	FilePanelPriv		Ocorreu um problema tentando salvar na pasta especificada. Por favor tente com outra.
 Restore	ContainerWindow		Recuperar
@@ -449,6 +448,7 @@ contains	FindPanel		contém
 Relation	OpenWithWindow		Relação
 Open	FilePanelPriv		Abrir
 Mount	DeskWindow		Montar
+Recent queries	FindPanel		Consultas recentes
 Mount	ContainerWindow		Montar
 %capacity (%used used -- %free free)	InfoWindow		%capacity (%used utilizados -- %free livres)
 Cancel	FSClipBoard		Cancelar

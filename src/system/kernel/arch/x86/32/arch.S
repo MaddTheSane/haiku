@@ -115,7 +115,7 @@ FUNCTION(x86_swap_pgdir):
 	ret
 FUNCTION_END(x86_swap_pgdir)
 
-/* thread exit stub - is copied to the userspace stack in arch_thread_enter_uspace() */
+/* thread exit stub */
 	.align 4
 FUNCTION(x86_userspace_thread_exit):
 	pushl	%eax
@@ -264,9 +264,12 @@ FUNCTION(arch_cpu_user_strlcpy):
 	/* count remaining bytes in src */
 .L_user_strlcpy_source_count:
 	not		%ecx
+		# %ecx was 0 and is now max
 	xor		%al,%al
+	movl	%esi,%edi
 	repnz
 	scasb
+	movl	%edi,%esi
 
 .L_user_strlcpy_source_done:
 	movl	%esi,%eax

@@ -1,4 +1,5 @@
 /*
+ * Copyright 2013, Rene Gollent, rene@gollent.com.
  * Copyright 2009, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Distributed under the terms of the MIT License.
  */
@@ -17,8 +18,8 @@ Thread::Thread(Team* team, thread_id threadID)
 	fTeam(team),
 	fID(threadID),
 	fState(THREAD_STATE_UNKNOWN),
-	fExecutedSubroutine(false),
-	fSubroutineAddress(0),
+	fReturnValueInfos(NULL),
+	fStopRequestPending(false),
 	fStoppedReason(THREAD_STOPPED_UNKNOWN),
 	fCpuState(NULL),
 	fStackTrace(NULL)
@@ -32,12 +33,19 @@ Thread::~Thread()
 		fCpuState->ReleaseReference();
 	if (fStackTrace != NULL)
 		fStackTrace->ReleaseReference();
+
+	ClearReturnValueInfos();
+	delete fReturnValueInfos;
 }
 
 
 status_t
 Thread::Init()
 {
+	fReturnValueInfos = new(std::nothrow) ReturnValueInfoList;
+	if (fReturnValueInfos == NULL)
+		return B_NO_MEMORY;
+
 	return B_OK;
 }
 
@@ -70,8 +78,8 @@ Thread::SetState(uint32 state, uint32 reason, const BString& info)
 	if (fState != THREAD_STATE_STOPPED) {
 		SetCpuState(NULL);
 		SetStackTrace(NULL);
-		fExecutedSubroutine = false;
-		fSubroutineAddress = 0;
+		ClearReturnValueInfos();
+		fStopRequestPending = false;
 	}
 
 	fTeam->NotifyThreadStateChanged(this);
@@ -113,11 +121,29 @@ Thread::SetStackTrace(StackTrace* trace)
 	fTeam->NotifyThreadStackTraceChanged(this);
 }
 
-
 void
-Thread::SetExecutedSubroutine(target_addr_t address)
+Thread::SetStopRequestPending()
 {
-	fExecutedSubroutine = true;
-	fSubroutineAddress = address;
+	fStopRequestPending = true;
 }
 
+
+status_t
+Thread::AddReturnValueInfo(ReturnValueInfo* info)
+{
+	if (!fReturnValueInfos->AddItem(info))
+		return B_NO_MEMORY;
+
+	info->AcquireReference();
+	return B_OK;
+}
+
+
+void
+Thread::ClearReturnValueInfos()
+{
+	for (int32 i = 0; i < fReturnValueInfos->CountItems(); i++)
+		fReturnValueInfos->ItemAt(i)->ReleaseReference();
+
+	fReturnValueInfos->MakeEmpty();
+}

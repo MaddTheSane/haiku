@@ -1,17 +1,21 @@
 /*
- * Copyright 2010, Haiku, Inc. All Rights Reserved.
+ * Copyright 2010 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
- * Documentation by:
- *   Alex Wilson <yourpalal2@gmail.com>
+ * Authors:
+ *		Alex Wilson, yourpalal2@gmail.com
+ *
  * Corresponds to:
- *   /trunk/headers/os/interface/TwoDimensionalLayout.h  rev 38207
- *   /trunk/src/kits/interface/TwoDimensionalLayout.cpp  rev 38207
+ *		headers/os/interface/TwoDimensionalLayout.h	rev 38207
+ *		src/kits/interface/TwoDimensionalLayout.cpp	rev 38207
  */
 
 
 /*!
 	\file TwoDimensionalLayout.h
+	\ingroup interface
+	\ingroup layout
+	\ingroup libbe
 	\brief Defines the BTwoDimensionalLayout class.
 */
 
@@ -21,7 +25,6 @@
 	\ingroup interface
 	\ingroup layout
 	\ingroup libbe
-
 	\brief Abstract BLayout subclass arranging items within rows and columns.
 
 	This class manages all the tricky work of actually positioning/resizing
@@ -53,7 +56,7 @@
 
 /*!
 	\fn void BTwoDimensionalLayout::AlignLayoutWith(
-		BTwoDimensionalLayout* other, enum orientation orientation)
+		BTwoDimensionalLayout* other, orientation orientation)
 	\brief Align the BLayoutItem&apos;s in the specified \a orientation within
 		two or more BTwoDimensionalLayout&apos;s.
 
@@ -111,7 +114,7 @@
 
 
 /*!
-	\fn void BTwoDimensionalLayout::PrepareItems(enum orientation orientation)
+	\fn void BTwoDimensionalLayout::PrepareItems(orientation orientation)
 	\brief Prepare the BLayoutItem in this BTwoDimensionalLayout subclass
 		for layout within a certain \a orientation.
 
@@ -155,8 +158,8 @@
 
 
 /*!
-	\fn void BTwoDimensionalLayout::GetColumnRowConstraints(enum orientation 
-		orientation, int32 index, ColumnRowConstraints* constraints)
+	\fn void BTwoDimensionalLayout::GetColumnRowConstraints(
+		orientation orientation, int32 index, ColumnRowConstraints* constraints)
 	\brief Fill in the ColumnRowConstraints for a certain column or row in
 		the BTwoDimensionalLayout.
 

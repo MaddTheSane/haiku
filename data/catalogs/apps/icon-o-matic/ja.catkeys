@@ -9,7 +9,7 @@ Reset transformation	Icon-O-Matic-ShapesList		変形をリセット
 Move Paths	Icon-O-Matic-MovePathsCmd		パスを移動
 None	Icon-O-Matic-Properties		解除
 New	Icon-O-Matic-Menu-File		新規作成
-Icon-O-Matic might not have interpreted all data from the SVG when it was loaded. By overwriting the original file, this information would now be lost.	Icon-O-Matic-SVGExport		Icon-O-Matic はロードされた SVG のすべてのデータを解釈できなかったかもしれません。オリジナルファイルを上書きすると、この情報は失われるでしょう。
+Icon-O-Matic might not have interpreted all data from the SVG when it was loaded. By overwriting the original file, this information would now be lost.	Icon-O-Matic-SVGExport		Icon-O-Matic はロードされた SVG のすべてのデータを解釈できなかったかもしれません。元のファイルを上書きすると、この情報は失われるでしょう。
 Paste Properties	Icon-O-Matic-Properties		プロパティを貼り付け
 Stroke	Transformation		ストローク
 Save Icon	Dialog title		アイコンを保存
@@ -48,7 +48,7 @@ Change Color	Icon-O-Matic-SetColorCmd		カラーを変更
 Style	Icon-O-Matic-Menus		スタイル
 <modify path>	Icon-O-Matic-PathCmd		<パスを修正>
 Opening the icon failed!	Icon-O-Matic-Main		アイコンを開けません!
-Error: 	Icon-O-Matic-Main		エラー：
+Error: 	Icon-O-Matic-Main		エラー:
 Rotate indices backwards	Icon-O-Matic-PathsList		インデックスを逆順に辿る
 Name	Icon-O-Matic-PropertyNames		名前
 bad news	Icon-O-Matic-Exporter		悪い知らせ
@@ -60,7 +60,7 @@ Joins	Icon-O-Matic-PropertyNames		結合
 Remove Style	Icon-O-Matic-RemoveStylesCmd		スタイルを削除
 Scale X	Icon-O-Matic-PropertyNames		X軸スケール
 Set 	Set (property name)		セット
-Cancel	Icon-O-Matic-SVGExport		キャンセル
+Cancel	Icon-O-Matic-SVGExport		中止
 Add shape with style	Icon-O-Matic-Menu-Shape		スタイルつきのシェイプを追加
 Remove Shape	Icon-O-Matic-RemoveShapesCmd		シェイプを削除
 Reverse	Icon-O-Matic-PathsList		反転
@@ -81,7 +81,7 @@ Opacity	Icon-O-Matic-PropertyNames		不透明度
 Add with path	Icon-O-Matic-ShapesList		パスとともに追加
 Gradient type	Icon-O-Matic-StyleTypes		グラデーションのタイプ
 Icon-O-Matic	System name		Icon-O-Matic
-Cancel	Icon-O-Matic-Menu-Settings		キャンセル
+Cancel	Icon-O-Matic-Menu-Settings		中止
 Modify Control Point	Icon-O-Matic-ChangePointCmd		コントロールポイントの編集
 Saving your document failed!	Icon-O-Matic-Exporter		ドキュメントの保存に失敗しました！
 edit it's properties here.	Empty property list - 3rd line		オブジェクトをクリックしてください。
@@ -133,7 +133,7 @@ Split Control Points	Icon-O-Matic-SplitPointsCmd		コントロールポイント
 Save	Icon-O-Matic-Menu-Settings		保存
 Add empty	Icon-O-Matic-ShapesList		空のシェイプを追加
 Close	Icon-O-Matic-Menu-File		閉じる
-Cancel	Icon-O-Matic-ColorPicker		キャンセル
+Cancel	Icon-O-Matic-ColorPicker		中止
 Paste	Icon-O-Matic-Properties		貼り付け
 Shape	Icon-O-Matic-Menus		シェイプ
 Translation X	Icon-O-Matic-PropertyNames		X軸移動
@@ -176,7 +176,7 @@ Add Path	Icon-O-Matic-AddPathsCmd		パスを追加
 Color	Icon-O-Matic-PropertyNames		カラー
 Insert Control Point	Icon-O-Matic-InsertPointCmd		コントロールポイントを挿入
 Flip Control Point	Icon-O-Matic-FlipPointsCmd		コントロールポイントを反転
-Redo	Icon-O-Matic-Main		やり直す
+Redo	Icon-O-Matic-Main		やり直し
 Assign Paths	Icon-O-Matic-AddPathsCmd		パスを割り当てる
 OK	Icon-O-Matic-SVGImport		OK
 Multi paste	Icon-O-Matic-Properties		複数貼り付け

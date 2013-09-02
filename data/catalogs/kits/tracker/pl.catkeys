@@ -1,5 +1,5 @@
-1	polish	x-vnd.Haiku-libtracker	628096147
-common	B_COMMON_DIRECTORY		common
+1	polish	x-vnd.Haiku-libtracker	4236144717
+common	B_COMMON_DIRECTORY		wspólny
 OK	WidgetAttributeText		OK
 Icon view	VolumeWindow		Widok ikon
 Add-ons	FilePanelPriv		Wtyczki
@@ -73,6 +73,7 @@ Arrange by	ContainerWindow		Ułóż według
 Mount server error	AutoMounterSettings		Błąd serwera montowania
 Search	FindPanel		Szukaj
 Preparing to empty Trash…	StatusWindow		Przygotowanie do opróżnienia Kosza…
+You cannot put the selected item(s) into the trash.	FSUtils		Nie możesz umieścić wybranych elementów w Koszu.
 Disks	Model		Dyski
 Create link	ContainerWindow		Utwórz link
 develop	B_COMMON_DEVELOP_DIRECTORY		develop
@@ -92,6 +93,7 @@ Cut	FilePanelPriv		Wytnij
 Replace	FilePanelPriv		Zastąp
 Select all	VolumeWindow		Zaznacz wszystko
 Opens with:	InfoWindow		Otwórz za pomocą:
+If you %ifYouDoAction the mime settings, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Jeśli wykonasz '%ifYouDoAction' wobec ustawień MIME, %osName może się nie zachowywać właściwie!\n\nCzy jesteś pewien, że chcesz wykonać operację %ifYouDoAction?
 Open	ContainerWindow		Otwórz
 96 x 96	DeskWindow		96 x 96
 Error calculating folder size.	InfoWindow		Błąd przy obliczaniu rozmiaru folderu.
@@ -140,6 +142,7 @@ Add-ons	ContainerWindow		Wtyczki
 Edit templates…	TemplatesMenu		Edytuj szablony…
 Finish: %time - Over %finishtime left	StatusWindow		Koniec: %time - Pozostało %finishtime
 An item named \"%name\" already exists in this folder. Would you like to replace it with the symbolic link you are creating?	FSUtils		Objekt o nazwie \"%name\" już istnieje w tym folderu. Zamienić na skrót symboliczny?
+Fewer options	FindPanel		Mniej opcji
 Sorry, there is not enough free space on the destination volume to copy the selection.	FSUtils		Nie wystarczająca ilość pamięci w miejscu docelowym by wykonać kopiowanie.
 Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Nie można otworzyć \"%document\" z aplikacją \"%app\" (%error). 
 Sorry, saving more than one item is not allowed.	FilePanelPriv		Można zapisać tylko jeden plik naraz.
@@ -208,7 +211,6 @@ Resize to fit	VolumeWindow		Zmień rozmiar by dopasować
 Could not find application \"%appname\"	OpenWithWindow		Nie można odnaleźć aplikacji \"%appname\"
 The selected item cannot be moved to the Trash. Would you like to delete it instead? (This operation cannot be reverted.)	PoseView		Zaznaczony plik nie może zostać przeniesiony do kosza. Czy chcesz go usunąć zamiast tego? (Ta operacja nie może zostać cofnięta)
 Invert	SelectionWindow		Odwróć
-Save Query as template…	FindPanel		Zapisz zapytanie jako szablon…
 rename	InfoWindow	As in 'if you rename this folder...' (en) 'Wird dieser Ordner umbenannt...' (de)	zmienisz nazwę
 Find	FindPanel		Znajdź
 Move	FSUtils	Button label, 'Move' (en), 'Verschieben' (de)	Przenieś
@@ -233,6 +235,7 @@ Temporary	FindPanel		Tymczasowy
 Version	OpenWithWindow		Wersja
 Default application	InfoWindow		Domyślna aplikacja
 Preparing to copy items…	StatusWindow		Przygotowanie do kopiowania elementów…
+Save query as template…	FindPanel		Zapisz zapytanie jako szablon…
 Show folder location in title tab	SettingsView		Pokaż lokacje folderu na pasku
 Proceed	FSUtils		Kontynuuj
 Some items already exist in this folder with the same names as the items you are %verb.\n \nWould you like to replace them with the ones you are %verb or be prompted for each one?	FSUtils		Niektóre obiekty już istnieją w tym folderze o nazwach identycznych co te które probujesz %verb.\n \nCzy chcesz je zamienić z tymi które próbujesz %verb czy wolisz być pytany o każdy z nich?
@@ -253,7 +256,7 @@ TiB	WidgetAttributeText		TiB
 The file \"%name\" already exists in the specified folder. Do you want to replace it?	FilePanelPriv		Plik o nazwie \"%name\" już istnieje w tej lokalizacji. Czy chcesz go zamienić?
 Cancel	ContainerWindow		Anuluj
 Only the boot disk	AutoMounterSettings		Tylko dysk bootujący
-Trash	TrackerSettingsWindow		Kosz
+If you %ifYouDoAction the config folder, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Jeśli wykonasz '%ifYouDoAction' wobec katalogu konfiguracji, %osName może się nie zachowywać właściwie!\n\nCzy jesteś pewien, że chcesz wykonać operację '%ifYouDoAction'?
 Unmount	ContainerWindow		Odmontuj
 Copy layout	ContainerWindow		Kopiuj motyw
 label too long	PoseView		opis zbyt długi
@@ -331,6 +334,7 @@ The specified name is already used as the name of a folder. Please choose anothe
 Clean up	ContainerWindow		Wyczyść
 after	FindPanel		po
 Select…	QueryContainerWindow		Wybierz…
+More options	FindPanel		Więcej opcji
 link	FSUtils	filename link	Skrót
 At %func \nfind_directory() failed. \nReason: %error	TrackerInitialState		W %func \nfind_directory() nie powiódł się. \nPowód: %error
 The specified name is illegal. Please choose another name.	FilePanelPriv		Podana nazwa jest niedozwolona. Proszę wybrać inną nazwę.
@@ -340,6 +344,7 @@ Handles any file	OpenWithWindow		Wspiera każdy plik
 Get info	FilePanelPriv		Pokaż informacje
 32 x 32	DeskWindow		32 x 32
 Cancel	FilePanelPriv		Anuluj
+The application \"%appname\" does not support the type of document you are about to open.\nAre you sure you want to proceed?\n\nIf you know that the application supports the document type, you should contact the publisher of the application and ask them to update their application to list the type of your document as supported.	OpenWithWindow		Typ dokumentu, którego zamierzasz otworzyć programem \"%appname\", nie jest przez niego obsługiwany.\nCzy jesteś pewien, że chcesz to zrobić?\n\nJeśli jesteś pewien, że program wspiera taki typ dokumentu, powinieneś skontaktować się z wydawcą programu i poprosić, żeby zaktualizowano listę wspieranych typów dokumentów.
 Disks	DirMenu		Dyski
 New folder %ld	FSUtils		Nowy folder %ld
 All BeOS disks	AutoMounterSettings		Wszystkie dyski BeOS
@@ -377,6 +382,7 @@ Preferences…	ContainerWindow		Ustawienia...
 Move	PoseView		Przenieś
 Open and make preferred	OpenWithWindow		Otwórz i zaznacz jako preferowane
 Are you sure you want to delete the selected item(s)? This operation cannot be reverted.	FSUtils		Jesteś pewien, że chcesz usunąć zaznaczone obiekty? Ta operacja nie może być cofnięta.
+If you %ifYouDoAction the home folder, %osName may not behave properly!\n\nAre you sure you want to do this?\n\nTo %toDoAction the home folder anyway, hold down the Shift key and click \"%toConfirmAction\".	FSUtils		Jeśli wykonasz '%ifYouDoAction' wobec katalogu domowego, %osName może nie zachowywać się właściwie!\n\nCzy jesteś pewien, że chcesz wykonać operację '%ifYouDoAction'?\n\nJeśli pomimo wszystko wciąż chcesz wykonać '%toDoAction', to przytrzymaj klawisz Shift i kliknij \"%toConfirmAction\".
 Add-ons	DeskWindow		Wtyczki
 Name	FindPanel		Nazwa
 And	FindPanel		I
@@ -386,7 +392,6 @@ Icon view	DeskWindow		Widok ikon
 Select all	QueryContainerWindow		Zaznacz wszystko
 Files cannot be moved or deleted from a read-only volume.	PoseView		Pliki nie mogą zostać przeniesione do woluminu tylko do odczytu.
 There was a problem trying to replace \"%name\". The item might be open or busy.	FSUtils		Pojawił się problem przy modyfikowaniu \"%name\". Plik może być zajęty lub otwarty przez inny proces.
-You cannot put the Trash, home or Desktop directory into the trash.	FSUtils		Nie możesz przenieść Kosza, folderu domowego, lub Pulpitu do kosza.
 Owner	FilePermissionsView		Właściciel
 There was a problem trying to save in the folder you specified. Please try another one.	FilePanelPriv		Pojawił się problem przy zapisywaniu we wskazanej lokalizacji. Proszę podać inną lokalizację.
 Restore	ContainerWindow		Przywróć
@@ -441,6 +446,7 @@ contains	FindPanel		zawiera
 Relation	OpenWithWindow		Relacje
 Open	FilePanelPriv		Otwórz
 Mount	DeskWindow		Zamontuj
+Recent queries	FindPanel		Ostatnie zapytania
 Mount	ContainerWindow		Zamontuj
 %capacity (%used used -- %free free)	InfoWindow		%capacity (%used zajęte -- %free wolne)
 Cancel	FSClipBoard		Anuluj

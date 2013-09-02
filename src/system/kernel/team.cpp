@@ -26,6 +26,7 @@
 
 #include <extended_system_info_defs.h>
 
+#include <commpage.h>
 #include <boot_device.h>
 #include <elf.h>
 #include <file_cache.h>
@@ -157,6 +158,9 @@ static int32 sMaxTeams = 2048;
 static int32 sUsedTeams = 1;
 
 static TeamNotificationService sNotificationService;
+
+static const size_t kTeamUserDataReservedSize	= 128 * B_PAGE_SIZE;
+static const size_t kTeamUserDataInitialSize	= 4 * B_PAGE_SIZE;
 
 
 // #pragma mark - TeamListIterator
@@ -447,6 +451,8 @@ Team::Team(team_id id, bool kernel)
 	user_data_size = 0;
 	free_user_threads = NULL;
 
+	commpage_address = NULL;
+
 	supplementary_groups = NULL;
 	supplementary_group_count = 0;
 
@@ -497,7 +503,8 @@ Team::~Team()
 	// get rid of all associated data
 	PrepareForDeletion();
 
-	vfs_put_io_context(io_context);
+	if (io_context != NULL)
+		vfs_put_io_context(io_context);
 	delete_owned_ports(this);
 	sem_delete_owned_sems(this);
 
@@ -1324,23 +1331,44 @@ remove_team_from_group(Team* team)
 
 
 static status_t
-create_team_user_data(Team* team)
+create_team_user_data(Team* team, void* exactAddress = NULL)
 {
 	void* address;
-	size_t size = 4 * B_PAGE_SIZE;
+	uint32 addressSpec;
+
+	if (exactAddress != NULL) {
+		address = exactAddress;
+		addressSpec = B_EXACT_ADDRESS;
+	} else {
+		address = (void*)KERNEL_USER_DATA_BASE;
+		addressSpec = B_RANDOMIZED_BASE_ADDRESS;
+	}
+
+	status_t result = vm_reserve_address_range(team->id, &address, addressSpec,
+		kTeamUserDataReservedSize, RESERVED_AVOID_BASE);
+
 	virtual_address_restrictions virtualRestrictions = {};
-	virtualRestrictions.address = (void*)KERNEL_USER_DATA_BASE;
-	virtualRestrictions.address_specification = B_BASE_ADDRESS;
+	if (result == B_OK || exactAddress != NULL) {
+		if (exactAddress != NULL)
+			virtualRestrictions.address = exactAddress;
+		else
+			virtualRestrictions.address = address;
+		virtualRestrictions.address_specification = B_EXACT_ADDRESS;
+	} else {
+		virtualRestrictions.address = (void*)KERNEL_USER_DATA_BASE;
+		virtualRestrictions.address_specification = B_RANDOMIZED_BASE_ADDRESS;
+	}
+
 	physical_address_restrictions physicalRestrictions = {};
-	team->user_data_area = create_area_etc(team->id, "user area", size,
-		B_FULL_LOCK, B_READ_AREA | B_WRITE_AREA, 0, 0, &virtualRestrictions,
-		&physicalRestrictions, &address);
+	team->user_data_area = create_area_etc(team->id, "user area",
+		kTeamUserDataInitialSize, B_FULL_LOCK, B_READ_AREA | B_WRITE_AREA, 0, 0,
+		&virtualRestrictions, &physicalRestrictions, &address);
 	if (team->user_data_area < 0)
 		return team->user_data_area;
 
 	team->user_data = (addr_t)address;
 	team->used_user_data = 0;
-	team->user_data_size = size;
+	team->user_data_size = kTeamUserDataInitialSize;
 	team->free_user_threads = NULL;
 
 	return B_OK;
@@ -1352,6 +1380,9 @@ delete_team_user_data(Team* team)
 {
 	if (team->user_data_area >= 0) {
 		vm_delete_area(team->id, team->user_data_area, true);
+		vm_unreserve_address_range(team->id, (void*)team->user_data,
+			kTeamUserDataReservedSize);
+
 		team->user_data = 0;
 		team->used_user_data = 0;
 		team->user_data_size = 0;
@@ -1612,6 +1643,32 @@ team_create_thread_start_internal(void* args)
 		// the arguments are already on the user stack, we no longer need
 		// them in this form
 
+	// Clone commpage area
+	area_id commPageArea = clone_commpage_area(team->id,
+		&team->commpage_address);
+	if (commPageArea  < B_OK) {
+		TRACE(("team_create_thread_start: clone_commpage_area() failed: %s\n",
+			strerror(commPageArea)));
+		return commPageArea;
+	}
+
+	// Register commpage image
+	image_id commPageImage = get_commpage_image();
+	image_info imageInfo;
+	err = get_image_info(commPageImage, &imageInfo);
+	if (err != B_OK) {
+		TRACE(("team_create_thread_start: get_image_info() failed: %s\n",
+			strerror(err)));
+		return err;
+	}
+	imageInfo.text = team->commpage_address;
+	image_id image = register_image(team, &imageInfo, sizeof(image_info));
+	if (image < 0) {
+		TRACE(("team_create_thread_start: register_image() failed: %s\n",
+			strerror(image)));
+		return image;
+	}
+
 	// NOTE: Normally arch_thread_enter_userspace() never returns, that is
 	// automatic variables with function scope will never be destroyed.
 	{
@@ -1645,7 +1702,7 @@ team_create_thread_start_internal(void* args)
 
 	// enter userspace -- returns only in case of error
 	return thread_enter_userspace_new_team(thread, (addr_t)entry,
-		programArgs, NULL);
+		programArgs, team->commpage_address);
 }
 
 
@@ -1723,7 +1780,9 @@ load_image_internal(char**& _flatArgs, size_t flatArgsSize, int32 argCount,
  	InterruptsSpinLocker teamsLocker(sTeamHashLock);
 
 	sTeamHash.Insert(team);
-	sUsedTeams++;
+	bool teamLimitReached = sUsedTeams >= sMaxTeams;
+	if (!teamLimitReached)
+		sUsedTeams++;
 
 	teamsLocker.Unlock();
 
@@ -1742,6 +1801,11 @@ load_image_internal(char**& _flatArgs, size_t flatArgsSize, int32 argCount,
 
 	// check the executable's set-user/group-id permission
 	update_set_id_user_and_group(team, path);
+
+	if (teamLimitReached) {
+		status = B_NO_MORE_TEAMS;
+		goto err1;
+	}
 
 	status = create_team_arg(&teamArgs, path, flatArgs, flatArgsSize, argCount,
 		envCount, (mode_t)-1, errorPort, errorToken);
@@ -1769,7 +1833,7 @@ load_image_internal(char**& _flatArgs, size_t flatArgsSize, int32 argCount,
 	status = VMAddressSpace::Create(team->id, USER_BASE, USER_SIZE, false,
 		&team->address_space);
 	if (status != B_OK)
-		goto err3;
+		goto err2;
 
 	// create the user data area
 	status = create_team_user_data(team);
@@ -1831,8 +1895,6 @@ err5:
 	delete_team_user_data(team);
 err4:
 	team->address_space->Put();
-err3:
-	vfs_put_io_context(team->io_context);
 err2:
 	free_team_arg(teamArgs);
 err1:
@@ -1852,6 +1914,8 @@ err1:
 
 	teamsLocker.Lock();
 	sTeamHash.Remove(team);
+	if (!teamLimitReached)
+		sUsedTeams--;
 	teamsLocker.Unlock();
 
 	sNotificationService.Notify(TEAM_REMOVED, team);
@@ -2045,6 +2109,8 @@ fork_team(void)
 	team->SetName(parentTeam->Name());
 	team->SetArgs(parentTeam->Args());
 
+	team->commpage_address = parentTeam->commpage_address;
+
 	// Inherit the parent's user/group.
 	inherit_parent_user_and_group(team, parentTeam);
 
@@ -2054,7 +2120,9 @@ fork_team(void)
 	InterruptsSpinLocker teamsLocker(sTeamHashLock);
 
 	sTeamHash.Insert(team);
-	sUsedTeams++;
+	bool teamLimitReached = sUsedTeams >= sMaxTeams;
+	if (!teamLimitReached)
+		sUsedTeams++;
 
 	teamsLocker.Unlock();
 
@@ -2070,6 +2138,11 @@ fork_team(void)
 	// inherit some team debug flags
 	team->debug_info.flags |= atomic_get(&parentTeam->debug_info.flags)
 		& B_TEAM_DEBUG_INHERITED_FLAGS;
+
+	if (teamLimitReached) {
+		status = B_NO_MORE_TEAMS;
+		goto err1;
+	}
 
 	forkArgs = (arch_fork_arg*)malloc(sizeof(arch_fork_arg));
 	if (forkArgs == NULL) {
@@ -2090,7 +2163,7 @@ fork_team(void)
 			parentTeam->realtime_sem_context);
 		if (team->realtime_sem_context == NULL) {
 			status = B_NO_MEMORY;
-			goto err25;
+			goto err2;
 		}
 	}
 
@@ -2108,7 +2181,7 @@ fork_team(void)
 	while (get_next_area_info(B_CURRENT_TEAM, &areaCookie, &info) == B_OK) {
 		if (info.area == parentTeam->user_data_area) {
 			// don't clone the user area; just create a new one
-			status = create_team_user_data(team);
+			status = create_team_user_data(team, info.address);
 			if (status != B_OK)
 				break;
 
@@ -2185,8 +2258,6 @@ err4:
 	team->address_space->RemoveAndPut();
 err3:
 	delete_realtime_sem_context(team->realtime_sem_context);
-err25:
-	vfs_put_io_context(team->io_context);
 err2:
 	free(forkArgs);
 err1:
@@ -2203,6 +2274,8 @@ err1:
 
 	teamsLocker.Lock();
 	sTeamHash.Remove(team);
+	if (!teamLimitReached)
+		sUsedTeams--;
 	teamsLocker.Unlock();
 
 	sNotificationService.Notify(TEAM_REMOVED, team);
@@ -2785,6 +2858,8 @@ team_init(kernel_args* args)
 		"Prints a list of all existing teams.\n", 0);
 
 	new(&sNotificationService) TeamNotificationService();
+
+	sNotificationService.Register();
 
 	return B_OK;
 }
@@ -3433,7 +3508,7 @@ team_allocate_user_thread(Team* team)
 
 	while (true) {
 		// enough space left?
-		size_t needed = ROUNDUP(sizeof(user_thread), 8);
+		size_t needed = ROUNDUP(sizeof(user_thread), 128);
 		if (team->user_data_size - team->used_user_data < needed) {
 			// try to resize the area
 			if (resize_area(team->user_data_area,

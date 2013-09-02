@@ -71,11 +71,12 @@ APRWindow::APRWindow(BRect frame)
 		.Add(tabView)
 		.Add(BSpaceLayoutItem::CreateVerticalStrut(5))
 		.Add(BGroupLayoutBuilder(B_HORIZONTAL)
+			.Add(fDefaultsButton)
 			.Add(fRevertButton)
 			.AddGlue()
-			.Add(fDefaultsButton)
 		)
-		.SetInsets(5, 5, 5, 5)
+		.SetInsets(B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING,
+			B_USE_DEFAULT_SPACING, B_USE_DEFAULT_SPACING)
 	);
 }
 
@@ -98,10 +99,10 @@ APRWindow::MessageReceived(BMessage *message)
 			break;
 
 		case kMsgRevert:
-			fColorsView->Revert();
-			fAntialiasingSettings->Revert();
-			fLookAndFeelSettings->Revert();
 			fFontSettings->Revert();
+			fColorsView->Revert();
+			fLookAndFeelSettings->Revert();
+			fAntialiasingSettings->Revert();
 
 			_UpdateButtons();
 			break;

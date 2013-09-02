@@ -19,6 +19,7 @@ local sources =
 	TimeSettings.cpp
 	TimeWindow.cpp
 	TimeZoneListItem.cpp
+	TimeZoneListView.cpp
 	TZDisplay.cpp
 	ZoneView.cpp
 	;
@@ -38,10 +39,12 @@ Preference Time
 DoCatalogs Time :
 	x-vnd.Haiku-Time
 	:
+	ClockView.cpp
 	DateTimeView.cpp
 	NetworkTimeView.cpp
 	ntp.cpp
 	Time.cpp
 	TimeWindow.cpp
+	TimeZoneListView.cpp
 	ZoneView.cpp
 	;

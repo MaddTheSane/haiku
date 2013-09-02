@@ -324,9 +324,6 @@ encoder_mode_set(uint8 crtcID)
 		case ENCODER_OBJECT_ID_INTERNAL_UNIPHY1:
 		case ENCODER_OBJECT_ID_INTERNAL_UNIPHY2:
 		case ENCODER_OBJECT_ID_INTERNAL_KLDSCP_LVTMA:
-			// already handled by virue of setting DPMS_OFF before
-			// getting here
-#if 0
 			if ((info.chipsetFlags & CHIP_APU) != 0
 				|| info.dceMajor >= 5) {
 				// Setup DIG encoder
@@ -359,7 +356,6 @@ encoder_mode_set(uint8 crtcID)
 				transmitter_dig_setup(connectorIndex, pixelClock, 0, 0,
 					ATOM_TRANSMITTER_ACTION_ENABLE);
 			}
-#endif
 			break;
 		case ENCODER_OBJECT_ID_INTERNAL_DDI:
 		case ENCODER_OBJECT_ID_INTERNAL_DVO1:
@@ -511,7 +507,7 @@ encoder_digital_setup(uint32 connectorIndex, uint32 pixelClock, int command)
 						}
 					}
 
-					if ((lvdsFlags & ATOM_PANEL_MISC_TEMPORAL) != 0)
+					if ((lvdsFlags & ATOM_PANEL_MISC_TEMPORAL) != 0) {
 						args.v2.ucTemporal = PANEL_ENCODER_TEMPORAL_DITHER_EN;
 						if ((lvdsFlags & ATOM_PANEL_MISC_888RGB) != 0) {
 							args.v2.ucTemporal
@@ -522,6 +518,7 @@ encoder_digital_setup(uint32 connectorIndex, uint32 pixelClock, int command)
 							args.v2.ucTemporal
 							|= PANEL_ENCODER_TEMPORAL_LEVEL_4;
 						}
+					}
 				} else {
 					//if (dig->linkb)
 					//	args.v2.ucMisc |= PANEL_ENCODER_MISC_TMDS_LINKB;
