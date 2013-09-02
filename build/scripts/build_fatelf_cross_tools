@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 CWD=`pwd`
 
@@ -746,3 +746,4 @@ LOGFILE="${OBJROOT}/build.log"
 
 # Run the main routine
 main
+
