@@ -101,8 +101,8 @@ void
 AppMenuItem::GetContentSize(float* _width, float* _height)
 {
 	if (_width)
-		*_width = fIcon->Bounds().Width() +
-			be_plain_font->StringWidth(Label());
+		*_width = fIcon->Bounds().Width()
+			+ be_plain_font->StringWidth(Label());
 
 	if (_height) {
 		struct font_height fh;
@@ -166,6 +166,10 @@ void
 PieView::AttachedToWindow()
 {
 	fWindow = (MainWindow*)Window();
+	if (Parent()) {
+		SetViewColor(Parent()->ViewColor());
+		SetLowColor(Parent()->ViewColor());
+	}
 }
 
 
@@ -186,6 +190,7 @@ PieView::MessageReceived(BMessage* message)
 			if (fScanner != NULL)
 				fScanner->Cancel();
 			break;
+
 		case kBtnRescan:
 			if (fVolume != NULL) {
 				if (fScanner != NULL)
@@ -196,16 +201,16 @@ PieView::MessageReceived(BMessage* message)
 				Invalidate();
 			}
 			break;
-		
+
 		case kScanDone:
 			fWindow->EnableRescan();
+			// fall-through
 		case kScanProgress:
 			Invalidate();
 			break;
 
 		default:
 			BView::MessageReceived(message);
-			break;
 	}
 }
 
@@ -213,8 +218,9 @@ PieView::MessageReceived(BMessage* message)
 void
 PieView::MouseDown(BPoint where)
 {
-	uint32 buttons;
 	BMessage* current = Window()->CurrentMessage();
+
+	uint32 buttons;
 	if (current->FindInt32("buttons", (int32*)&buttons) != B_OK)
 		buttons = B_PRIMARY_MOUSE_BUTTON;
 
@@ -222,7 +228,7 @@ PieView::MouseDown(BPoint where)
 	if (info == NULL || info->pseudo)
 		return;
 
-	if (buttons & B_PRIMARY_MOUSE_BUTTON) {
+	if ((buttons & B_PRIMARY_MOUSE_BUTTON) != 0) {
 		fClicked = true;
 		fDragStart = where;
 		fClickedFile = info;
@@ -237,21 +243,32 @@ PieView::MouseDown(BPoint where)
 void
 PieView::MouseUp(BPoint where)
 {
-	// If the primary button was released and there was no dragging happening,
-	// just zoom in or out.
 	if (fClicked && !fDragging) {
+		// The primary mouse button was released and there's no dragging happening.
 		FileInfo* info = _FileAt(where);
 		if (info != NULL) {
-			if (info == fScanner->CurrentDir()) {
-				fScanner->ChangeDir(info->parent);
-				fLastWhere = where;
-				fUpdateFileAt = true;
-				Invalidate();
-			} else if (info->children.size() > 0) {
-				fScanner->ChangeDir(info);
-				fLastWhere = where;
-				fUpdateFileAt = true;
-				Invalidate();
+			BMessage* current = Window()->CurrentMessage();
+
+			uint32 modifiers;
+			if (current->FindInt32("modifiers", (int32*)&modifiers) != B_OK)
+				modifiers = 0;
+
+			if ((modifiers & B_COMMAND_KEY) != 0) {
+				// launch the app on command-click
+				_Launch(info);
+			} else {
+				// zoom in or out
+				if (info == fScanner->CurrentDir()) {
+					fScanner->ChangeDir(info->parent);
+					fLastWhere = where;
+					fUpdateFileAt = true;
+					Invalidate();
+				} else if (info->children.size() > 0) {
+					fScanner->ChangeDir(info);
+					fLastWhere = where;
+					fUpdateFileAt = true;
+					Invalidate();
+				}
 			}
 		}
 	}
@@ -354,8 +371,6 @@ PieView::_DrawProgressBar(BRect updateRect)
 
 	fMouseOverInfo.clear();
 
-	FillRect(updateRect, B_SOLID_LOW);
-
 	// Draw the progress bar.
 	BRect b = Bounds();
 	float bx = floorf((b.left + b.Width() - kProgBarWidth) / 2.0);
@@ -387,9 +402,6 @@ PieView::_DrawPieChart(BRect updateRect)
 		return;
 
 	pieRect.InsetBy(kPieOuterMargin, kPieOuterMargin);
-
-	SetHighColor(kPieBGColor);
-	FillRect(updateRect);
 
 	// constraint proportions
 	if (pieRect.Width() > pieRect.Height()) {
@@ -563,7 +575,7 @@ PieView::_FileAt(const BPoint& where)
 	float cy = b.top + b.Height() / 2.0;
 	float dx = where.x - cx;
 	float dy = where.y - cy;
-	float dist = sqrt(dx*dx + dy*dy);
+	float dist = sqrt(dx * dx + dy * dy);
 
 	int level;
 	if (dist < kPieCenterSize)
@@ -731,11 +743,9 @@ PieView::_ShowContextMenu(FileInfo* info, BPoint p)
 
 		fMouseOverMenu->RemoveItem(openWith);
 		delete openWith;
-	}
-	else {
+	} else
 		// The file is no longer available.
 		fFileUnavailableMenu->Go(p, false, true, openRect);
-	}
 }
 
 
@@ -763,7 +773,7 @@ PieView::_OpenInfo(FileInfo* info, BPoint p)
 	BMessenger tracker(kTrackerSignature);
 	if (!tracker.IsValid()) {
 		new InfoWin(p, info, Window());
- 	} else {
+	} else {
 		BMessage message(kGetInfo);
 		message.AddRef("refs", &info->ref);
 		tracker.SendMessage(&message);

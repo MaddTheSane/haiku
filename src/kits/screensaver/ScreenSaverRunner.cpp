@@ -1,37 +1,37 @@
 /*
- * Copyright 2003-2006, Haiku.
+ * Copyright 2003-2013 Haiku, Inc. All rights reserved
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Michael Phipps
- *		Jérôme Duval, jerome.duval@free.fr
  *		Axel Dörfler, axeld@pinc-software.de
+ *		Jérôme Duval, jerome.duval@free.fr
+ *		Michael Phipps
+ *		John Scipione, jscipione@gmail.com
  */
 
 
 #include "ScreenSaverRunner.h"
-#include "ScreenSaverSettings.h"
-
-#include <FindDirectory.h>
-#include <Screen.h>
-#include <ScreenSaver.h>
-#include <View.h>
 
 #include <stdio.h>
 
+#include <DirectWindow.h>
+#include <FindDirectory.h>
+#include <Message.h>
+#include <Window.h>
+
+
 ScreenSaverRunner::ScreenSaverRunner(BWindow* window, BView* view,
-		bool preview, ScreenSaverSettings& settings)
+	ScreenSaverSettings& settings)
 	:
-	fSaver(NULL),
 	fWindow(window),
 	fView(view),
+	fIsDirectDraw(dynamic_cast<BDirectWindow*>(window) != NULL),
 	fSettings(settings),
-	fPreview(preview),
+	fSaver(NULL),
 	fAddonImage(-1),
 	fThread(-1),
 	fQuitting(false)
 {
-	fDirectWindow = dynamic_cast<BDirectWindow *>(fWindow);
 	_LoadAddOn();
 }
 
@@ -45,24 +45,11 @@ ScreenSaverRunner::~ScreenSaverRunner()
 }
 
 
-BScreenSaver*
-ScreenSaverRunner::ScreenSaver() const
-{
-	return fSaver;
-}
-
-
-bool
-ScreenSaverRunner::HasStarted() const
-{
-	return fHasStarted;
-}
-
-
 status_t
 ScreenSaverRunner::Run()
 {
-	fThread = spawn_thread(&_ThreadFunc, "ScreenSaverRenderer", B_LOW_PRIORITY, this);
+	fThread = spawn_thread(&_ThreadFunc, "ScreenSaverRenderer", B_LOW_PRIORITY,
+		this);
 	Resume();
 
 	return fThread >= B_OK ? B_OK : fThread;
@@ -82,17 +69,17 @@ ScreenSaverRunner::Quit()
 }
 
 
-void
+status_t
 ScreenSaverRunner::Suspend()
 {
-	suspend_thread(fThread);
+	return suspend_thread(fThread);
 }
 
 
-void
+status_t
 ScreenSaverRunner::Resume()
 {
-	resume_thread(fThread);
+	return resume_thread(fThread);
 }
 
 
@@ -108,18 +95,20 @@ ScreenSaverRunner::_LoadAddOn()
 	}
 	_CleanUp();
 
-	if (!strcmp("", fSettings.ModuleName())) {
+	const char* moduleName = fSettings.ModuleName();
+	if (moduleName == NULL || *moduleName == '\0') {
 		Resume();
 		return;
 	}
 
 	BScreenSaver* (*instantiate)(BMessage*, image_id);
 
-	// try all directories until the first one succeeds
+	// try each directory until one succeeds
 
 	directory_which which[] = {
+		B_USER_NONPACKAGED_ADDONS_DIRECTORY,
 		B_USER_ADDONS_DIRECTORY,
-		B_COMMON_ADDONS_DIRECTORY,
+		B_SYSTEM_NONPACKAGED_ADDONS_DIRECTORY,
 		B_SYSTEM_ADDONS_DIRECTORY,
 	};
 	BPath path;
@@ -127,33 +116,38 @@ ScreenSaverRunner::_LoadAddOn()
 	for (uint32 i = 0; i < sizeof(which) / sizeof(which[0]); i++) {
 		if (find_directory(which[i], &path, false) != B_OK)
 			continue;
-
-		path.Append("Screen Savers");
-		path.Append(fSettings.ModuleName());
+		else if (path.Append("Screen Savers") != B_OK)
+			continue;
+		else if (path.Append(fSettings.ModuleName()) != B_OK)
+			continue;
 
 		fAddonImage = load_add_on(path.Path());
-		if (fAddonImage >= B_OK)
+		if (fAddonImage > 0)
 			break;
 	}
 
-	if (fAddonImage < B_OK) {
-		printf("Unable to open add-on: %s: %s\n", path.Path(), strerror(fAddonImage));
-	} else {
-		// Look for the one C function that should exist.
+	if (fAddonImage > 0) {
+		// look for the one C function that should exist,
+		// instantiate_screen_saver()
 		if (get_image_symbol(fAddonImage, "instantiate_screen_saver",
 				B_SYMBOL_TYPE_TEXT, (void **)&instantiate) != B_OK) {
-			printf("Unable to find the instantiator\n");
+			fprintf(stderr, "Unable to find the instantiation function.\n");
 		} else {
 			BMessage state;
-			fSettings.GetModuleState(fSettings.ModuleName(), &state);
+			fSettings.GetModuleState(moduleName, &state);
 			fSaver = instantiate(&state, fAddonImage);
 		}
 
-		if (fSaver->InitCheck() != B_OK) {
-			printf("ScreenSaver initialization failed: %s!\n", strerror(fSaver->InitCheck()));
+		if (fSaver == NULL) {
+			fprintf(stderr, "Screen saver initialization failed.\n");
+			_CleanUp();
+		} else if (fSaver->InitCheck() != B_OK) {
+			fprintf(stderr, "Screen saver initialization failed: %s.\n",
+				strerror(fSaver->InitCheck()));
 			_CleanUp();
 		}
-	}
+	} else
+		fprintf(stderr, "Unable to open add-on %s.\n", path.Path());
 
 	Resume();
 }
@@ -166,32 +160,28 @@ ScreenSaverRunner::_CleanUp()
 	fSaver = NULL;
 
 	if (fAddonImage >= 0) {
-		unload_add_on(fAddonImage);
+		status_t result = unload_add_on(fAddonImage);
+		if (result != B_OK) {
+			fprintf(stderr, "Unable to unload screen saver add-on: %s.\n",
+				strerror(result));
+		}
 		fAddonImage = -1;
 	}
 }
 
 
-void
-ScreenSaverRunner::_Run() 
+status_t
+ScreenSaverRunner::_Run()
 {
 	static const uint32 kInitialTickRate = 50000;
 
-	if (fWindow->Lock()) {
-		fView->SetViewColor(0, 0, 0);
-		fView->SetLowColor(0, 0, 0);
-		if (fSaver)
-			fHasStarted = fSaver->StartSaver(fView, fPreview) == B_OK;
-		fWindow->Unlock();
-	}
-	
 	// TODO: This code is getting awfully complicated and should
 	// probably be refactored.
 	uint32 tickBase = kInitialTickRate;
 	int32 snoozeCount = 0;
 	int32 frame = 0;
 	bigtime_t lastTickTime = 0;
-	bigtime_t tick = fSaver ? fSaver->TickSize() : tickBase;
+	bigtime_t tick = fSaver != NULL ? fSaver->TickSize() : tickBase;
 
 	while (!fQuitting) {
 		// break the idle time up into ticks so that we can evaluate
@@ -200,38 +190,39 @@ ScreenSaverRunner::_Run()
 		// will result in the screen saver not responding to deactivation
 		// for that length of time
 		snooze(tickBase);
-		if (system_time() - lastTickTime < tick) {
+		if (system_time() - lastTickTime < tick)
 			continue;
-		} else {
-			// re-evaluate the tick time after each successful wakeup - 
+		else {
+			// re-evaluate the tick time after each successful wakeup
 			// screensavers can adjust it on the fly, and we must be
 			// prepared to accomodate that
-			tick = fSaver ? fSaver->TickSize() : tickBase;
-			
+			tick = fSaver != NULL ? fSaver->TickSize() : tickBase;
+
 			if (tick < tickBase) {
 				if (tick < 0)
 					tick = 0;
 				tickBase = tick;
-			} else if (tickBase < kInitialTickRate && tick >= kInitialTickRate) {
+			} else if (tickBase < kInitialTickRate
+				&& tick >= kInitialTickRate) {
 				tickBase = kInitialTickRate;
 			}
-			
+
 			lastTickTime = system_time();
 		}
-		
+
 		if (snoozeCount) {
 			// if we are sleeping, do nothing
 			snoozeCount--;
-		} else if (fSaver != NULL && fHasStarted) {
+		} else if (fSaver != NULL) {
 			if (fSaver->LoopOnCount() && frame >= fSaver->LoopOnCount()) {
 				// Time to nap
 				frame = 0;
 				snoozeCount = fSaver->LoopOffCount();
 			} else if (fWindow->LockWithTimeout(5000LL) == B_OK) {
 				if (!fQuitting) {
-					// NOTE: R5 really calls DirectDraw()
+					// NOTE: BeOS R5 really calls DirectDraw()
 					// and then Draw() for the same frame
-					if (fDirectWindow)
+					if (fIsDirectDraw)
 						fSaver->DirectDraw(frame);
 					fSaver->Draw(fView, frame);
 					fView->Sync();
@@ -243,16 +234,16 @@ ScreenSaverRunner::_Run()
 			snoozeCount = 1000;
 	}
 
-	if (fSaver)
+	if (fSaver != NULL)
 		fSaver->StopSaver();
+
+	return B_OK;
 }
 
 
 status_t
-ScreenSaverRunner::_ThreadFunc(void *data)
+ScreenSaverRunner::_ThreadFunc(void* data)
 {
 	ScreenSaverRunner* runner = (ScreenSaverRunner*)data;
-	runner->_Run();
-	return B_OK;
+	return runner->_Run();
 }
-

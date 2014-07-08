@@ -28,7 +28,7 @@ bool gLogFunctionCalls = true;
 bool gLogFunctionReturns = true;
 bool gLogFunctionResults = true;
 
-static const char *sLogFilePath = kCommonLogDirectory "/" DRIVER_NAME ".log";
+static const char *sLogFilePath = kSystemLogDirectory "/" DRIVER_NAME ".log";
 static sem_id sLogLock;
 
 
@@ -81,7 +81,7 @@ usb_serial_trace(bool force, const char *format, ...)
 	static char buffer[1024];
 	char *bufferPointer = buffer;
 	if (!gLogToFile) {
-		const char *prefix = "\33[32m"DRIVER_NAME":\33[0m ";
+		const char *prefix = "\33[32m" DRIVER_NAME ":\33[0m ";
 		strcpy(bufferPointer, prefix);
 		bufferPointer += strlen(prefix);
 	}

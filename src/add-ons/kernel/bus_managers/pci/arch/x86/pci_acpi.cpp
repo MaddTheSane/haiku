@@ -99,7 +99,7 @@ acpi_check_rsdt(acpi_rsdp* rsdp)
 	if (rsdp->revision > 0) {
 		length = rsdp->xsdt_length;
 		rsdtArea = map_physical_memory("rsdt acpi",
-			(uint32)rsdp->xsdt_address, rsdp->xsdt_length, B_ANY_KERNEL_ADDRESS, 
+			(uint32)rsdp->xsdt_address, rsdp->xsdt_length, B_ANY_KERNEL_ADDRESS,
 			B_KERNEL_READ_AREA, (void **)&rsdt);
 		if (rsdt != NULL
 			&& strncmp(rsdt->signature, ACPI_XSDT_SIGNATURE, 4) != 0) {
@@ -117,8 +117,11 @@ acpi_check_rsdt(acpi_rsdp* rsdp)
 		rsdtArea = map_physical_memory("rsdt acpi",
 			rsdp->rsdt_address, sizeof(acpi_descriptor_header),
 			B_ANY_KERNEL_ADDRESS, B_KERNEL_READ_AREA, (void **)&rsdt);
-		if (rsdt != NULL
-			&& strncmp(rsdt->signature, ACPI_RSDT_SIGNATURE, 4) != 0) {
+		if (rsdt == NULL) {
+			TRACE(("acpi: couldn't map rsdt header\n"));
+			return B_ERROR;
+		}
+		if (strncmp(rsdt->signature, ACPI_RSDT_SIGNATURE, 4) != 0) {
 			delete_area(rsdtArea);
 			rsdt = NULL;
 			TRACE(("acpi: invalid root system description table\n"));
@@ -130,7 +133,7 @@ acpi_check_rsdt(acpi_rsdp* rsdp)
 		TRACE(("acpi: rsdt length: %lu\n", length));
 		delete_area(rsdtArea);
 		rsdtArea = map_physical_memory("rsdt acpi",
-			rsdp->rsdt_address, length, B_ANY_KERNEL_ADDRESS, 
+			rsdp->rsdt_address, length, B_ANY_KERNEL_ADDRESS,
 			B_KERNEL_READ_AREA, (void **)&rsdt);
 	}
 
@@ -184,7 +187,7 @@ acpi_find_table_generic(const char* signature, acpi_descriptor_header* acpiSdt)
 	area_id headerArea = -1;
 	for (int32 j = 0; j < sNumEntries; j++, pointer++) {
 		headerArea = map_physical_memory("acpi header", (uint32)*pointer,
-				sizeof(acpi_descriptor_header), B_ANY_KERNEL_ADDRESS, 
+				sizeof(acpi_descriptor_header), B_ANY_KERNEL_ADDRESS,
 			B_KERNEL_READ_AREA, (void **)&header);
 
 		if (header == NULL
@@ -214,7 +217,7 @@ acpi_find_table_generic(const char* signature, acpi_descriptor_header* acpiSdt)
 	delete_area(headerArea);
 
 	headerArea = map_physical_memory("acpi table",
-		(uint32)*pointer, length, B_ANY_KERNEL_ADDRESS, 
+		(uint32)*pointer, length, B_ANY_KERNEL_ADDRESS,
 			B_KERNEL_READ_AREA, (void **)&header);
 	return header;
 }
@@ -259,7 +262,7 @@ acpi_init()
 				rsdp = (acpi_rsdp*)pointer;
 			}
 		}
-		
+
 		if (rsdp != NULL && acpi_check_rsdt(rsdp) == B_OK) {
 			delete_area(rsdpArea);
 			break;

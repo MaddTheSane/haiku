@@ -35,12 +35,15 @@
 #include <PartitioningInfo.h>
 #include <Roster.h>
 #include <Screen.h>
+#include <ScrollBar.h>
 #include <Volume.h>
 #include <VolumeRoster.h>
 
+#include <fs_volume.h>
 #include <tracker_private.h>
 
 #include "ChangeParametersPanel.h"
+#include "ColumnListView.h"
 #include "CreateParametersPanel.h"
 #include "DiskView.h"
 #include "InitParametersPanel.h"
@@ -199,12 +202,12 @@ private:
 MainWindow::MainWindow()
 	:
 	BWindow(BRect(50, 50, 600, 500), B_TRANSLATE_SYSTEM_NAME("DriveSetup"),
-		B_DOCUMENT_WINDOW, B_ASYNCHRONOUS_CONTROLS | B_NOT_ZOOMABLE),
+		B_DOCUMENT_WINDOW, B_ASYNCHRONOUS_CONTROLS),
 	fCurrentDisk(NULL),
 	fCurrentPartitionID(-1),
 	fSpaceIDMap()
 {
-	BMenuBar* menuBar = new BMenuBar(Bounds(), "root menu");
+	fMenuBar = new BMenuBar(Bounds(), "root menu");
 
 	// create all the menu items
 	fWipeMenuItem = new BMenuItem(B_TRANSLATE("Wipe (not implemented)"),
@@ -245,7 +248,7 @@ MainWindow::MainWindow()
 	// fDiskMenu->AddItem(fSurfaceTestMenuItem);
 	fDiskMenu->AddItem(fRescanMenuItem);
 
-	menuBar->AddItem(fDiskMenu);
+	fMenuBar->AddItem(fDiskMenu);
 
 	// Parition menu
 	fPartitionMenu = new BMenu(B_TRANSLATE("Partition"));
@@ -265,13 +268,37 @@ MainWindow::MainWindow()
 	fPartitionMenu->AddSeparatorItem();
 
 	fPartitionMenu->AddItem(fMountAllMenuItem);
-	menuBar->AddItem(fPartitionMenu);
+	fMenuBar->AddItem(fPartitionMenu);
 
-	AddChild(menuBar);
+	AddChild(fMenuBar);
+
+	// Partition / Drives context menu
+	fContextMenu = new BPopUpMenu("Partition", false, false);
+	fCreateContextMenuItem = new BMenuItem(B_TRANSLATE("Create" B_UTF8_ELLIPSIS),
+		new BMessage(MSG_CREATE), 'C');
+	fChangeContextMenuItem = new BMenuItem(
+		B_TRANSLATE("Change parameters" B_UTF8_ELLIPSIS),
+		new BMessage(MSG_CHANGE));
+	fDeleteContextMenuItem = new BMenuItem(B_TRANSLATE("Delete"),
+		new BMessage(MSG_DELETE), 'D');
+	fMountContextMenuItem = new BMenuItem(B_TRANSLATE("Mount"),
+		new BMessage(MSG_MOUNT), 'M');
+	fUnmountContextMenuItem = new BMenuItem(B_TRANSLATE("Unmount"),
+		new BMessage(MSG_UNMOUNT), 'U');
+	fFormatContextMenuItem = new BMenu(B_TRANSLATE("Format"));
+
+	fContextMenu->AddItem(fCreateContextMenuItem);
+	fContextMenu->AddItem(fFormatContextMenuItem);
+	fContextMenu->AddItem(fChangeContextMenuItem);
+	fContextMenu->AddItem(fDeleteContextMenuItem);
+	fContextMenu->AddSeparatorItem();
+	fContextMenu->AddItem(fMountContextMenuItem);
+	fContextMenu->AddItem(fUnmountContextMenuItem);
+	fContextMenu->SetTargetForItems(this);
 
 	// add DiskView
 	BRect r(Bounds());
-	r.top = menuBar->Frame().bottom + 1;
+	r.top = fMenuBar->Frame().bottom + 1;
 	r.bottom = floorf(r.top + r.Height() * 0.33);
 	fDiskView = new DiskView(r, B_FOLLOW_LEFT_RIGHT | B_FOLLOW_TOP,
 		fSpaceIDMap);
@@ -308,6 +335,7 @@ MainWindow::~MainWindow()
 {
 	BDiskDeviceRoster().StopWatching(this);
 	delete fCurrentDisk;
+	delete fContextMenu;
 }
 
 
@@ -369,10 +397,19 @@ MainWindow::MessageReceived(BMessage* message)
 			_ScanDrives();
 			break;
 
-		case MSG_PARTITION_ROW_SELECTED:
+		case MSG_PARTITION_ROW_SELECTED: {
 			// selection of partitions via list view
 			_AdaptToSelectedPartition();
+
+			BPoint where;
+			uint32 buttons;
+			fListView->GetMouse(&where, &buttons);
+			where.x += 2; // to prevent occasional select
+			if (buttons & B_SECONDARY_MOUSE_BUTTON)
+				fContextMenu->Go(fListView->ConvertToScreen(where),
+					true, false, true);
 			break;
+		}
 		case MSG_SELECTED_PARTITION_ID: {
 			// selection of partitions via disk view
 			partition_id id;
@@ -383,8 +420,19 @@ MainWindow::MessageReceived(BMessage* message)
 					_AdaptToSelectedPartition();
 				}
 			}
+			BPoint where;
+			uint32 buttons;
+			fListView->GetMouse(&where, &buttons);
+			where.x += 2; // to prevent occasional select
+			if (buttons & B_SECONDARY_MOUSE_BUTTON)
+				fContextMenu->Go(fListView->ConvertToScreen(where),
+					true, false, true);
 			break;
 		}
+
+		case MSG_UPDATE_ZOOM_LIMITS:
+			_UpdateWindowZoomLimits();
+			break;
 
 		default:
 			BWindow::MessageReceived(message);
@@ -499,6 +547,8 @@ MainWindow::_ScanDrives()
 	} else {
 		_UpdateMenus(NULL, -1, -1);
 	}
+
+	PostMessage(MSG_UPDATE_ZOOM_LIMITS);
 }
 
 
@@ -576,11 +626,17 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 		delete item;
 	while (BMenuItem* item = fDiskInitMenu->RemoveItem((int32)0))
 		delete item;
+	while (BMenuItem* item = fFormatContextMenuItem->RemoveItem((int32)0))
+		delete item;
 
 	fCreateMenuItem->SetEnabled(false);
 	fUnmountMenuItem->SetEnabled(false);
 	fDiskInitMenu->SetEnabled(false);
 	fFormatMenu->SetEnabled(false);
+
+	fCreateContextMenuItem->SetEnabled(false);
+	fUnmountContextMenuItem->SetEnabled(false);
+	fFormatContextMenuItem->SetEnabled(false);
 
 	if (!disk) {
 		fWipeMenuItem->SetEnabled(false);
@@ -600,13 +656,19 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 			parentPartition = disk->FindDescendant(parentID);
 		}
 
-		if (parentPartition && parentPartition->ContainsPartitioningSystem())
+		if (parentPartition && parentPartition->ContainsPartitioningSystem()) {
 			fCreateMenuItem->SetEnabled(true);
-
+			fCreateContextMenuItem->SetEnabled(true);
+		}
 		bool prepared = disk->PrepareModifications() == B_OK;
+
 		fFormatMenu->SetEnabled(prepared);
 		fDeleteMenuItem->SetEnabled(prepared);
 		fChangeMenuItem->SetEnabled(prepared);
+
+		fChangeContextMenuItem->SetEnabled(prepared);
+		fDeleteContextMenuItem->SetEnabled(prepared);
+		fFormatContextMenuItem->SetEnabled(prepared);
 
 		BPartition* partition = disk->FindDescendant(selectedPartition);
 
@@ -635,6 +697,16 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 			} else if (diskSystem.IsFileSystem()) {
 				// Otherwise a filesystem
 				fFormatMenu->AddItem(item);
+
+				// Context menu
+				BMessage* message = new BMessage(MSG_INITIALIZE);
+				message->AddInt32("parent id", parentID);
+				message->AddString("disk system", diskSystem.PrettyName());
+				BMenuItem* popUpItem = new BMenuItem(label.String(), message);
+				popUpItem->SetEnabled(partition != NULL
+					&& partition->CanInitialize(diskSystem.PrettyName()));
+				fFormatContextMenuItem->AddItem(popUpItem);
+				fFormatContextMenuItem->SetTargetForItems(this);
 			}
 		}
 
@@ -658,6 +730,13 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 
 			fMountMenuItem->SetEnabled(!partition->IsMounted());
 
+			fFormatContextMenuItem->SetEnabled(notMountedAndWritable
+				&& fFormatContextMenuItem->CountItems() > 0);
+			fChangeContextMenuItem->SetEnabled(notMountedAndWritable);
+			fDeleteContextMenuItem->SetEnabled(notMountedAndWritable
+				&& !partition->IsDevice());
+			fMountContextMenuItem->SetEnabled(notMountedAndWritable);
+
 			bool unMountable = false;
 			if (partition->IsMounted()) {
 				// see if this partition is the boot volume
@@ -670,12 +749,18 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 					unMountable = true;
 			}
 			fUnmountMenuItem->SetEnabled(unMountable);
+			fUnmountContextMenuItem->SetEnabled(unMountable);
 		} else {
 			fDeleteMenuItem->SetEnabled(false);
 			fChangeMenuItem->SetEnabled(false);
 			fMountMenuItem->SetEnabled(false);
 			fFormatMenu->SetEnabled(false);
 			fDiskInitMenu->SetEnabled(false);
+
+			fDeleteContextMenuItem->SetEnabled(false);
+			fChangeContextMenuItem->SetEnabled(false);
+			fMountContextMenuItem->SetEnabled(false);
+			fFormatContextMenuItem->SetEnabled(false);
 		}
 
 		if (prepared)
@@ -687,6 +772,10 @@ MainWindow::_UpdateMenus(BDiskDevice* disk,
 		fDeleteMenuItem->SetEnabled(false);
 		fChangeMenuItem->SetEnabled(false);
 		fMountMenuItem->SetEnabled(false);
+
+		fDeleteContextMenuItem->SetEnabled(false);
+		fChangeContextMenuItem->SetEnabled(false);
+		fMountContextMenuItem->SetEnabled(false);
 	}
 }
 
@@ -776,6 +865,25 @@ MainWindow::_Unmount(BDiskDevice* disk, partition_id selectedPartition)
 		BPath path;
 		partition->GetMountPoint(&path);
 		status_t status = partition->Unmount();
+		if (status != B_OK) {
+			BString message = B_TRANSLATE("Could not unmount partition");
+			message << " \"" << partition->ContentName() << "\":\n\t"
+				<< strerror(status) << "\n\n"
+				<< B_TRANSLATE("Should unmounting be forced?\n\n"
+				"Note: If an application is currently writing to the volume, "
+				"unmounting it now might result in loss of data.\n");
+
+			BAlert* alert = new BAlert(B_TRANSLATE("Force unmount"), message,
+				B_TRANSLATE("Cancel"), B_TRANSLATE("Force unmount"), NULL,
+				B_WIDTH_AS_USUAL, B_WARNING_ALERT);
+			alert->SetShortcut(0, B_ESCAPE);
+
+			if (alert->Go() == 1)
+				status = partition->Unmount(B_FORCE_UNMOUNT);
+			else
+				return;
+		}
+
 		if (status != B_OK) {
 			_DisplayPartitionError(
 				B_TRANSLATE("Could not unmount partition %s."),
@@ -1278,3 +1386,46 @@ MainWindow::_ChangeParameters(BDiskDevice* disk, partition_id selectedPartition)
 	_ScanDrives();
 	fDiskView->ForceUpdate();
 }
+
+
+float
+MainWindow::_ColumnListViewHeight(BColumnListView* list, BRow* currentRow)
+{
+	float height = 0;
+	int32 rows = list->CountRows(currentRow);
+	for (int32 i = 0; i < rows; i++) {
+		BRow* row = list->RowAt(i, currentRow);
+		height += row->Height() + 1;
+		if (row->IsExpanded() && list->CountRows(row) > 0)
+			height += _ColumnListViewHeight(list, row);
+	}
+	return height;
+}
+
+
+void
+MainWindow::_UpdateWindowZoomLimits()
+{
+	float maxHeight = 0;
+	int32 numColumns = fListView->CountColumns();
+	BRow* parentRow = NULL;
+	BColumn* column = NULL;
+
+	maxHeight += _ColumnListViewHeight(fListView, NULL);
+
+	float maxWidth = fListView->LatchWidth();
+	for (int32 i = 0; i < numColumns; i++) {
+		column = fListView->ColumnAt(i);
+		maxWidth += column->Width();
+	}
+
+	parentRow = fListView->RowAt(0, NULL);
+	maxHeight += B_H_SCROLL_BAR_HEIGHT;
+	maxHeight += 1.5 * parentRow->Height();	// the label row
+	maxHeight += fDiskView->Bounds().Height();
+	maxHeight += fMenuBar->Bounds().Height();
+	maxWidth += 1.5 * B_V_SCROLL_BAR_WIDTH;	// scroll bar & borders
+
+	SetZoomLimits(maxWidth, maxHeight);
+}
+

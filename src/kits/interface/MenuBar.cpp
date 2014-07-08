@@ -44,10 +44,10 @@ struct menubar_data {
 };
 
 
-BMenuBar::BMenuBar(BRect frame, const char* title, uint32 resizeMask,
+BMenuBar::BMenuBar(BRect frame, const char* name, uint32 resizingMode,
 		menu_layout layout, bool resizeToFit)
 	:
-	BMenu(frame, title, resizeMask, B_WILL_DRAW | B_FRAME_EVENTS
+	BMenu(frame, name, resizingMode, B_WILL_DRAW | B_FRAME_EVENTS
 		| B_FULL_UPDATE_ON_RESIZE, layout, resizeToFit),
 	fBorder(B_BORDER_FRAME),
 	fTrackingPID(-1),
@@ -60,9 +60,9 @@ BMenuBar::BMenuBar(BRect frame, const char* title, uint32 resizeMask,
 }
 
 
-BMenuBar::BMenuBar(const char* title, menu_layout layout, uint32 flags)
+BMenuBar::BMenuBar(const char* name, menu_layout layout, uint32 flags)
 	:
-	BMenu(BRect(), title, B_FOLLOW_NONE,
+	BMenu(BRect(), name, B_FOLLOW_NONE,
 		flags | B_WILL_DRAW | B_FRAME_EVENTS | B_SUPPORTS_LAYOUT,
 		layout, false),
 	fBorder(B_BORDER_FRAME),
@@ -76,9 +76,9 @@ BMenuBar::BMenuBar(const char* title, menu_layout layout, uint32 flags)
 }
 
 
-BMenuBar::BMenuBar(BMessage* data)
+BMenuBar::BMenuBar(BMessage* archive)
 	:
-	BMenu(data),
+	BMenu(archive),
 	fBorder(B_BORDER_FRAME),
 	fTrackingPID(-1),
 	fPrevFocusToken(-1),
@@ -88,11 +88,11 @@ BMenuBar::BMenuBar(BMessage* data)
 {
 	int32 border;
 
-	if (data->FindInt32("_border", &border) == B_OK)
+	if (archive->FindInt32("_border", &border) == B_OK)
 		SetBorder((menu_bar_border)border);
 
 	menu_layout layout = B_ITEMS_IN_COLUMN;
-	data->FindInt32("_layout", (int32*)&layout);
+	archive->FindInt32("_layout", (int32*)&layout);
 
 	_InitData(layout);
 }
@@ -380,22 +380,27 @@ BMenuBar::Perform(perform_code code, void* _data)
 			((perform_data_min_size*)_data)->return_value
 				= BMenuBar::MinSize();
 			return B_OK;
+
 		case PERFORM_CODE_MAX_SIZE:
 			((perform_data_max_size*)_data)->return_value
 				= BMenuBar::MaxSize();
 			return B_OK;
+
 		case PERFORM_CODE_PREFERRED_SIZE:
 			((perform_data_preferred_size*)_data)->return_value
 				= BMenuBar::PreferredSize();
 			return B_OK;
+
 		case PERFORM_CODE_LAYOUT_ALIGNMENT:
 			((perform_data_layout_alignment*)_data)->return_value
 				= BMenuBar::LayoutAlignment();
 			return B_OK;
+
 		case PERFORM_CODE_HAS_HEIGHT_FOR_WIDTH:
 			((perform_data_has_height_for_width*)_data)->return_value
 				= BMenuBar::HasHeightForWidth();
 			return B_OK;
+
 		case PERFORM_CODE_GET_HEIGHT_FOR_WIDTH:
 		{
 			perform_data_get_height_for_width* data
@@ -404,12 +409,14 @@ BMenuBar::Perform(perform_code code, void* _data)
 				&data->preferred);
 			return B_OK;
 		}
+
 		case PERFORM_CODE_SET_LAYOUT:
 		{
 			perform_data_set_layout* data = (perform_data_set_layout*)_data;
 			BMenuBar::SetLayout(data->layout);
 			return B_OK;
 		}
+
 		case PERFORM_CODE_LAYOUT_INVALIDATED:
 		{
 			perform_data_layout_invalidated* data
@@ -417,6 +424,7 @@ BMenuBar::Perform(perform_code code, void* _data)
 			BMenuBar::LayoutInvalidated(data->descendants);
 			return B_OK;
 		}
+
 		case PERFORM_CODE_DO_LAYOUT:
 		{
 			BMenuBar::DoLayout();
@@ -571,9 +579,8 @@ BMenuBar::_Track(int32* action, int32 startIndex, bool showMenu)
 			// where to store the current mouse position ?
 			// (Or just use the BView mouse hooks)
 			BPoint newWhere;
-			uint32 newButtons;
 			if (LockLooper()) {
-				GetMouse(&newWhere, &newButtons);
+				GetMouse(&newWhere, &buttons);
 				UnlockLooper();
 			}
 
@@ -631,9 +638,7 @@ BMenuBar::_Track(int32* action, int32 startIndex, bool showMenu)
 			} while (newWhere == where && newButtons == buttons
 				&& fState == MENU_STATE_TRACKING);
 
-			uint32 test = newWhere == where ? 0 : buttons;
-
-			if (newButtons != test && _IsStickyMode()) {
+			if (newButtons != 0 && _IsStickyMode()) {
 				if (item == NULL || (item->Submenu() != NULL
 						&& item->Submenu()->Window() != NULL)) {
 					// clicked outside the menu bar or on item with already
@@ -641,7 +646,7 @@ BMenuBar::_Track(int32* action, int32 startIndex, bool showMenu)
 					fState = MENU_STATE_CLOSED;
 				} else
 					_SetStickyMode(false);
-			} else if (newButtons == test && !_IsStickyMode()) {
+			} else if (newButtons == 0 && !_IsStickyMode()) {
 				if ((fSelected != NULL && fSelected->Submenu() == NULL)
 					|| item == NULL) {
 					// clicked on an item without a submenu or clicked and

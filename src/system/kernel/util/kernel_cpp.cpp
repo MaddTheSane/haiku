@@ -251,6 +251,7 @@ abort()
 	panic("abort() called!");
 }
 
+
 extern "C"
 void
 debugger(const char *message)
@@ -259,3 +260,12 @@ debugger(const char *message)
 }
 
 #endif	// _#if KERNEL_MODE
+
+
+extern "C"
+void
+exit(int status)
+{
+	panic("exit() called with status code = %d!", status);
+}
+

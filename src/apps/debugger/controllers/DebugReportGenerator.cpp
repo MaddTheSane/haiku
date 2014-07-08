@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013, Rene Gollent, rene@gollent.com.
+ * Copyright 2012-2014, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 
@@ -18,12 +18,15 @@
 #include "AreaInfo.h"
 #include "CpuState.h"
 #include "DebuggerInterface.h"
+#include "DisassembledCode.h"
+#include "FunctionInstance.h"
 #include "Image.h"
 #include "MessageCodes.h"
 #include "Register.h"
 #include "SemaphoreInfo.h"
 #include "StackFrame.h"
 #include "StackTrace.h"
+#include "Statement.h"
 #include "StringUtils.h"
 #include "SystemInfo.h"
 #include "Team.h"
@@ -36,6 +39,14 @@
 #include "ValueLocation.h"
 #include "ValueNode.h"
 #include "ValueNodeManager.h"
+
+
+#define WRITE_AND_CHECK(output, data) \
+	{ \
+		ssize_t error = output.Write(data.String(), data.Length()); \
+		if (error < 0) \
+			return error; \
+	}
 
 
 DebugReportGenerator::DebugReportGenerator(::Team* team,
@@ -51,7 +62,8 @@ DebugReportGenerator::DebugReportGenerator(::Team* team,
 	fWaitingNode(NULL),
 	fCurrentBlock(NULL),
 	fBlockRetrievalStatus(B_OK),
-	fTraceWaitingThread(NULL)
+	fTraceWaitingThread(NULL),
+	fSourceWaitingFunction(NULL)
 {
 	fTeam->AddListener(this);
 	fArchitecture->AcquireReference();
@@ -117,29 +129,24 @@ DebugReportGenerator::_GenerateReport(const entry_ref& outputPath)
 	if (result != B_OK)
 		return result;
 
-	BString output;
-	result = _GenerateReportHeader(output);
+	result = _GenerateReportHeader(file);
 	if (result != B_OK)
 		return result;
 
-	result = _DumpRunningThreads(output);
+	result = _DumpRunningThreads(file);
 	if (result != B_OK)
 		return result;
 
-	result = _DumpLoadedImages(output);
+	result = _DumpLoadedImages(file);
 	if (result != B_OK)
 		return result;
 
-	result = _DumpAreas(output);
+	result = _DumpAreas(file);
 	if (result != B_OK)
 		return result;
 
-	result = _DumpSemaphores(output);
+	result = _DumpSemaphores(file);
 	if (result != B_OK)
-		return result;
-
-	result = file.Write(output.String(), output.Length());
-	if (result < 0)
 		return result;
 
 	BPath path(&outputPath);
@@ -204,24 +211,68 @@ DebugReportGenerator::ValueNodeValueChanged(ValueNode* node)
 }
 
 
+void
+DebugReportGenerator::FunctionSourceCodeChanged(Function* function)
+{
+	AutoLocker< ::Team> teamLocker(fTeam);
+	if (function == fSourceWaitingFunction) {
+		if (function->FirstInstance()->SourceCodeState()
+				== FUNCTION_SOURCE_LOADED
+		   || function->FirstInstance()->SourceCodeState()
+				== FUNCTION_SOURCE_UNAVAILABLE) {
+			release_sem(fTeamDataSem);
+		}
+	}
+}
+
 status_t
-DebugReportGenerator::_GenerateReportHeader(BString& _output)
+DebugReportGenerator::_GenerateReportHeader(BFile& _output)
 {
 	AutoLocker< ::Team> locker(fTeam);
 
 	BString data;
 	data.SetToFormat("Debug information for team %s (%" B_PRId32 "):\n",
 		fTeam->Name(), fTeam->ID());
-	_output << data;
+	WRITE_AND_CHECK(_output, data);
 
 	SystemInfo sysInfo;
+
+	uint32 topologyNodeCount = 0;
+	cpu_topology_node_info* topology = NULL;
+	get_cpu_topology_info(NULL, &topologyNodeCount);
+	if (topologyNodeCount != 0)
+		topology = new cpu_topology_node_info[topologyNodeCount];
+	get_cpu_topology_info(topology, &topologyNodeCount);
+
+	cpu_platform platform = B_CPU_UNKNOWN;
+	cpu_vendor cpuVendor = B_CPU_VENDOR_UNKNOWN;
+	uint32 cpuModel = 0;
+	for (uint32 i = 0; i < topologyNodeCount; i++) {
+		switch (topology[i].type) {
+			case B_TOPOLOGY_ROOT:
+				platform = topology[i].data.root.platform;
+				break;
+
+			case B_TOPOLOGY_PACKAGE:
+				cpuVendor = topology[i].data.package.vendor;
+				break;
+
+			case B_TOPOLOGY_CORE:
+				cpuModel = topology[i].data.core.model;
+				break;
+
+			default:
+				break;
+		}
+	}
 
 	if (fDebuggerInterface->GetSystemInfo(sysInfo) == B_OK) {
 		const system_info &info = sysInfo.GetSystemInfo();
 		data.SetToFormat("CPU(s): %" B_PRId32 "x %s %s\n",
-			info.cpu_count, get_cpu_vendor_string(info.cpu_type),
-			get_cpu_model_string(&info));
-		_output << data;
+			info.cpu_count, get_cpu_vendor_string(cpuVendor),
+			get_cpu_model_string(platform, cpuVendor, cpuModel));
+		WRITE_AND_CHECK(_output, data);
+
 		char maxSize[32];
 		char usedSize[32];
 
@@ -230,26 +281,27 @@ DebugReportGenerator::_GenerateReportHeader(BString& _output)
 				maxSize, sizeof(maxSize)),
 			BPrivate::string_for_size((int64)info.used_pages * B_PAGE_SIZE,
 				usedSize, sizeof(usedSize)));
-		_output << data;
+		WRITE_AND_CHECK(_output, data);
 
 		const utsname& name = sysInfo.GetSystemName();
 		data.SetToFormat("Haiku revision: %s (%s)\n", name.version,
 			name.machine);
-		_output << data;
+		WRITE_AND_CHECK(_output, data);
 	}
 
+	delete[] topology;
 	return B_OK;
 }
 
 
 status_t
-DebugReportGenerator::_DumpLoadedImages(BString& _output)
+DebugReportGenerator::_DumpLoadedImages(BFile& _output)
 {
 	AutoLocker< ::Team> locker(fTeam);
 
-	_output << "\nLoaded Images:\n";
+	BString data("\nLoaded Images:\n");
+	WRITE_AND_CHECK(_output, data);
 	BObjectList<Image> images;
-	BString data;
 	for (ImageList::ConstIterator it = fTeam->Images().GetIterator();
 		 Image* image = it.Next();) {
 		 images.AddItem(image);
@@ -260,9 +312,11 @@ DebugReportGenerator::_DumpLoadedImages(BString& _output)
 	Image* image = NULL;
 	data.SetToFormat("\tID\t\tText Base\tText End\tData Base\tData"
 		" End\tType\tName\n\t");
-	_output << data;
-	_output.Append('-', 80);
-	_output.Append("\n");
+	WRITE_AND_CHECK(_output, data);
+	data.Truncate(0L);
+	data.Append('-', 80);
+	data.Append("\n");
+	WRITE_AND_CHECK(_output, data);
 	for (int32 i = 0; (image = images.ItemAt(i)) != NULL; i++) {
 		const ImageInfo& info = image->Info();
 		char buffer[32];
@@ -277,7 +331,7 @@ DebugReportGenerator::_DumpLoadedImages(BString& _output)
 				UiUtils::ImageTypeToString(info.Type(), buffer,
 					sizeof(buffer)), info.Name().String());
 
-			_output << data;
+			WRITE_AND_CHECK(_output, data);
 		} catch (...) {
 			return B_NO_MEMORY;
 		}
@@ -288,7 +342,7 @@ DebugReportGenerator::_DumpLoadedImages(BString& _output)
 
 
 status_t
-DebugReportGenerator::_DumpAreas(BString& _output)
+DebugReportGenerator::_DumpAreas(BFile& _output)
 {
 	BObjectList<AreaInfo> areas(20, true);
 	status_t result = fDebuggerInterface->GetAreaInfos(areas);
@@ -297,12 +351,14 @@ DebugReportGenerator::_DumpAreas(BString& _output)
 
 	areas.SortItems(&_CompareAreas);
 
-	_output << "\nAreas:\n";
-	BString data;
+	BString data("\nAreas:\n");
+	WRITE_AND_CHECK(_output, data);
 	data.SetToFormat("\tID\t\tBase\t\tEnd\t\t\tSize (KiB)\tProtection\tLocking\t\t\tName\n\t");
-	_output << data;
-	_output.Append('-', 80);
-	_output.Append("\n");
+	WRITE_AND_CHECK(_output, data);
+	data.Truncate(0L);
+	data.Append('-', 80);
+	data.Append("\n");
+	WRITE_AND_CHECK(_output, data);
 	AreaInfo* info;
 	BString protectionBuffer;
 	char lockingBuffer[32];
@@ -317,35 +373,38 @@ DebugReportGenerator::_DumpAreas(BString& _output)
 				UiUtils::AreaLockingFlagsToString(info->Lock(), lockingBuffer,
 					sizeof(lockingBuffer)), info->Name().String());
 
-			_output << data;
+			WRITE_AND_CHECK(_output, data);
 		} catch (...) {
 			return B_NO_MEMORY;
 		}
 	}
 
-	_output << "\nProtection Flags: r - read, w - write, x - execute, "
+	data = "\nProtection Flags: r - read, w - write, x - execute, "
 		"s - stack, o - overcommit, c - cloneable, S - shared, k - kernel\n";
+	WRITE_AND_CHECK(_output, data);
 
 	return B_OK;
 }
 
 
 status_t
-DebugReportGenerator::_DumpSemaphores(BString& _output)
+DebugReportGenerator::_DumpSemaphores(BFile& _output)
 {
 	BObjectList<SemaphoreInfo> semaphores(20, true);
-	status_t result = fDebuggerInterface->GetSemaphoreInfos(semaphores);
-	if (result != B_OK)
-		return result;
+	status_t error = fDebuggerInterface->GetSemaphoreInfos(semaphores);
+	if (error != B_OK)
+		return error;
 
 	semaphores.SortItems(&_CompareSemaphores);
 
-	_output << "\nSemaphores:\n";
-	BString data;
+	BString data = "\nSemaphores:\n";
+	WRITE_AND_CHECK(_output, data);
 	data.SetToFormat("\tID\t\tCount\tLast Holder\tName\n\t");
-	_output << data;
-	_output.Append('-', 60);
-	_output.Append("\n");
+	WRITE_AND_CHECK(_output, data);
+	data.Truncate(0L);
+	data.Append('-', 60);
+	data.Append("\n");
+	WRITE_AND_CHECK(_output, data);
 	SemaphoreInfo* info;
 	for (int32 i = 0; (info = semaphores.ItemAt(i)) != NULL; i++) {
 		try {
@@ -353,7 +412,7 @@ DebugReportGenerator::_DumpSemaphores(BString& _output)
 				"\t%s\n", info->SemID(), info->Count(),
 				info->LatestHolder(), info->Name().String());
 
-			_output << data;
+			WRITE_AND_CHECK(_output, data);
 		} catch (...) {
 			return B_NO_MEMORY;
 		}
@@ -364,13 +423,12 @@ DebugReportGenerator::_DumpSemaphores(BString& _output)
 
 
 status_t
-DebugReportGenerator::_DumpRunningThreads(BString& _output)
+DebugReportGenerator::_DumpRunningThreads(BFile& _output)
 {
 	AutoLocker< ::Team> locker(fTeam);
 
-	_output << "\nActive Threads:\n";
-	BString data;
-	status_t result = B_OK;
+	BString data("\nActive Threads:\n");
+	WRITE_AND_CHECK(_output, data);
 	BObjectList< ::Thread> threads;
 	::Thread* thread;
 	for (ThreadList::ConstIterator it = fTeam->Threads().GetIterator();
@@ -381,10 +439,10 @@ DebugReportGenerator::_DumpRunningThreads(BString& _output)
 	threads.SortItems(&_CompareThreads);
 	for (int32 i = 0; (thread = threads.ItemAt(i)) != NULL; i++) {
 		try {
-			data.SetToFormat("\tthread %" B_PRId32 ": %s %s", thread->ID(),
+			data.SetToFormat("\tthread %" B_PRId32 ": %s %s\n", thread->ID(),
 					thread->Name(), thread->IsMainThread()
 						? "(main)" : "");
-			_output << data << "\n";
+			WRITE_AND_CHECK(_output, data);
 
 			if (thread->State() == THREAD_STATE_STOPPED) {
 				data.SetToFormat("\t\tstate: %s",
@@ -393,18 +451,19 @@ DebugReportGenerator::_DumpRunningThreads(BString& _output)
 				const BString& stoppedInfo = thread->StoppedReasonInfo();
 				if (stoppedInfo.Length() != 0)
 					data << " (" << stoppedInfo << ")";
-				_output << data << "\n\n";
+				data << "\n\n";
+				WRITE_AND_CHECK(_output, data);
 
 				// we need to release our lock on the team here
 				// since we might need to block and wait
 				// on the stack trace.
 				BReference< ::Thread> threadRef(thread);
 				locker.Unlock();
-				result = _DumpDebuggedThreadInfo(_output, thread);
+				status_t error = _DumpDebuggedThreadInfo(_output, thread);
+				if (error != B_OK)
+					return error;
 				locker.Lock();
 			}
-			if (result != B_OK)
-				return result;
 		} catch (...) {
 			return B_NO_MEMORY;
 		}
@@ -415,13 +474,14 @@ DebugReportGenerator::_DumpRunningThreads(BString& _output)
 
 
 status_t
-DebugReportGenerator::_DumpDebuggedThreadInfo(BString& _output,
+DebugReportGenerator::_DumpDebuggedThreadInfo(BFile& _output,
 	::Thread* thread)
 {
 	AutoLocker< ::Team> locker;
 	if (thread->State() != THREAD_STATE_STOPPED)
 		return B_OK;
 
+	status_t error;
 	StackTrace* trace = NULL;
 	for (;;) {
 		trace = thread->GetStackTrace();
@@ -430,53 +490,88 @@ DebugReportGenerator::_DumpDebuggedThreadInfo(BString& _output,
 
 		locker.Unlock();
 		fTraceWaitingThread = thread;
-		status_t result = acquire_sem(fTeamDataSem);
-		if (result != B_OK)
-			return result;
+		error = acquire_sem(fTeamDataSem);
+		if (error == B_INTERRUPTED)
+			continue;
+		else if (error != B_OK)
+			return error;
 
 		locker.Lock();
 	}
 
-	_output << "\t\tFrame\t\tIP\t\t\tFunction Name\n";
-	_output << "\t\t-----------------------------------------------\n";
-	BString data;
+	BString data("\t\tFrame\t\tIP\t\t\tFunction Name\n");
+	WRITE_AND_CHECK(_output, data);
+	data = "\t\t-----------------------------------------------\n";
+	WRITE_AND_CHECK(_output, data);
 	for (int32 i = 0; StackFrame* frame = trace->FrameAt(i); i++) {
 		char functionName[512];
-		data.SetToFormat("\t\t%#08" B_PRIx64 "\t%#08" B_PRIx64 "\t%s\n",
-			frame->FrameAddress(), frame->InstructionPointer(),
-			UiUtils::FunctionNameForFrame(frame, functionName,
-				sizeof(functionName)));
+		BString sourcePath;
 
-		_output << data;
-		if (frame->CountParameters() == 0
-			&& frame->CountLocalVariables() == 0) {
-			// only dump the topmost frame
-			if (i == 0) {
-				_DumpStackFrameMemory(_output, thread->GetCpuState(),
-					frame->FrameAddress(), thread->GetTeam()->GetArchitecture()
-						->StackGrowthDirection());
+		target_addr_t ip = frame->InstructionPointer();
+		FunctionInstance* functionInstance;
+		Statement* statement;
+		if (fTeam->GetStatementAtAddress(ip,
+				functionInstance, statement) == B_OK) {
+			BReference<Statement> statementReference(statement, true);
+
+			int32 line = statement->StartSourceLocation().Line();
+			LocatableFile* sourceFile = functionInstance->GetFunction()
+				->SourceFile();
+			if (sourceFile != NULL) {
+				sourceFile->GetPath(sourcePath);
+				sourcePath.SetToFormat("(%s:%" B_PRId32 ")",
+					sourcePath.String(), line);
 			}
-			continue;
 		}
 
-		_output << "\t\t\tVariables:\n";
-		status_t result = fNodeManager->SetStackFrame(thread, frame);
-		if (result != B_OK)
+
+		data.SetToFormat("\t\t%#08" B_PRIx64 "\t%#08" B_PRIx64 "\t%s %s\n",
+			frame->FrameAddress(), ip, UiUtils::FunctionNameForFrame(
+				frame, functionName, sizeof(functionName)),
+				sourcePath.String());
+
+		WRITE_AND_CHECK(_output, data);
+
+		// only dump the topmost frame
+		if (i == 0) {
+			locker.Unlock();
+			error = _DumpFunctionDisassembly(_output, frame->InstructionPointer());
+			if (error != B_OK)
+				return error;
+			error = _DumpStackFrameMemory(_output, thread->GetCpuState(),
+				frame->FrameAddress(), thread->GetTeam()->GetArchitecture()
+					->StackGrowthDirection());
+			if (error != B_OK)
+				return error;
+			locker.Lock();
+		}
+
+		if (frame->CountParameters() == 0 && frame->CountLocalVariables() == 0)
+			continue;
+
+		data = "\t\t\tVariables:\n";
+		WRITE_AND_CHECK(_output, data);
+		error = fNodeManager->SetStackFrame(thread, frame);
+		if (error != B_OK)
 			continue;
 
 		ValueNodeContainer* container = fNodeManager->GetContainer();
 		AutoLocker<ValueNodeContainer> containerLocker(container);
 		for (int32 i = 0; i < container->CountChildren(); i++) {
+			data.Truncate(0L);
 			ValueNodeChild* child = container->ChildAt(i);
 			containerLocker.Unlock();
 			_ResolveValueIfNeeded(child->Node(), frame, 1);
 			containerLocker.Lock();
-			UiUtils::PrintValueNodeGraph(_output, child, 3, 1);
+			UiUtils::PrintValueNodeGraph(data, child, 3, 1);
+			WRITE_AND_CHECK(_output, data);
 		}
-		_output << "\n";
+		data = "\n";
+		WRITE_AND_CHECK(_output, data);
 	}
 
-	_output << "\n\t\tRegisters:\n";
+	data = "\n\t\tRegisters:\n";
+	WRITE_AND_CHECK(_output, data);
 
 	CpuState* state = thread->GetCpuState();
 	BVariant value;
@@ -488,15 +583,87 @@ DebugReportGenerator::_DumpDebuggedThreadInfo(BString& _output,
 		char buffer[64];
 		data.SetToFormat("\t\t\t%5s:\t%s\n", reg->Name(),
 			UiUtils::VariantToString(value, buffer, sizeof(buffer)));
-		_output << data;
+		WRITE_AND_CHECK(_output, data);
 	}
 
 	return B_OK;
 }
 
 
-void
-DebugReportGenerator::_DumpStackFrameMemory(BString& _output,
+status_t
+DebugReportGenerator::_DumpFunctionDisassembly(BFile& _output,
+	target_addr_t instructionPointer)
+{
+	AutoLocker< ::Team> teamLocker(fTeam);
+	BString data;
+	FunctionInstance* instance = NULL;
+	Statement* statement = NULL;
+	status_t error = fTeam->GetStatementAtAddress(instructionPointer, instance,
+		statement);
+	if (error != B_OK) {
+		data.SetToFormat("Unable to retrieve disassembly for IP %#" B_PRIx64
+				": %s\n", instructionPointer, strerror(error));
+		WRITE_AND_CHECK(_output, data);
+		return B_OK;
+	}
+
+	DisassembledCode* code = instance->GetSourceCode();
+	Function* function = instance->GetFunction();
+	if (code == NULL) {
+		switch (function->SourceCodeState()) {
+			case FUNCTION_SOURCE_NOT_LOADED:
+			case FUNCTION_SOURCE_LOADED:
+				// FUNCTION_SOURCE_LOADED is included since, if we entered
+				// here, it implies that the high level source for the
+				// function has been loaded, but the disassembly has not.
+				function->AddListener(this);
+				fSourceWaitingFunction = function;
+				fListener->FunctionSourceCodeRequested(instance, true);
+				// fall through
+			case FUNCTION_SOURCE_LOADING:
+			{
+				teamLocker.Unlock();
+				do {
+					error = acquire_sem(fTeamDataSem);
+				} while (error == B_INTERRUPTED);
+				if (error != B_OK)
+					return error;
+				teamLocker.Lock();
+				break;
+			}
+			default:
+				return B_OK;
+		}
+
+		if (instance->SourceCodeState() == 	FUNCTION_SOURCE_UNAVAILABLE)
+			return B_OK;
+
+		error = fTeam->GetStatementAtAddress(instructionPointer, instance,
+			statement);
+		code = instance->GetSourceCode();
+	}
+
+	SourceLocation location = statement->StartSourceLocation();
+
+	data = "\t\t\tDisassembly:\n";
+	WRITE_AND_CHECK(_output, data);
+	for (int32 i = 0; i <= location.Line(); i++) {
+		data = "\t\t\t\t";
+		data << code->LineAt(i);
+		if (i == location.Line())
+			data << " <--";
+		data << "\n";
+		WRITE_AND_CHECK(_output, data);
+	}
+	data = "\n";
+	WRITE_AND_CHECK(_output, data);
+
+	return B_OK;
+}
+
+
+status_t
+DebugReportGenerator::_DumpStackFrameMemory(BFile& _output,
 	CpuState* state, target_addr_t framePointer, uint8 stackDirection)
 {
 	target_addr_t startAddress;
@@ -509,25 +676,29 @@ DebugReportGenerator::_DumpStackFrameMemory(BString& _output,
 		endAddress = framePointer;
 	}
 
+	status_t error;
 	if (fCurrentBlock == NULL || !fCurrentBlock->Contains(startAddress)) {
 		fListener->InspectRequested(startAddress, this);
-		status_t result = B_OK;
+		error = B_OK;
 		do {
-			result = acquire_sem(fTeamDataSem);
-		} while (result == B_INTERRUPTED);
+			error = acquire_sem(fTeamDataSem);
+		} while (error == B_INTERRUPTED);
 	}
 
-	_output << "\t\t\tFrame memory:\n";
+	BString data("\t\t\tFrame memory:\n");
+	WRITE_AND_CHECK(_output, data);
 	if (fBlockRetrievalStatus == B_OK) {
-		UiUtils::DumpMemory(_output, 3, fCurrentBlock, startAddress, 1, 16,
+		data.Truncate(0L);
+		UiUtils::DumpMemory(data, 4, fCurrentBlock, startAddress, 1, 16,
 			endAddress - startAddress);
+		WRITE_AND_CHECK(_output, data);
 	} else {
-		BString data;
-		data.SetToFormat("\t\t\tUnavailable (%s)\n", strerror(
+		data.SetToFormat("\t\t\t\tUnavailable (%s)\n", strerror(
 				fBlockRetrievalStatus));
-		_output += data;
+		WRITE_AND_CHECK(_output, data);
 	}
 
+	return B_OK;
 }
 
 

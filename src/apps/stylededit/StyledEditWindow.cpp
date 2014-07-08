@@ -39,6 +39,7 @@
 #include <NodeMonitor.h>
 #include <Path.h>
 #include <PrintJob.h>
+#include <RecentItems.h>
 #include <Rect.h>
 #include <Roster.h>
 #include <Screen.h>
@@ -48,6 +49,7 @@
 #include <TranslationUtils.h>
 #include <UnicodeChar.h>
 #include <UTF8.h>
+#include <Volume.h>
 
 
 using namespace BPrivate;
@@ -80,7 +82,8 @@ bs_printf(BString* string, const char* format, ...)
 
 
 StyledEditWindow::StyledEditWindow(BRect frame, int32 id, uint32 encoding)
-	: BWindow(frame, "untitled", B_DOCUMENT_WINDOW, B_ASYNCHRONOUS_CONTROLS)
+	: BWindow(frame, "untitled", B_DOCUMENT_WINDOW, B_ASYNCHRONOUS_CONTROLS),
+	fFindWindow(NULL), fReplaceWindow(NULL)
 {
 	_InitWindow(encoding);
 	BString unTitled(B_TRANSLATE("Untitled "));
@@ -93,7 +96,8 @@ StyledEditWindow::StyledEditWindow(BRect frame, int32 id, uint32 encoding)
 
 
 StyledEditWindow::StyledEditWindow(BRect frame, entry_ref* ref, uint32 encoding)
-	: BWindow(frame, "untitled", B_DOCUMENT_WINDOW, B_ASYNCHRONOUS_CONTROLS)
+	: BWindow(frame, "untitled", B_DOCUMENT_WINDOW, B_ASYNCHRONOUS_CONTROLS),
+	fFindWindow(NULL), fReplaceWindow(NULL)
 {
 	_InitWindow(encoding);
 	OpenFile(ref);
@@ -234,10 +238,25 @@ StyledEditWindow::MessageReceived(BMessage* message)
 			break;
 		case MENU_FIND:
 		{
-			BRect findWindowFrame(100, 100, 400, 235);
-			BWindow* window = new FindWindow(findWindowFrame, this,
-				&fStringToFind, fCaseSensitive, fWrapAround, fBackSearch);
-			window->Show();
+			if (fFindWindow == NULL) {
+				BRect findWindowFrame(Frame());
+				findWindowFrame.InsetBy(
+					(findWindowFrame.Width() - 400) / 2,
+					(findWindowFrame.Height() - 235) / 2);
+
+				fFindWindow = new FindWindow(findWindowFrame, this,
+					&fStringToFind, fCaseSensitive, fWrapAround, fBackSearch);
+				fFindWindow->Show();
+
+			} else if (fFindWindow->IsHidden())
+				fFindWindow->Show();
+			else
+				fFindWindow->Activate();
+			break;
+		}
+		case MSG_FIND_WINDOW_QUIT:
+		{
+			fFindWindow = NULL;
 			break;
 		}
 		case MSG_SEARCH:
@@ -257,11 +276,21 @@ StyledEditWindow::MessageReceived(BMessage* message)
 			break;
 		case MENU_REPLACE:
 		{
-			BRect replaceWindowFrame(100, 100, 400, 284);
-			BWindow* window = new ReplaceWindow(replaceWindowFrame, this,
-				&fStringToFind, &fReplaceString, fCaseSensitive, fWrapAround,
-				fBackSearch);
-			window->Show();
+			if (fReplaceWindow == NULL) {
+				BRect replaceWindowFrame(Frame());
+				replaceWindowFrame.InsetBy(
+					(replaceWindowFrame.Width() - 400) / 2,
+					(replaceWindowFrame.Height() - 284) / 2);
+
+				fReplaceWindow = new ReplaceWindow(replaceWindowFrame, this,
+					&fStringToFind, &fReplaceString, fCaseSensitive,
+					fWrapAround, fBackSearch);
+				fReplaceWindow->Show();
+
+			} else if (fReplaceWindow->IsHidden())
+				fReplaceWindow->Show();
+			else
+				fReplaceWindow->Activate();
 			break;
 		}
 		case MSG_REPLACE:
@@ -517,10 +546,17 @@ StyledEditWindow::MessageReceived(BMessage* message)
 			break;
 
 		case UPDATE_STATUS:
+		{
 			message->AddBool("modified", !fClean);
-			message->AddBool("readOnly", !fTextView->IsEditable());
+			bool readOnly = !fTextView->IsEditable();
+			message->AddBool("readOnly", readOnly);
+			if (readOnly) {
+				BVolume volume(fNodeRef.device);
+				message->AddBool("canUnlock", !volume.IsReadOnly());
+			}
 			fStatusView->SetStatus(message);
 			break;
+		}
 
 		case UNLOCK_FILE:
 		{
@@ -564,34 +600,6 @@ StyledEditWindow::MessageReceived(BMessage* message)
 void
 StyledEditWindow::MenusBeginning()
 {
-	// set up the recent documents menu
-	BMessage documents;
-	be_roster->GetRecentDocuments(&documents, 9, NULL, APP_SIGNATURE);
-
-	// delete old items..
-	//    shatty: it would be preferable to keep the old
-	//            menu around instead of continuously thrashing
-	//            the menu, but unfortunately there does not
-	//            seem to be a straightforward way to update it
-	// going backwards may simplify memory management
-	for (int i = fRecentMenu->CountItems(); i-- > 0;) {
-		delete fRecentMenu->RemoveItem(i);
-	}
-
-	// add new items
-	int count = 0;
-	entry_ref ref;
-	while (documents.FindRef("refs", count++, &ref) == B_OK) {
-		if (ref.device != -1 && ref.directory != -1) {
-			// sanity check passed
-			BMessage* openRecent = new BMessage(B_REFS_RECEIVED);
-			openRecent->AddRef("refs", &ref);
-			BMenuItem* item = new BMenuItem(ref.name, openRecent);
-			item->SetTarget(be_app);
-			fRecentMenu->AddItem(item);
-		}
-	}
-
 	// update the font menu
 	// unselect the old values
 	if (fCurrentFontItem != NULL) {
@@ -785,10 +793,6 @@ StyledEditWindow::Save(BMessage* message)
 		fSaveMessage = new BMessage(*message);
 	}
 
-	entry_ref ref;
-	if (entry.GetRef(&ref) == B_OK)
-		be_roster->AddToRecentDocuments(&ref, APP_SIGNATURE);
-
 	// clear clean modes
 	fSaveItem->SetEnabled(false);
 	fUndoCleans = false;
@@ -796,6 +800,7 @@ StyledEditWindow::Save(BMessage* message)
 	fClean = true;
 	fNagOnNodeChange = true;
 
+	PostMessage(UPDATE_STATUS);
 	return status;
 }
 
@@ -864,7 +869,6 @@ StyledEditWindow::OpenFile(entry_ref* ref)
 		return;
 	}
 
-	be_roster->AddToRecentDocuments(ref, APP_SIGNATURE);
 	fSaveMessage = new BMessage(B_SAVE_REQUESTED);
 	if (fSaveMessage) {
 		BEntry entry(ref, true);
@@ -1109,9 +1113,9 @@ StyledEditWindow::_InitWindow(uint32 encoding)
 		new BMessage(MENU_NEW), 'N'));
 	menuItem->SetTarget(be_app);
 
-	menu->AddItem(menuItem = new BMenuItem(fRecentMenu
-		= new BMenu(B_TRANSLATE("Open" B_UTF8_ELLIPSIS)),
-			new BMessage(MENU_OPEN)));
+	menu->AddItem(menuItem = new BMenuItem(BRecentFilesList::NewFileListMenu(
+		B_TRANSLATE("Open" B_UTF8_ELLIPSIS), NULL, NULL, be_app, 9, true,
+		NULL, APP_SIGNATURE), new BMessage(MENU_OPEN)));
 	menuItem->SetShortcut('O', 0);
 	menuItem->SetTarget(be_app);
 	menu->AddSeparatorItem();
@@ -1437,6 +1441,8 @@ StyledEditWindow::_LoadFile(entry_ref* ref, const char* forceEncoding)
 		bool editable = (getuid() == st.st_uid && S_IWUSR & st.st_mode)
 					|| (getgid() == st.st_gid && S_IWGRP & st.st_mode)
 					|| (S_IWOTH & st.st_mode);
+		BVolume volume(ref->device);
+		editable = editable && !volume.IsReadOnly();
 		_SetReadOnly(!editable);
 	}
 
@@ -2042,7 +2048,6 @@ StyledEditWindow::_HandleNodeMonitorEvent(BMessage *message)
 				}
 
 				SetTitle(name);
-				be_roster->AddToRecentDocuments(&newRef, APP_SIGNATURE);
 
 				if (srcFolder != dstFolder) {
 					_SwitchNodeMonitor(false);

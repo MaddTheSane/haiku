@@ -199,13 +199,8 @@ BMediaRosterEx::ReleaseNodeAll(const media_node& node)
 	if (IS_INVALID_NODE(node))
 		return B_MEDIA_BAD_NODE;
 
-	if (node.kind & NODE_KIND_NO_REFCOUNTING) {
-		printf("BMediaRoster::ReleaseNodeAll, trying to release reference "
-			"counting disabled timesource, node %" B_PRId32 ", port %" B_PRId32
-			", team %" B_PRId32 "\n",
-			node.node, node.port, BPrivate::current_team());
+	if (node.kind & NODE_KIND_NO_REFCOUNTING)
 		return B_OK;
-	}
 
 	server_release_node_request request;
 	server_release_node_reply reply;
@@ -221,9 +216,18 @@ BMediaRosterEx::ReleaseNodeAll(const media_node& node)
 	rv = QueryServer(SERVER_RELEASE_NODE_ALL, &request, sizeof(request), &reply,
 		sizeof(reply));
 	if (rv != B_OK) {
-		ERROR("BMediaRoster::ReleaseNodeAll FAILED, node %" B_PRId32 ", port %"
+		ERROR("BMediaRoster::ReleaseNodeAll failed to query media_server, "
+			"retrying local, node %" B_PRId32 ", port %"
 			B_PRId32 ", team %" B_PRId32 "!\n", node.node, node.port,
 			BPrivate::current_team());
+		node_final_release_command command;
+		rv = SendToPort(node.port, NODE_FINAL_RELEASE, &command,
+			sizeof(command));
+		if (rv != B_OK) {
+			ERROR("BMediaRoster::ReleaseNodeAll FAILED, node %" B_PRId32 ", port %"
+				B_PRId32 ", team %" B_PRId32 "!\n", node.node, node.port,
+				BPrivate::current_team());
+		}
 	}
 	return rv;
 }
@@ -773,7 +777,7 @@ BMediaRoster::ReleaseNode(const media_node& node)
 		return B_MEDIA_BAD_NODE;
 
 	if (node.kind & NODE_KIND_NO_REFCOUNTING) {
-		printf("BMediaRoster::ReleaseNode, trying to release reference "
+		TRACE("BMediaRoster::ReleaseNode, trying to release reference "
 			"counting disabled timesource, node %" B_PRId32 ", port %" B_PRId32
 			", team %" B_PRId32 "\n", node.node, node.port,
 			BPrivate::current_team());
@@ -1028,7 +1032,6 @@ BMediaRoster::Connect(const media_source& from, const media_destination& to,
 	strcpy(out_output->name, reply5.name);
 
 	// the connection is now made
-	printf("BMediaRoster::Connect connection established!\n");
 	PRINT_FORMAT("   format", *io_format);
 	PRINT_INPUT("   input", *out_input);
 	PRINT_OUTPUT("   output", *out_output);
@@ -2079,13 +2082,16 @@ BMediaRoster::UnregisterNode(BMediaNode* node)
 	BPrivate::media::notifications::NodesDeleted(&request.node_id, 1);
 
 	server_unregister_node_reply reply;
+	reply.add_on_id = -1;
 	status_t status = QueryServer(SERVER_UNREGISTER_NODE, &request,
 		sizeof(request), &reply, sizeof(reply));
 	if (status != B_OK) {
 		ERROR("BMediaRoster::UnregisterNode: failed to unregister node id %"
 			B_PRId32 ", name '%s': %s\n", node->ID(), node->Name(),
 			strerror(status));
-		return status;
+		BMediaAddOn *addon = node->AddOn(&reply.flavor_id);
+		if (addon != NULL)
+			reply.add_on_id = addon->AddonID();
 	}
 
 	if (reply.add_on_id != -1) {
@@ -2110,7 +2116,7 @@ BMediaRoster::UnregisterNode(BMediaNode* node)
 	// we are a friend class of BMediaNode and invalidate this member variable
 	node->fNodeID = NODE_UNREGISTERED_ID;
 
-	return B_OK;
+	return status;
 }
 
 
@@ -2250,23 +2256,19 @@ BMediaRoster::GetParameterWebFor(const media_node& node, BParameterWeb** _web)
 		}
 		if (reply.size > 0) {
 			// we got a flattened parameter web!
-			*_web = new (std::nothrow) BParameterWeb();
-			if (*_web == NULL)
+			BParameterWeb* web = new (std::nothrow) BParameterWeb();
+			if (web == NULL)
 				rv = B_NO_MEMORY;
 			else {
-				printf("BMediaRoster::GetParameterWebFor Unflattening %"
-					B_PRId32 " bytes, %#" B_PRIx32 ", %#" B_PRIx32 ", %#"
-					B_PRIx32 ", %#" B_PRIx32 "\n", reply.size,
-					((uint32*)data)[0], ((uint32*)data)[1], ((uint32*)data)[2],
-					((uint32*)data)[3]);
+				rv = web->Unflatten(reply.code, data, reply.size);
+				if (rv != B_OK) {
+					ERROR("BMediaRoster::GetParameterWebFor Unflatten failed, "
+						"%s\n", strerror(rv));
+					delete web;
+				} else
+					*_web = web;
+			}
 
-				rv = (*_web)->Unflatten(reply.code, data, reply.size);
-			}
-			if (rv != B_OK) {
-				ERROR("BMediaRoster::GetParameterWebFor Unflatten failed, "
-					"%s\n", strerror(rv));
-				delete *_web;
-			}
 			delete_area(area);
 			return rv;
 		}
@@ -3112,25 +3114,10 @@ BMediaRoster::AudioBufferSizeFor(int32 channelCount, uint32 sampleFormat,
 	bigtime_t bufferDuration;
 	ssize_t bufferSize;
 
-	system_info info;
-	get_system_info(&info);
-
-	if (info.cpu_clock_speed > 2000000000)	// 2 GHz
-		bufferDuration = 2500;
-	else if (info.cpu_clock_speed > 1000000000)
-		bufferDuration = 5000;
-	else if (info.cpu_clock_speed > 600000000)
-		bufferDuration = 10000;
-	else if (info.cpu_clock_speed > 200000000)
-		bufferDuration = 20000;
-	else if (info.cpu_clock_speed > 100000000)
-		bufferDuration = 30000;
-	else
-		bufferDuration = 50000;
-
-	if ((busKind == B_ISA_BUS || busKind == B_PCMCIA_BUS)
-		&& bufferDuration < 25000)
+	if (busKind == B_ISA_BUS || busKind == B_PCMCIA_BUS)
 		bufferDuration = 25000;
+	else
+		bufferDuration = 10000;
 
 	bufferSize = (sampleFormat & 0xf) * channelCount
 		* (ssize_t)((frameRate * bufferDuration) / 1000000.0);
@@ -3309,4 +3296,3 @@ BMediaRoster::SetRunningDefault(media_node_id forDefault,
 
 
 BMediaRoster* BMediaRoster::sDefaultInstance = NULL;
-

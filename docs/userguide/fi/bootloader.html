@@ -4,7 +4,7 @@
 <head>
 <!-- 
  *
- * Copyright 2008-2012, Haiku. All rights reserved.
+ * Copyright 2008-2013, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -16,7 +16,7 @@
 	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
 	<meta http-equiv="Content-Style-Type" content="text/css" />
 	<meta name="robots" content="all" />
-	<title>Alkukäynnistyslataaja</title>
+	<title>Käynnistyslataaja</title>
 	<link rel="stylesheet" type="text/css" href="../Haiku-doc.css" />
 </head>
 <body>
@@ -43,72 +43,108 @@
 <li><a href="../hu/bootloader.html"><img src="../images/flags/hu.png" alt="" />Magyar</a></li>
 <li><a href="../pt_BR/bootloader.html"><img src="../images/flags/pt_BR.png" alt="" />Português (Brazil)</a></li>
 <li><a href="../ca/bootloader.html"><img src="../images/flags/ca.png" alt="" />Català</a></li>
+<li><a href="../pl/bootloader.html"><img src="../images/flags/pl.png" alt="" />Polski</a></li>
 <li><a href="../en/bootloader.html"><img src="../images/flags/gb.png" alt="" />English</a></li>
 </ul>
 <span>
-    <!-- «  <a href="installation.html">Installing Haiku</a> 
-::  -->
-    <a href="contents.html" class="uplink">Sisältö</a> 
-::  <a href="filesystem-layout.html">Tiedostojärjestelmäsijoittelu</a>  »
+    <!-- «  <a href="installation.html">Installing Haiku</a> 
+::  -->
+    <a href="contents.html" class="uplink">Sisältö</a> 
+::  <a href="filesystem-layout.html">Tiedostojärjestelmäsijoittelu</a>  »
 </span></div>
 </div>
 
 <div id="content">
 <div>
 
-<h1>Alkukäynnistyslataaja</h1>
+<h1>Käynnistyslataaja</h1>
 
-<p>Haikun alkukäynnistyslataaja voi avustaa kun koet laitteistopulmia tai haluat valita, minkä Haiku-asennuksen käynnistät, jos sinulla on useampi kuin yksi. (ehkä asennus-CD:llä tai USB-tikulla)<br />Se on myös kätevä kun olet asentanut ohjelmistokomponentin, joka oireilee ja estää sinua alkukäynnistämästä järjestelmää uudelleen komponentin poistamiseksi. <i>Ota pois käytössä lisäosa</i>-valitsin, joka on mainittu alla, käynnistää Haikun lataamatta käyttäjän asentamia komponentteja, esim.: ajuria.</p>
-<p>Alkulatauslataajan valitsimiin pääsemiseksi sinun on painettava ja pidettävä alhaalla  <span class="key">VAIHTO</span>-näppäintä ennen Haikun alkulatausprosessin käynnistymistä. Jos alkulataushallinta on asennettu, voit aloittaa pitämällä <span class="key">VAIHTO</span>-näppäintä ennen Haikun alkulatausrivin valintaa. Jos Haiku on ainoa koneeseen asennettu käyttöjärjestelmä, voit aloittaa näppäimen pitämisen alhaalla jo silloin, kun näet näytölläsi BIOS-alkulatausviestit.</p>
-<p><br /></p>
+<p>Haikun käynnistyslataaja voi avustaa kun koet laitteistopulmia tai haluat valita, minkä Haiku-asennuksen käynnistät, jos sinulla on useampia kuin yksi. (ehkä asennus-CD:llä tai USB-tikulla)<br />Se on myös kätevä kun olet asentanut ohjelmistokomponentin, joka oireilee ja estää sinua käynnistämästä järjestelmää uudelleen komponentin poistamiseksi. <i>Ota pois käytöstä alla mainittu lisäosa</i>-valitsin käynnistää Haikun lataamatta käyttäjän asentamia komponentteja, esim.: ajuria.</p>
+<p>Käynnistyslataajan valitsimiin pääsemiseksi sinun on painettava ja pidettävä alhaalla  <span class="key">VAIHTO</span>-näppäintä ennen Haikun käynnistysprosessin alkamista. Jos käynnistyshallinta on asennettu, voit aloittaa pitämällä <span class="key">VAIHTO</span>-näppäintä ennen Haikun käynnistysrivin valintaa. Jos Haiku on ainoa koneeseen asennettu käyttöjärjestelmä, voit aloittaa näppäimen pitämisen alhaalla jo silloin, kun näet näytölläsi BIOS-käynnistysviestit.</p>
+<h2>
+<a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
+<a id="options" name="options">Käynnistyslataajavalitsimet</a></h2>
 <p>Kun olet päässyt sinne, näkyviin tulee neljä valikkoa:</p>
 <table summary="bootloader menus" border="0" cellspacing="0" cellpadding="2">
-<tr><td><b>Valitse alkulatauslevy</b></td><td> </td><td>Valitse, minkä Haiku-asennuksen käynnistät.</td></tr>
+<tr><td><b>Valitse käynnistyslevy</b></td><td> </td><td>Valitse, minkä Haiku-asennuksen käynnistät.</td></tr>
 <tr><td><b>Valitse turvatilavalitsimet</b>
-</td><td> </td><td>Laitteistopulmien tapahtuessa voit kokeilla useita valitsimia tai jos järjestelmä tulee epästabiiliksi tai sitä ei pysty alkulataamaan huonosti käyttäytyvän lisäosan vuoksi. Kun valintapalkin siirtää valitsimelle, niin näytön alalaiteen ilmaantuu lyhyt selite.</td></tr>
+</td><td> </td><td>Laitteistopulmien tapahtuessa voit kokeilla useita valitsimia tai jos järjestelmä tulee epästabiiliksi tai sitä ei pysty käynnistämään huonosti käyttäytyvän lisäosan vuoksi. Kun valintapalkin siirtää valitsimelle, niin näytön alalaitaan ilmaantuu lyhyt selite.</td></tr>
 <tr><td></td><td></td><td>
-	<table summary="layout" border="0" cellspacing="0" cellpadding="2">
-	<tr><td><i>- Turvatila</i></td><td width="15"></td><td></td></tr>
-	<tr><td><i>- Ota käyttäjälisäosat pois käytöstä</i></td><td></td><td></td></tr>
-	<tr><td><i>- Ota pois käytöstä IDE DMA</i></td><td></td><td></td></tr>
-	<tr><td class="onelinetop"><i>- Käytä vikaturvallista videotilaa</i></td><td></td><td></td></tr>
-	<tr><td><i>- Älä kutsu BIOS:ia</i></td><td></td><td></td></tr>
-	<tr><td><i>- Ota pois käytöstä APM</i></td><td></td><td></td></tr>
-	<tr><td><i>- Ota pois käytöstä ACPI</i></td><td></td><td></td></tr>
-	</table></td></tr>
+	<p><span class="menu">Turvatila</span><br />
+		Laittaa järjestelmän turvatilaan. Tämä voidaan ottaa käyttöön riippumatta muista valitsimista.</p>
+	<p><span class="menu">Ota pois käytöstä käyttäjälisäosat</span><br />
+		Estää kaikkien käyttäjän asentamien lisäosien latauksen. Vain järjestelmähakemistossa sijaitsevia lisäosia käytetään. Katso alla <a href="#troubleshooting">Vianjäljitys</a>.</p>
+	<p><span class="menu">Ota pois käytöstä IDE DMA</span><br />
+		Ottaa pois käytöstä IDE DMA:an, lisää IDE-yhteensopivuutta suorituskyvyn kustannuksella.</p>
+	<p><span class="menu">Ohita muisti 4 gibitavun takana</span><br />
+		Ohittaa kaiken muistin 4 gibitavun rajan takana, korvaa asetukset käyttöjärjestelmäytimen asetustiedostossa.
+</p>
+	<p><span class="menu">Käytä vikasietoista videotilaa</span><br />
+		Järjestelmä käyttää VESA-tilaa ja ei yritä käyttää videografiikka-ajureita.</p>
+	<p><span class="menu">Ota pois käytöstä IO-APIC</span><br />
+		Ottaa pois käytöstä IO APIC keskeytysreitityksen, pakotetaan sen sijaan perinne-PIC.</p>
+	<p><span class="menu">Ota pois käytöstä paikallinen APIC</span><br />
+		Ottaa pois käytöstä paikallisen APIC:in, ottaa pois käytöstä myös SMP:n.</p>
+	<p><span class="menu">Ota pois käytöstä SMP</span><br />
+		Ottaa pois käytöstä kaiken muun paitsi yhden prosessoriytimen.</p>
+	<p><span class="menu">Älä kutsu BIOS:ia</span><br />
+		Pysäyttää järjestelmän kutsumasta BIOS-funktioita.</p>
+	<p><span class="menu">Ota pois käytöstä APM</span><br />
+		Ottaa pois käytöstä Advanced Power Management -laitetuen, korvaa APM-asetukset käyttöjärjestelmäytimen asetustiedostossa.</p>
+	<p><span class="menu">Ota pois käytöstä ACPI</span><br />
+		Ottaa pois käytöstä Advanced Configuration ja Power Interface -laitetuen, korvaa ACPI-asetukset käyttöjärjestelmäytimen asetustiedostossa.</p>
+	<p><span class="menu">Merkitse kohde mustalle listalle</span><br />
+		Sallii valita järjestelmätiedostoja, jotka ohitetaan. Hyödyllinen esim. otettaessa tilapäisesti ajureita pois. Katso alla <a href="#troubleshooting">Vianjäljitys</a>.</p></td></tr>
 <tr><td><b>Valitse vianjäljitysvalitsimet</b>
 </td><td> </td><td>Tästä löydät useita valitsimia, jotka opastavat vianjäljityksessä tai yksityiskohtien hakemisessa <a href="../welcome/fi/bugreports.html">vikailmoitukseen</a>. Taas näytön alalaidassa näytetään lyhyt selite.</td></tr>
 <tr><td></td><td></td><td>
-	<table summary="layout" border="0" cellspacing="0" cellpadding="2">
-	<tr><td><i>- Ota käyttöön vianjäljitystuloste sarjaväylän kautta</i></td><td width="15"></td><td></td></tr>
-	<tr><td><i>- Ota käyttöön vianjäljitystuloste näytölle</i></td><td></td><td></td></tr>
-	<tr><td><i>- Ota pois käytöstä näytön sivutus</i></td><td></td><td></td></tr>
-	<tr><td><i>- Ota käyttöön vianjäljitys syslog-tiedostoon</i></td><td></td><td></td></tr>
-	<tr><td class="onelinetop"><i>- Näytä nykyinen alkulatausloki</i></td><td></td><td>(Paina näppäintä <span class="key">Q</span> lokista poistumiseksi)</td></tr>
-	<tr><td><i>- Lisää lisävikajäljitysvalitsin</i></td><td></td><td></td></tr>
-</table></td></tr>
-<tr><td></td><td></td><td>Jos valitsin "Ota käyttöön vianjäljitys syslog-tiedostoon" on aktivoitu, uudelleenkäynnistyminen kaatumisen jälkeen näyttää nämä lisävalitsimet:</td></tr>
-<tr><td></td><td></td><td>
-<table summary="layout" border="0" cellspacing="0" cellpadding="2">
-	<tr><td class="onelinetop"><i>- Näytä syslog-tiedosto edellisestä istunnosta</i></td><td></td><td></td></tr>
-	<tr><td><i>- Tallenna syslog-tiedosto edellisestä istunnosta</i></td><td></td><td></td></tr>
-</table>
-</td></tr>
+	<p><span class="menu">Ota käyttöön vianjäljitystulostus sarjaporttiin</span><br />
+		Kääntää päälle järjestelmälokin lähetyksen sarjaporttiin (oletus: 115200, 8N1).</p>
+	<p><span class="menu">Ota käyttöön vianjäljitystulostus näytölle</span><br />
+		Näyttää vianjäljitystulostuksen näytölle järjestelmää käynnistettäessä eikä normaaliin käynnistyslokiin.</p>
+	<p><span class="menu">Ota pois käytöstä näytön sivutus</span><br />
+		Ottaa pois käytöstä sivutuksen, kun vianjäljitystulostus on otettu käyttöön.</p>
+	<p><span class="menu">Ota käyttöön vianjäljitysjärjestelmäloki</span><br />
+		Ottaa käyttöön erityisen muistissa olevan järjestelmälokipuskurin tälle istunnolle, johon käynnistyslataaja pääsee käsiksi uudelleenkäynnistyksen jälkeen.</p>
+	<p><span class="menu">Näytä nykyinen käynnistyslatajaloki</span><br />
+		Näyttää käynnistyslataajan kirjaamat vianjäljitystiedot (poistu lokista painamalla näppäintä <span class="key">Q</span>)</p>
+	<p><span class="menu">Lisää edistynyt vianjäljitysvalitsin</span><br />
+		Sallii edistyneiden vianjäljitysvalitsimien kirjoittamisen suoraan.</p></td></tr>
+<tr><td></td><td></td><td>Jos valitsin "<i>Ota käyttöön vianjäljitys syslog-tiedostoon</i>" on aktivoitu, uudelleenkäynnistyminen kaatumisen jälkeen näyttää nämä lisävalitsimet:</td></tr>
+<tr><td></td><td></td><td>	<p><span class="menu">Tallenna järjestelmäloki edellisestä istunnosta käynnistyksen aikana</span><br />
+		Tallentaa järjestelmälokin edellisestä Haiku-istunnosta tiedostoon /var/log/previous_syslog käynnistyksen aikana.</p>
+	<p><span class="menu">Näytä järjestelmäloki edellisestä istunnosta</span><br />
+		Näyttää järjestelmälokin edellisestä Haiku-istunnosta</p>
+	<p><span class="menu">Tallenna järjestelmäloki edellisestä istunnosta</span><br />
+		Tallentaa järjestelmälokin edellisestä Haiku-istunnosta levylle. Nykyisin tuetaan vain FAT32-taltioita.</p></td></tr>
 <tr><td class="onelinetop"><b>Valitse vikaturvallinen videotila</b></td><td> </td><td>Jos sinun oli aktivoitava valitsin <i>Käytä vikaturvallista videotila</i>a, voit asettaa resoluution ja värisyvyyden.</td></tr>
 </table>
-<p><br /></p>
-<p>Yhden tai useamman valitsimen aktivoinnin jälkeen palaat päävalikkoon ja jatkat alkulatausta, mikä esittää sinulle tämän alkulatausnäytön:</p>
+<h2>
+<a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
+<a id="troubleshooting" name="troubleshooting">Vianjäljitys</a></h2>
+<p>Jos Haiku kieltäytyy käynnistymästä aivan alusta, yritä asettaa eri valitsimia valikosta <span class="menu">Valitse turvatilavalitsimet</span>. Harkitse joka tapauksessa <a href="../welcome/en/bugreports.html">vikailmoitus</a>-raportin täyttämistä.</p>
+<p>Toisaalta, jos Haiku äkkiä vain häiriököi, kun olet asentanut jonkin ohjelmiston, erityisesti laitteistoajurin, sinulla on useita valitsimia käytettävissä saadaksesi Haikun taas käynnistymään poistamalla häiritsevän pakkauksen asennuksen:</p>
+<ul>
+<li><p><span class="menu">Turvatila</span>-aktivointi estää useimpien palvelin-, taustaprosessi- ja KäyttäjäKäynnistysSkriptien käynnistymisen.</p></li>
+<li><p><span class="menu">Ota pois käytöstä käyttäjälisäosat</span>-aktivointi estää kaikkien lisäosien käytön (ajurit, kääntäjät, jne.), jotka olet asentanut Home-kansion alaiseen hierarkkiaan.</p></li>
+<li><p>Jos häiritsevä ajuri, lisäosa jne. on asennettu järjestelmähierarkiaan, asiat ovat hiukan mutkikkaampia, koska se alue on kirjoitussuojattu. Tässä <span class="menu">Merkitse kohteita mustalle listalle</span> voi näytellä tärkeää roolia. Sen avulla voit navigoida läpi koko järjestelmähierarkian ja ottaa pois käytöstä komponentit, jotka sotkevat järjestelmää merkitsemällä kohteita <span class="key">VÄLILYÖNTI</span>-näppäimellä tai <span class="key">RETURN</span>-näppäimellä. <span class="key">ESC</span>-näppäin palauttaa sinut yhden tason ylöspäin ylempään hakemistoon.</p>
+<p>Verkossa oleva artikkeli <a href="http://www.haiku-os.org/blog/barrett/2013-12-15_how_permanently_blacklist_package_file">Kuinka merkitä pakkaustiedoston mustalle listalle pysyvästi</a> näyttää, kuinka tästä asetuksesta tekee pysyvän.</p></li>
+</ul>
+<h2>
+<a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
+<a id="booting" name="booting">Haikun käynnistäminen</a></h2>
+<p>Yhden tai useamman valitsimen aktivoinnin jälkeen palaat päävalikkoon ja jatkat käynnistystä, mikä esittää sinulle tämän käynnistysnäytön:</p>
 <img src="../images/bootloader-images/boot-screen.png" alt="boot-screen.png" />
 
 <p>Jos kaikki toimii normaalisti, symboli toisensa jälkeen syttyy.<br />Erilaiset symbolit vastaavat likimain näitä alkulatausvaiheita:</p>
 <table summary="layout" border="0" cellpadding="2" cellspacing="0"> 
-	<tr><td><b>Atomi</b></td><td style="width:10px;"> </td><td>Moduulien alustaminen</td></tr>
-	<tr><td><b>Levy + suurentaja</b></td><td> </td><td>Luodaan rootfs (<span class="path">/</span>) ja liitetään devfs (<span class="path">/dev</span>).</td></tr>
-	<tr><td><b>Lisäosakortti</b></td><td> </td><td>Alustetaan laitehallintaa</td></tr>
-	<tr><td><b>Alkukäynnistetään levy</b></td><td> </td><td>Liitetään alkulatauslevy</td></tr>
-	<tr><td><b>Mikropiirit</b></td><td> </td><td>Ladataan prosessorikohtaiset moduulit</td></tr>
-	<tr><td><b>Kansio</b></td><td> </td><td>Alijärjestelmien loppualustus.</td></tr>
-	<tr><td><b>Raketti</b></td><td> </td><td>Järjestelmän käynnistävä alkulatausskripti.</td></tr>
+	<tr><td><b>Atomi</b></td><td style="width:10px;"> </td><td>Moduulien alustaminen</td></tr>
+	<tr><td><b>Levy + suurentaja</b></td><td> </td><td>Luodaan rootfs (<span class="path">/</span>) ja liitetään devfs (<span class="path">/dev</span>).</td></tr>
+	<tr><td><b>Lisäosakortti</b></td><td> </td><td>Alustetaan laitehallintaa</td></tr>
+	<tr><td><b>Käynnistetään levy</b></td><td> </td><td>Liitetään käynnistyslevy</td></tr>
+	<tr><td><b>Mikropiirit</b></td><td> </td><td>Ladataan prosessorikohtaiset moduulit</td></tr>
+	<tr><td><b>Kansio</b></td><td> </td><td>Alijärjestelmien loppualustus.</td></tr>
+	<tr><td><b>Raketti</b></td><td> </td><td>Järjestelmän käynnistävä käynnistysskripti.</td></tr>
 </table>
 
 </div>
@@ -116,10 +152,10 @@
 
 <div class="nav">
 <div class="inner"><span>
-    <!-- «  <a href="installation.html">Installing Haiku</a> 
-::  -->
-    <a href="contents.html" class="uplink">Sisältö</a> 
-::  <a href="filesystem-layout.html">Tiedostojärjestelmäsijoittelu</a>  »
+    <!-- «  <a href="installation.html">Installing Haiku</a> 
+::  -->
+    <a href="contents.html" class="uplink">Sisältö</a> 
+::  <a href="filesystem-layout.html">Tiedostojärjestelmäsijoittelu</a>  »
 </span></div>
 </div>
 

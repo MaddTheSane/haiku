@@ -1,0 +1,32 @@
+# Builds the Haiku packages repository.
+
+local haikuRepository = <repository>haiku ;
+MakeLocate $(haikuRepository)
+	: $(HAIKU_PACKAGE_REPOSITORIES_DIR_$(HAIKU_PACKAGING_ARCH)) ;
+
+local repoInfo = <repository-info-template>haiku ;
+SEARCH on $(repoInfo) = $(HAIKU_TOP)/src/data/repository_infos ;
+
+local secondaryArchs = $(TARGET_PACKAGING_ARCHS[2-]) ;
+local packages =
+	haiku
+	haiku_devel
+	haiku_loader
+	haiku_userguide
+	haiku_welcome
+	makefile_engine
+
+	haiku_$(secondaryArchs)
+	haiku_$(secondaryArchs)_devel
+	;
+
+if $(TARGET_PACKAGING_ARCH) != x86_gcc2 || $(secondaryArchs) {
+	packages += webpositive ;
+}
+
+HaikuRepository $(haikuRepository) : $(repoInfo) : $(packages:S=.hpkg)
+	: http://www.haiku-files.org/haiku/master/repo/$(TARGET_PACKAGING_ARCH)/$(HAIKU_VERSION)_$version
+	: [ DetermineEffectiveHaikuRevision ]
+		# TODO: Remove the URL and the version file argument once the repository
+		# is available on haiku-os.org as specified in the repository info.
+	;

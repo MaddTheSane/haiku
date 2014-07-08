@@ -4,7 +4,8 @@ UsePrivateHeaders libroot syslog_daemon ;
 
 
 # filter warnings about strftime()-formats in locale_test
-TARGET_WARNING_C++FLAGS on [ FGristFiles locale_test.o ] += -Wno-format ;
+TARGET_WARNING_C++FLAGS_$(TARGET_PACKAGING_ARCH)
+	on [ FGristFiles locale_test.o ] += -Wno-format ;
 
 # POSIX/libc tests
 SimpleTest abort_test : abort_test.cpp ;
@@ -15,7 +16,7 @@ SimpleTest flock_test : flock_test.cpp ;
 SimpleTest fseek_test : fseek_test.cpp ;
 SimpleTest getsubopt_test : getsubopt_test.cpp ;
 SimpleTest locale_test : locale_test.cpp ;
-SimpleTest memalign_test : memalign_test.cpp ;
+SimpleTest memalign_test : memalign_test.cpp : $(TARGET_LIBSUPC++) ;
 SimpleTest mprotect_test : mprotect_test.cpp ;
 SimpleTest pthread_signal_test : pthread_signal_test.cpp ;
 SimpleTest realtime_sem_test1 : realtime_sem_test1.cpp ;

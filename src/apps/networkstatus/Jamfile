@@ -2,7 +2,7 @@ SubDir HAIKU_TOP src apps networkstatus ;
 
 SetSubDirSupportedPlatformsBeOSCompatible ;
 
-UsePrivateHeaders net shared ;
+UsePrivateHeaders interface net ;
 UseLibraryHeaders agg ;
 
 local icon_libs ;
@@ -17,7 +17,7 @@ Application NetworkStatus :
 	RadioView.cpp
 	WirelessNetworkMenuItem.cpp
 
-	: be libshared.a $(HAIKU_LOCALE_LIBS) $(icon_libs) $(TARGET_NETWORK_LIBS)
+	: be libshared.a localestub $(icon_libs) $(TARGET_NETWORK_LIBS)
 		libbnetapi.so $(TARGET_LIBSTDC++)
 	: NetworkStatus.rdef NetworkStatusIcons.rdef
 ;

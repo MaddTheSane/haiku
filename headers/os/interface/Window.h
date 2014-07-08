@@ -149,7 +149,7 @@ public:
 			BView*				CurrentFocus() const;
 
 			void				Activate(bool = true);
-	virtual	void				WindowActivated(bool state);
+	virtual	void				WindowActivated(bool focus);
 
 			void				ConvertToScreen(BPoint* point) const;
 			BPoint				ConvertToScreen(BPoint point) const;
@@ -369,7 +369,7 @@ private:
 			BView*				fTopView;
 			BView*				fFocus;
 			BView*				fLastMouseMovedView;
-			BMessageRunner*		fIdleMouseRunner;
+			uint32				_unused1;
 			BMenuBar*			fKeyMenuBar;
 			BButton*			fDefaultButton;
 			BList				fShortcuts;
@@ -394,7 +394,7 @@ private:
 			window_look			fLook;
 			window_feel			fFeel;
 			int32				fLastViewToken;
-			BPrivate::PortLink*	fLink;
+			::BPrivate::PortLink* fLink;
 			BMessageRunner*		fPulseRunner;
 			BRect				fPreviousFrame;
 

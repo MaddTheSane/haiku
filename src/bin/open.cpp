@@ -2,7 +2,15 @@
  * Copyright 2003-2007, Axel Dörfler, axeld@pinc-software.de.
  * Copyright 2005-2007, François Revol, revol@free.fr.
  * Copyright 2009, Jonas Sundström, jonas@kirilla.com.
- * All rights reserved. Distributed under the terms of the MIT License.
+ * Copyright 2014 Haiku, Inc. All rights reserved.
+ *
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		François Revol, revol@free.fr
+ *		John Scipione, jscipione@gmail.com
+ *		Jonas Sundström, jonas@kirilla.com
  */
 
 /*! Launches an application/document from the shell */
@@ -18,22 +26,20 @@
 #include <Mime.h>
 #include <Roster.h>
 #include <String.h>
-
 #include <Url.h>
 
-
-const char *kTrackerSignature = "application/x-vnd.Be-TRAK";
+#include <tracker_private.h>
 
 
 status_t
-open_file(const char* openWith, BEntry &entry, int32 line = -1, int32 col = -1)
+open_file(const char* openWith, BEntry& entry, int32 line = -1, int32 col = -1)
 {
 	entry_ref ref;
-	status_t status = entry.GetRef(&ref);
-	if (status < B_OK)
-		return status;
+	status_t result = entry.GetRef(&ref);
+	if (result != B_OK)
+		return result;
 
-	BMessenger target(openWith ? openWith : kTrackerSignature);
+	BMessenger target(openWith != NULL ? openWith : kTrackerSignature);
 	if (!target.IsValid())
 		return be_roster->Launch(&ref);
 
@@ -41,6 +47,7 @@ open_file(const char* openWith, BEntry &entry, int32 line = -1, int32 col = -1)
 	message.AddRef("refs", &ref);
 	if (line > -1)
 		message.AddInt32("be:line", line);
+
 	if (col > -1)
 		message.AddInt32("be:column", col);
 
@@ -50,12 +57,12 @@ open_file(const char* openWith, BEntry &entry, int32 line = -1, int32 col = -1)
 
 
 int
-main(int argc, char **argv)
+main(int argc, char** argv)
 {
-	int exitcode = EXIT_SUCCESS;
-	const char *openWith = NULL;
+	int exitCode = EXIT_SUCCESS;
+	const char* openWith = NULL;
 
-	char *progName = argv[0];
+	char* progName = argv[0];
 	if (strrchr(progName, '/'))
 		progName = strrchr(progName, '/') + 1;
 
@@ -65,12 +72,12 @@ main(int argc, char **argv)
 	}
 
 	while (*++argv) {
-		status_t status = B_OK;
+		status_t result = B_OK;
 		argc--;
 
 		BEntry entry(*argv);
-		if ((status = entry.InitCheck()) == B_OK && entry.Exists()) {
-			status = open_file(openWith, entry);
+		if ((result = entry.InitCheck()) == B_OK && entry.Exists()) {
+			result = open_file(openWith, entry);
 		} else if (!strncasecmp("application/", *argv, 12)) {
 			// maybe it's an application-mimetype?
 
@@ -84,18 +91,18 @@ main(int argc, char **argv)
 				be_roster->GetAppList(*argv, &teams);
 
 			if (teams.IsEmpty())
-				status = be_roster->Launch(*argv);
+				result = be_roster->Launch(*argv);
 			else
-				status = B_OK;
+				result = B_OK;
 		} else if (strchr(*argv, ':')) {
 			// try to open it as an URI
-			BPrivate::Support::BUrl url(*argv);
+			BUrl url(*argv);
 			if (url.OpenWithPreferredApplication() == B_OK)
 				continue;
 
 			// maybe it's "file:line" or "file:line:col"
 			int line = 0, col = 0, i;
-			status = B_ENTRY_NOT_FOUND;
+			result = B_ENTRY_NOT_FOUND;
 			// remove gcc error's last :
 			BString arg(*argv);
 			if (arg[arg.Length() - 1] == ':')
@@ -106,10 +113,10 @@ main(int argc, char **argv)
 				line = atoi(arg.String() + i + 1);
 				arg.Truncate(i);
 
-				status = entry.SetTo(arg.String());
-				if (status == B_OK && entry.Exists()) {
-					status = open_file(openWith, entry, line);
-					if (status == B_OK)
+				result = entry.SetTo(arg.String());
+				if (result == B_OK && entry.Exists()) {
+					result = open_file(openWith, entry, line);
+					if (result == B_OK)
 						continue;
 				}
 
@@ -119,20 +126,20 @@ main(int argc, char **argv)
 				line = atoi(arg.String() + i + 1);
 				arg.Truncate(i);
 
-				status = entry.SetTo(arg.String());
-				if (status == B_OK && entry.Exists())
-					status = open_file(openWith, entry, line, col);
+				result = entry.SetTo(arg.String());
+				if (result == B_OK && entry.Exists())
+					result = open_file(openWith, entry, line, col);
 			}
 		} else
-			status = B_ENTRY_NOT_FOUND;
+			result = B_ENTRY_NOT_FOUND;
 
-		if (status != B_OK && status != B_ALREADY_RUNNING) {
+		if (result != B_OK && result != B_ALREADY_RUNNING) {
 			fprintf(stderr, "%s: \"%s\": %s\n", progName, *argv,
-				strerror(status));
+				strerror(result));
 			// make sure the shell knows this
-			exitcode = EXIT_FAILURE;
+			exitCode = EXIT_FAILURE;
 		}
 	}
 
-	return exitcode;
+	return exitCode;
 }

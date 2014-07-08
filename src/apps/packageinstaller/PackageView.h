@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2009, Haiku, Inc.
+ * Copyright 2007-2014, Haiku, Inc.
  * Distributed under the terms of the MIT license.
  *
  * Author:
@@ -13,57 +13,77 @@
 #include "PackageInstall.h"
 #include "PackageStatus.h"
 
-#include <Box.h>
-#include <Button.h>
-#include <FilePanel.h>
-#include <MenuField.h>
 #include <View.h>
 
+class BBox;
+class BButton;
+class BFilePanel;
+class BMenu;
+class BMenuField;
 class BPopUpMenu;
 class BTextView;
 
 
 enum {
-	P_MSG_GROUP_CHANGED = 'gpch',
+	P_MSG_INSTALL_TYPE_CHANGED = 'gpch',
 	P_MSG_PATH_CHANGED,
 	P_MSG_OPEN_PANEL,
 	P_MSG_INSTALL
 };
 
 class PackageView : public BView {
-	public:
-		PackageView(BRect frame, const entry_ref *ref);
-		~PackageView();
+public:
+								PackageView(const entry_ref* ref);
+	virtual						~PackageView();
 
-		void AttachedToWindow();
-		void MessageReceived(BMessage *msg);
+	virtual	void				AttachedToWindow();
+	virtual	void				MessageReceived(BMessage* message);
 
-		int32 ItemExists(PackageItem &item, BPath &path, int32 &policy);
+			int32				ItemExists(PackageItem& item,
+									BPath& path, int32& policy);
 
-		BPath *GetCurrentPath()          { return &fCurrentPath; }
-		PackageInfo *GetPackageInfo()    { return &fInfo; }
-		uint32 GetCurrentType()          { return fCurrentType; }
-		PackageStatus *GetStatusWindow() { return fStatusWindow; }
+			BPath*				CurrentPath()
+									{ return &fCurrentPath; }
+			PackageInfo*		GetPackageInfo()
+									{ return &fInfo; }
+			uint32				CurrentType() const
+									{ return fCurrentType; }
+			PackageStatus*		StatusWindow()
+									{ return fStatusWindow; }
 
-	private:
-		void _InitView();
-		void _InitProfiles();
+private:
+			void				_InitView();
+			void				_InitProfiles();
 
-		status_t _GroupChanged(int32 index);
+			status_t			_InstallTypeChanged(int32 index);
 
-		BPopUpMenu *fInstallTypes;
-		BTextView *fInstallDesc;
-		BPopUpMenu *fDestination;
-		BMenuField *fDestField;
-		BButton *fInstall;
+			BString				_NamePlusSizeString(BString name,
+									size_t size, const char* format) const;
+			BMenuItem*			_AddInstallTypeMenuItem(BString baseName,
+									size_t size, int32 index) const;
+			BMenuItem*			_AddDestinationMenuItem(BString baseName,
+									size_t size, const char* path) const;
+			BMenuItem*			_AddMenuItem(const char* name,
+									BMessage* message, BMenu* menu) const;
 
-		BFilePanel *fOpenPanel;
-		BPath fCurrentPath;
-		uint32 fCurrentType;
+			bool				_ValidateFilePanelMessage(BMessage* message);
 
-		PackageInfo fInfo;
-		PackageStatus *fStatusWindow;
-		PackageInstall fInstallProcess;
+private:
+			BPopUpMenu*			fInstallTypes;
+			BTextView*			fInstallTypeDescriptionView;
+			BPopUpMenu*			fDestination;
+			BMenuField*			fDestField;
+			BButton*			fBeginButton;
+
+			BFilePanel*			fOpenPanel;
+			bool				fExpectingOpenPanelResult;
+
+			BPath				fCurrentPath;
+			uint32				fCurrentType;
+
+			PackageInfo			fInfo;
+			PackageStatus*		fStatusWindow;
+			PackageInstall		fInstallProcess;
 };
 
 #endif	// PACKAGE_VIEW_H

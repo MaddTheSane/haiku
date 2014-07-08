@@ -17,6 +17,8 @@
 
 #include <StorageDefs.h>
 
+#include <find_directory_private.h>
+
 
 #ifndef HAIKU_BUILD_GENERATED_DIRECTORY
 #	error HAIKU_BUILD_GENERATED_DIRECTORY not defined!
@@ -64,14 +66,14 @@ find_directory(directory_which which, dev_t device, bool createIt,
 	// we support only the handful of paths we need
 	const char* path;
 	switch (which) {
-		case B_COMMON_TEMP_DIRECTORY:
+		case B_SYSTEM_TEMP_DIRECTORY:
 			path = HAIKU_BUILD_GENERATED_DIRECTORY "/tmp";
 			break;
-		case B_COMMON_SETTINGS_DIRECTORY:
-			path = HAIKU_BUILD_GENERATED_DIRECTORY "/common/settings";
+		case B_SYSTEM_SETTINGS_DIRECTORY:
+			path = HAIKU_BUILD_GENERATED_DIRECTORY "/system/settings";
 			break;
-		case B_COMMON_CACHE_DIRECTORY:
-			path = HAIKU_BUILD_GENERATED_DIRECTORY "/common/cache";
+		case B_SYSTEM_CACHE_DIRECTORY:
+			path = HAIKU_BUILD_GENERATED_DIRECTORY "/system/cache";
 			break;
 		case B_USER_SETTINGS_DIRECTORY:
 			path = HAIKU_BUILD_GENERATED_DIRECTORY "/user/settings";
@@ -95,3 +97,10 @@ find_directory(directory_which which, dev_t device, bool createIt,
 	return error;
 }
 
+
+status_t
+__find_directory(directory_which which, dev_t device, bool createIt,
+	char *returnedPath, int32 pathLength)
+{
+	return find_directory(which, device, createIt, returnedPath, pathLength);
+}

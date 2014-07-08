@@ -21,6 +21,7 @@
 #include <MenuItem.h>
 #include <NodeInfo.h>
 #include <NodeMonitor.h>
+#include <Notification.h>
 #include <PopUpMenu.h>
 #include <Roster.h>
 #include <SpaceLayoutItem.h>
@@ -139,6 +140,11 @@ public:
 	virtual BSize MaxSize()
 	{
 		return MinSize();
+	}
+
+	BBitmap* Bitmap()
+	{
+		return &fIconBitmap;
 	}
 
 private:
@@ -401,8 +407,7 @@ DownloadProgressView::MessageReceived(BMessage* message)
 			break;
 
 		case CANCEL_DOWNLOAD:
-			fDownload->Cancel();
-			DownloadCanceled();
+			CancelDownload();
 			break;
 
 		case REMOVE_DOWNLOAD:
@@ -421,7 +426,7 @@ DownloadProgressView::MessageReceived(BMessage* message)
 			switch (opCode) {
 				case B_ENTRY_REMOVED:
 					fIconView->SetIconDimmed(true);
-					DownloadCanceled();
+					CancelDownload();
 					break;
 				case B_ENTRY_MOVED:
 				{
@@ -455,10 +460,8 @@ DownloadProgressView::MessageReceived(BMessage* message)
 							// The entry was moved into the Trash.
 							// If the download is still in progress,
 							// cancel it.
-							if (fDownload)
-								fDownload->Cancel();
 							fIconView->SetIconDimmed(true);
-							DownloadCanceled();
+							CancelDownload();
 							break;
 						} else if (fIconView->IsIconDimmed()) {
 							// Maybe it was moved out of the trash.
@@ -617,12 +620,41 @@ DownloadProgressView::DownloadFinished()
 	fBottomButton->SetMessage(new BMessage(REMOVE_DOWNLOAD));
 	fBottomButton->SetEnabled(true);
 	fInfoView->SetText("");
+	fStatusBar->SetBarColor(ui_color(B_SUCCESS_COLOR));
+
+	BNotification success(B_INFORMATION_NOTIFICATION);
+	success.SetTitle(B_TRANSLATE("Download finished"));
+	success.SetContent(fPath.Leaf());
+	BEntry entry(fPath.Path());
+	entry_ref ref;
+	entry.GetRef(&ref);
+	success.SetOnClickFile(&ref);
+	success.SetIcon(fIconView->Bitmap());
+	success.Send();
+
 }
 
 
 void
-DownloadProgressView::DownloadCanceled()
+DownloadProgressView::CancelDownload()
 {
+	// Show the cancel notification, and set the progress bar red, only if the
+	// download was still running. In cases where the file is deleted after
+	// the download was finished, we don't want these things to happen.
+	if (fDownload) {
+		// Also cancel the download
+		fDownload->Cancel();
+		BNotification success(B_ERROR_NOTIFICATION);
+		success.SetTitle(B_TRANSLATE("Download aborted"));
+		success.SetContent(fPath.Leaf());
+		// Don't make a click on the notification open the file: it is not
+		// complete
+		success.SetIcon(fIconView->Bitmap());
+		success.Send();
+
+		fStatusBar->SetBarColor(ui_color(B_FAILURE_COLOR));
+	}
+
 	fDownload = NULL;
 	fTopButton->SetLabel(B_TRANSLATE("Restart"));
 	fTopButton->SetMessage(new BMessage(RESTART_DOWNLOAD));
@@ -631,6 +663,7 @@ DownloadProgressView::DownloadCanceled()
 	fBottomButton->SetMessage(new BMessage(REMOVE_DOWNLOAD));
 	fBottomButton->SetEnabled(true);
 	fInfoView->SetText("");
+
 	fPath.Unset();
 }
 

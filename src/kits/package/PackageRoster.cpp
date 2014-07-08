@@ -1,5 +1,5 @@
 /*
- * Copyright 2011, Haiku, Inc. All Rights Reserved.
+ * Copyright 2011-2014, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -14,10 +14,12 @@
 
 #include <Directory.h>
 #include <Entry.h>
+#include <Messenger.h>
 #include <Path.h>
 #include <String.h>
 #include <StringList.h>
 
+#include <package/InstallationLocationInfo.h>
 #include <package/PackageInfo.h>
 #include <package/PackageInfoContentHandler.h>
 #include <package/PackageInfoSet.h>
@@ -25,6 +27,13 @@
 #include <package/RepositoryConfig.h>
 
 #include <package/hpkg/PackageReader.h>
+
+
+#if defined(__HAIKU__) && !defined(HAIKU_HOST_PLATFORM_HAIKU)
+#	include <package/DaemonClient.h>
+#	include <RegistrarDefs.h>
+#	include <RosterPrivate.h>
+#endif
 
 
 namespace BPackageKit {
@@ -46,7 +55,7 @@ BPackageRoster::~BPackageRoster()
 status_t
 BPackageRoster::GetCommonRepositoryConfigPath(BPath* path, bool create) const
 {
-	return _GetRepositoryPath(path, create, B_COMMON_SETTINGS_DIRECTORY);
+	return _GetRepositoryPath(path, create, B_SYSTEM_SETTINGS_DIRECTORY);
 }
 
 
@@ -60,7 +69,7 @@ BPackageRoster::GetUserRepositoryConfigPath(BPath* path, bool create) const
 status_t
 BPackageRoster::GetCommonRepositoryCachePath(BPath* path, bool create) const
 {
-	return _GetRepositoryPath(path, create, B_COMMON_CACHE_DIRECTORY);
+	return _GetRepositoryPath(path, create, B_SYSTEM_CACHE_DIRECTORY);
 }
 
 
@@ -184,89 +193,99 @@ BPackageRoster::GetRepositoryConfig(const BString& name,
 
 
 status_t
+BPackageRoster::GetInstallationLocationInfo(
+	BPackageInstallationLocation location, BInstallationLocationInfo& _info)
+{
+// This method makes sense only on an installed Haiku, but not for the build
+// tools.
+#if defined(__HAIKU__) && !defined(HAIKU_HOST_PLATFORM_HAIKU)
+	return BPackageKit::BPrivate::BDaemonClient().GetInstallationLocationInfo(
+		location, _info);
+#else
+	return B_NOT_SUPPORTED;
+#endif
+}
+
+
+status_t
 BPackageRoster::GetActivePackages(BPackageInstallationLocation location,
 	BPackageInfoSet& packageInfos)
 {
 // This method makes sense only on an installed Haiku, but not for the build
 // tools.
 #if defined(__HAIKU__) && !defined(HAIKU_HOST_PLATFORM_HAIKU)
-	// check the given location
-	directory_which packagesDirectory;
-	switch (location) {
-		case B_PACKAGE_INSTALLATION_LOCATION_SYSTEM:
-			packagesDirectory = B_SYSTEM_PACKAGES_DIRECTORY;
-			break;
-		case B_PACKAGE_INSTALLATION_LOCATION_COMMON:
-			packagesDirectory = B_COMMON_PACKAGES_DIRECTORY;
-			break;
-		case B_PACKAGE_INSTALLATION_LOCATION_HOME:
-			packagesDirectory = B_USER_PACKAGES_DIRECTORY;
-			break;
-		default:
-			return B_BAD_VALUE;
+	BInstallationLocationInfo info;
+	status_t error = GetInstallationLocationInfo(location, info);
+	if (error != B_OK)
+		return error;
+
+	packageInfos = info.LatestActivePackageInfos();
+	return B_OK;
+#else
+	return B_NOT_SUPPORTED;
+#endif
+}
+
+
+status_t
+BPackageRoster::StartWatching(const BMessenger& target, uint32 eventMask)
+{
+// This method makes sense only on an installed Haiku, but not for the build
+// tools.
+#if defined(__HAIKU__) && !defined(HAIKU_HOST_PLATFORM_HAIKU)
+	// compose the registrar request
+	BMessage request(::BPrivate::B_REG_PACKAGE_START_WATCHING);
+	status_t error;
+	if ((error = request.AddMessenger("target", target)) != B_OK
+		|| (error = request.AddUInt32("events", eventMask)) != B_OK) {
+		return error;
 	}
 
-	// find the package links directory
-	BPath packageLinksPath;
-	status_t error = find_directory(B_PACKAGE_LINKS_DIRECTORY,
-		&packageLinksPath);
+	// send it
+	BMessage reply;
+	error = BRoster::Private().SendTo(&request, &reply, false);
 	if (error != B_OK)
 		return error;
 
-	// find and open the packages directory
-	BPath packagesDirPath;
-	error = find_directory(packagesDirectory, &packagesDirPath);
+	// get result
+	if (reply.what != ::BPrivate::B_REG_SUCCESS) {
+		int32 result;
+		if (reply.FindInt32("error", &result) != B_OK)
+			result = B_ERROR;
+		return (status_t)error;
+	}
+
+	return B_OK;
+#else
+	return B_NOT_SUPPORTED;
+#endif
+}
+
+
+status_t
+BPackageRoster::StopWatching(const BMessenger& target)
+{
+// This method makes sense only on an installed Haiku, but not for the build
+// tools.
+#if defined(__HAIKU__) && !defined(HAIKU_HOST_PLATFORM_HAIKU)
+	// compose the registrar request
+	BMessage request(::BPrivate::B_REG_PACKAGE_STOP_WATCHING);
+	status_t error = request.AddMessenger("target", target);
+	if (error  != B_OK)
+		return error;
+
+	// send it
+	BMessage reply;
+	error = BRoster::Private().SendTo(&request, &reply, false);
 	if (error != B_OK)
 		return error;
 
-	BDirectory directory;
-	error = directory.SetTo(packagesDirPath.Path());
-	if (error != B_OK)
-		return error;
-
-	// TODO: Implement that correctly be reading the activation files/directory!
-
-	// iterate through the packages
-	char buffer[sizeof(dirent) + B_FILE_NAME_LENGTH];
-	dirent* entry = (dirent*)&buffer;
-	while (directory.GetNextDirents(entry, sizeof(buffer), 1) == 1) {
-		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-			continue;
-
-		// get the full package file path
-		BPath packagePath;
-		error = packagePath.SetTo(packagesDirPath.Path(), entry->d_name);
-		if (error != B_OK)
-			continue;
-
-		// read the package info from the file
-		BPackageReader packageReader(NULL);
-		error = packageReader.Init(packagePath.Path());
-		if (error != B_OK)
-			continue;
-
-		BPackageInfo info;
-		BPackageInfoContentHandler handler(info);
-		error = packageReader.ParseContent(&handler);
-		if (error != B_OK || info.InitCheck() != B_OK)
-			continue;
-
-		// check whether the package is really active by verifying that a
-		// package link exists for it
-		BString packageLinkName(info.Name());
-		packageLinkName << '-' << info.Version().ToString();
-		BPath packageLinkPath;
-		struct stat st;
-		if (packageLinkPath.SetTo(packageLinksPath.Path(), packageLinkName)
-				!= B_OK
-			|| lstat(packageLinkPath.Path(), &st) != 0) {
-			continue;
-		}
-
-		// add the info
-		error = packageInfos.AddInfo(info);
-		if (error != B_OK)
-			return error;
+	// get result
+	if (reply.what != ::BPrivate::B_REG_SUCCESS) {
+		int32 result;
+		if (reply.FindInt32("error", &result) != B_OK)
+			result = B_ERROR;
+		return (status_t)error;
 	}
 
 	return B_OK;

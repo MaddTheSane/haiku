@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2013 Haiku Inc. All rights reserved.
+ * Copyright 2011-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -9,6 +9,7 @@
 #define MODIFIER_KEYS_WINDOW_H
 
 
+#include <View.h>
 #include <Window.h>
 
 
@@ -24,13 +25,15 @@ public:
 	virtual	void				Draw(BRect updateRect);
 
 			BBitmap*			Icon();
-			void				ShowIcon(bool show);
+			void				SetStopIcon(bool show);
+			void				SetWarnIcon(bool show);
 
 private:
-	void						_FillSavedIcon();
+			void				_FillIcons();
 
-	BBitmap*					fIcon;
-	BBitmap*					fSavedIcon;
+			BBitmap*			fIcon;
+			BBitmap*			fStopIcon;
+			BBitmap*			fWarnIcon;
 };
 
 
@@ -54,6 +57,7 @@ private:
 			int32					_LastKey();
 			void					_ValidateDuplicateKeys();
 			uint32					_DuplicateKeys();
+			void					_HideShowIcons();
 
 			BPopUpMenu*				fShiftMenu;
 			BPopUpMenu*				fControlMenu;

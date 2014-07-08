@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2008, Haiku, Inc. All Rights Reserved.
+ * Copyright 2004-2013, Haiku, Inc. All Rights Reserved.
  * Copyright 2002, Thomas Kurschel. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
@@ -77,6 +77,8 @@ status_t periph_handle_free(scsi_periph_handle_info *handle);
 // block.c
 
 status_t periph_check_capacity(scsi_periph_device_info *device, scsi_ccb *ccb);
+status_t periph_trim_device(scsi_periph_device_info *device, scsi_ccb *request,
+	scsi_block_range* ranges, uint32 rangeCount);
 
 
 // device.c
@@ -99,6 +101,8 @@ status_t periph_io(scsi_periph_device_info* device, io_operation* operation,
 status_t periph_ioctl(scsi_periph_handle_info *handle, int op,
 	void *buf, size_t len);
 void periph_sync_queue_daemon(void *arg, int iteration);
+status_t vpd_page_get(scsi_periph_device_info *device, uint8 page, void* data,
+	uint16 length);
 
 
 // scsi_periph.c

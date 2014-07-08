@@ -24,6 +24,7 @@
 #include <thread_defs.h>
 #include <user_group.h>
 #include <user_timer_defs.h>
+#include <vfs_defs.h>
 
 #include <errno_private.h>
 #include <libroot_private.h>
@@ -98,8 +99,6 @@ __sysconf(int name)
 			return _POSIX_THREADS;
 		case _SC_IOV_MAX:
 			return IOV_MAX;
-		case _SC_NPROCESSORS_MAX:
-			return B_MAX_CPU_COUNT;
 		case _SC_NPROCESSORS_CONF:
 		{
 			system_info info;
@@ -125,8 +124,6 @@ __sysconf(int name)
 					count++;
 			return count;
 		}
-		case _SC_CPUID_MAX:
-			return B_MAX_CPU_COUNT - 1;
 		case _SC_ATEXIT_MAX:
 			return ATEXIT_MAX;
 		case _SC_PASS_MAX:
@@ -257,7 +254,7 @@ __pathconf_common(struct statvfs *fs, struct stat *st,
 			return PATH_MAX;
 
 		case _PC_PIPE_BUF:
-			return 4096;
+			return VFS_FIFO_ATOMIC_WRITE_SIZE;
 
 		case _PC_LINK_MAX:
 			return LINK_MAX;
@@ -387,8 +384,8 @@ confstr(int name, char *buffer, size_t length)
 
 	switch (name) {
 		case _CS_PATH:
-			string = kGlobalBinDirectory ":" kSystemAppsDirectory ":"
-				kCommonBinDirectory ":" kCommonDevelopToolsBinDirectory;
+			string = kSystemNonpackagedBinDirectory ":" kGlobalBinDirectory ":"
+				kSystemAppsDirectory ":" kSystemPreferencesDirectory;
 			break;
 		default:
 			__set_errno(EINVAL);

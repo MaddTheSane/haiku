@@ -1,4 +1,4 @@
-1	swedish	x-vnd.haiku-icon_o_matic	3933520036
+1	swedish	x-vnd.haiku-icon_o_matic	28048799
 Select All	Icon-O-Matic-PathManipulator		Markera allt
 Add Style	Icon-O-Matic-AddStylesCmd		Lägg till stil
 Color (#%02x%02x%02x)	Style name after dropping a color		Färg (#%02x%02x%02x)
@@ -12,7 +12,6 @@ New	Icon-O-Matic-Menu-File		Ny
 Icon-O-Matic might not have interpreted all data from the SVG when it was loaded. By overwriting the original file, this information would now be lost.	Icon-O-Matic-SVGExport		IkonRedigeraren har kanske inte tolkat all data från SVGn när den laddades. Genom att skriva över originalfilen förloras denna information.
 Paste Properties	Icon-O-Matic-Properties		Klistra in attribut
 Stroke	Transformation		Dragning
-Save Icon	Dialog title		Spara ikon
 Closed	Icon-O-Matic-PropertyNames		Stängd
 Remove Path	Icon-O-Matic-RemovePathsCmd		Ta bort bana
 Add shape with path	Icon-O-Matic-Menu-Shape		Lägg till figur med bana
@@ -79,6 +78,7 @@ Perspective	Transformation		Perspektiv
 Move Transformer	Icon-O-Matic-MoveTransformersCmd		Förflyttningsomvandlare
 Opacity	Icon-O-Matic-PropertyNames		Opacitet
 Add with path	Icon-O-Matic-ShapesList		Lägg till med bana
+Export icon	Dialog title		Exportera ikon
 Gradient type	Icon-O-Matic-StyleTypes		Övergångstyp
 Icon-O-Matic	System name		IkonRedigerare
 Cancel	Icon-O-Matic-Menu-Settings		Avbryt
@@ -108,7 +108,6 @@ Move Shapes	Icon-O-Matic-MoveShapesCommand		Flytta figurer
 Remove Styles	Icon-O-Matic-RemoveStylesCmd		Ta bort stilar
 The text you are trying to import is quite long,are you sure?	Icon-O-Matic-StyledTextImport		Texten som du försöker importera är ganska lång, är du säker?
 Add	Icon-O-Matic-TransformersList		Lägg till
-Export Icon	Dialog title		Exportera ikon
 Color	Icon-O-Matic-StyleTypes		Färg
 Settings…	Icon-O-Matic-SavePanel		Inställningar...
 Remove	Icon-O-Matic-PathManipulator		Ta bort
@@ -160,7 +159,6 @@ Snap to grid	Icon-O-Matic-Menu-Settings		Fäst i rutnät
 Remove	Icon-O-Matic-ShapesList		Ta bort
 Yes	Icon-O-Matic-StyledTextImport		Ja
 Transformation	Icon-O-Matic-TransformersList		Omvandling
-Save image	Icon-O-Matic-SavePanel		Spara bild
 Add Styles	Icon-O-Matic-AddStylesCmd		Lägg till stilar
 Remove Control Points	Icon-O-Matic-RemovePointsCmd		Ta bort kontrollpunkter
 Format	Icon-O-Matic-SavePanel		Format
@@ -193,6 +191,7 @@ Overwrite	Icon-O-Matic-SVGExport		Skriv över
 Freeze Shapes	Icon-O-Matic-FreezeTransformationCmd		Frys figurer
 Split Control Point	Icon-O-Matic-SplitPointsCmd		Klyv kontrollpunkt
 Open…	Icon-O-Matic-Menu-File		Öppna...
+Save icon	Dialog title		Spara ikon
 Color (#%02x%02x%02x)	Icon-O-Matic-StyledTextImport		Färg (#%02x%02x%02x)
 Edit Gradient	Icon-O-Matic-SetGradientCmd		Redigera övergång
 Clean Up Path	Icon-O-Matic-CleanUpPathCmd		Rensa upp bana

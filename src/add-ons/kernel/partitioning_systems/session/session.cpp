@@ -39,9 +39,9 @@ standard_operations(int32 op, ...)
 static float
 identify_partition(int fd, partition_data *partition, void **cookie)
 {
-	DEBUG_INIT_ETC(NULL, ("fd: %d, id: %ld, offset: %Ld, "
-		"size: %Ld, block_size: %ld, flags: 0x%lx", fd,
-		partition->id, partition->offset, partition->size,
+	DEBUG_INIT_ETC(NULL, ("fd: %d, id: %" B_PRId32 ", offset: %" B_PRIdOFF ", "
+		"size: %" B_PRIdOFF ", block_size: %" B_PRId32 ", flags: 0x%" B_PRIx32,
+		fd, partition->id, partition->offset, partition->size,
 		partition->block_size, partition->flags));
 
 	device_geometry geometry;
@@ -54,13 +54,10 @@ identify_partition(int fd, partition_data *partition, void **cookie)
 		if (disc != NULL && disc->InitCheck() == B_OK) {
 			// If we have only a single session then we can let the file system
 			// drivers play directly with the device.
-			Session *session = disc->GetSession(1);
-			if (session != NULL) {
+			if (disc->GetSession(1) != NULL)
 				result = 0.9f;
-				delete session;
-			} else
+			else
 				result = 0.1f;
-
 			*cookie = static_cast<void*>(disc);
 		} else
 			delete disc;
@@ -73,9 +70,10 @@ identify_partition(int fd, partition_data *partition, void **cookie)
 static status_t
 scan_partition(int fd, partition_data *partition, void *cookie)
 {
-	DEBUG_INIT_ETC(NULL, ("fd: %d, id: %ld, offset: %Ld, size: %Ld, "
-		"block_size: %ld, cookie: %p", fd, partition->id, partition->offset,
-		partition->size, partition->block_size, cookie));
+	DEBUG_INIT_ETC(NULL, ("fd: %d, id: %" B_PRId32 ", offset: %" B_PRId64 ", "
+		"size: %" B_PRIdOFF ", block_size: %" B_PRId32 ", cookie: %p", fd,
+		partition->id, partition->offset, partition->size,
+		partition->block_size, cookie));
 
 	Disc *disc = static_cast<Disc*>(cookie);
 	partition->status = B_PARTITION_VALID;
@@ -97,14 +95,13 @@ scan_partition(int fd, partition_data *partition, void *cookie)
 		child->block_size = session->BlockSize();
 		child->flags |= session->Flags();
 		child->type = strdup(session->Type());
-		delete session;
 		if (!child->type) {
 			error = B_NO_MEMORY;
 			break;
 		}
 		child->parameters = NULL;
 	}
-	PRINT(("error: 0x%lx, `%s'\n", error, strerror(error)));
+	PRINT(("error: 0x%" B_PRIx32 ", `%s'\n", error, strerror(error)));
 	RETURN(error);
 }
 

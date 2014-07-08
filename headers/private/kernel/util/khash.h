@@ -9,7 +9,8 @@
 #define _KERNEL_UTIL_KHASH_H
 
 
-#include <SupportDefs.h>
+#include <util/StringHash.h>
+
 
 // The use of offsetof() on non-PODs is invalid. Since many structs use
 // templated members (i.e. DoublyLinkedList) which makes them non-PODs we
@@ -59,8 +60,6 @@ void hash_dump_table(struct hash_table* table);
  *		compare function should compare the element with
  *		the key, returning 0 if equal, other if not
  */
-
-uint32 hash_hash_string(const char *str);
 
 #ifdef __cplusplus
 }

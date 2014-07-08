@@ -40,7 +40,7 @@ Application Terminal :
 	TitlePlaceholderMapper.cpp
 	VTKeyTbl.c
 	VTPrsTbl.c
-	: be $(HAIKU_LOCALE_LIBS) tracker textencoding
+	: be localestub tracker textencoding
 	$(TARGET_LIBSUPC++) $(TARGET_LIBSTDC++)
 	: Terminal.rdef XColors.rdef
 ;
@@ -60,6 +60,7 @@ DoCatalogs Terminal :
 	TermApp.cpp
 	TermConst.cpp
 	TermView.cpp
+	TermViewStates.cpp
 	TermWindow.cpp
 	: en.catalog
 ;

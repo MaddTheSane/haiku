@@ -45,6 +45,7 @@ All rights reserved.
 #include <NodeInfo.h>
 #include <Roster.h>
 #include <Screen.h>
+#include <Thread.h>
 #include <Window.h>
 
 #include "icons.h"
@@ -55,6 +56,7 @@ All rights reserved.
 #include "BarWindow.h"
 #include "DeskbarMenu.h"
 #include "DeskbarUtils.h"
+#include "ExpandoMenuBar.h"
 #include "InlineScrollView.h"
 #include "ResourceSet.h"
 #include "ShowHideMenuItem.h"
@@ -90,8 +92,7 @@ TExpandoMenuBar::TExpandoMenuBar(BRect frame, const char* name,
 	fDeskbarMenuWidth(kMinMenuItemWidth),
 	fPreviousDragTargetItem(NULL),
 	fLastMousedOverItem(NULL),
-	fLastClickedItem(NULL),
-	fClickedExpander(false)
+	fLastClickedItem(NULL)
 {
 	SetItemMargins(0.0f, 0.0f, 0.0f, 0.0f);
 	SetFont(be_plain_font);
@@ -266,9 +267,6 @@ TExpandoMenuBar::MessageReceived(BMessage* message)
 void
 TExpandoMenuBar::MouseDown(BPoint where)
 {
-	fClickedExpander = false;
-		// in case MouseUp() wasn't called
-
 	BMessage* message = Window()->CurrentMessage();
 	BMenuItem* menuItem;
 	TTeamMenuItem* item = TeamItemAtPoint(where, &menuItem);
@@ -309,16 +307,13 @@ TExpandoMenuBar::MouseDown(BPoint where)
 			// absorb the message
 	}
 
-	int32 buttons = 0;
 	// check if within expander bounds to expand window items
 	if (fVertical && fShowTeamExpander
-		&& item->ExpanderBounds().Contains(where)
-		&& message->FindInt32("buttons", &buttons) == B_OK
-		&& buttons == B_PRIMARY_MOUSE_BUTTON) {
+		&& item->ExpanderBounds().Contains(where)) {
 		// start the animation here, finish on mouse up
 		fLastClickedItem = item;
-		fClickedExpander = true;
-		item->SetArrowDirection(BControlLook::B_RIGHT_DOWN_ARROW);
+		MouseDownThread<TExpandoMenuBar>::TrackMouse(this,
+			&TExpandoMenuBar::_DoneTracking, &TExpandoMenuBar::_Track);
 		Invalidate(item->ExpanderBounds());
 		return;
 			// absorb the message
@@ -354,20 +349,6 @@ TExpandoMenuBar::MouseMoved(BPoint where, uint32 code, const BMessage* message)
 		_FinishedDrag();
 
 		switch (code) {
-			case B_ENTERED_VIEW:
-			{
-				TTeamMenuItem* lastItem
-					= dynamic_cast<TTeamMenuItem*>(fLastClickedItem);
-				if (fVertical && fShowTeamExpander && fClickedExpander
-					&& lastItem != NULL && buttons == B_PRIMARY_MOUSE_BUTTON) {
-					// Started expander animation, exited view then entered
-					// again, redraw the expanded arrow
-					lastItem->SetArrowDirection(BControlLook::B_RIGHT_DOWN_ARROW);
-					Invalidate(lastItem->ExpanderBounds());
-				}
-				break;
-			}
-
 			case B_INSIDE_VIEW:
 			{
 				BMenuItem* menuItem;
@@ -412,26 +393,6 @@ TExpandoMenuBar::MouseMoved(BPoint where, uint32 code, const BMessage* message)
 					// new item, set the tooltip to the item name
 				fLastMousedOverItem = menuItem;
 					// save the current menuitem for the next MouseMoved() call
-				break;
-			}
-
-			case B_OUTSIDE_VIEW:
-				// NOTE: Should not be here, but for the sake of defensive
-				// programming... fall-through
-			case B_EXITED_VIEW:
-			{
-				TTeamMenuItem* lastItem
-					= dynamic_cast<TTeamMenuItem*>(fLastClickedItem);
-				if (lastItem != NULL && fVertical && fShowTeamExpander
-					&& fClickedExpander) {
-					// Started expander animation, then exited view,
-					// since we can't track outside mouse movements
-					// redraw the original expander arrow
-					lastItem->SetArrowDirection(lastItem->IsExpanded()
-						? BControlLook::B_DOWN_ARROW
-						: BControlLook::B_RIGHT_ARROW);
-					Invalidate(lastItem->ExpanderBounds());
-				}
 				break;
 			}
 		}
@@ -487,33 +448,10 @@ TExpandoMenuBar::MouseMoved(BPoint where, uint32 code, const BMessage* message)
 void
 TExpandoMenuBar::MouseUp(BPoint where)
 {
-	bool clickedExpander = fClickedExpander;
-	fClickedExpander = false;
-
 	if (fBarView->Dragging()) {
 		_FinishedDrag(true);
 		return;
 			// absorb the message
-	}
-
-	TTeamMenuItem* item = TeamItemAtPoint(where, NULL);
-	TTeamMenuItem* lastItem = dynamic_cast<TTeamMenuItem*>(fLastClickedItem);
-	if (fVertical && fShowTeamExpander && clickedExpander) {
-		if (item != NULL && lastItem != NULL && item == lastItem
-			&& item->ExpanderBounds().Contains(where)) {
-			// Toggle the expanded state
-			BAutolock locker(sMonLocker);
-				// let the update thread wait...
-			item->ToggleExpandState(true);
-			item->Draw();
-			return;
-				// absorb the message
-		} else if (lastItem != NULL) {
-			// User changed their mind, redraw the original expander arrow
-			lastItem->SetArrowDirection(lastItem->IsExpanded()
-				? BControlLook::B_DOWN_ARROW : BControlLook::B_RIGHT_ARROW);
-			Invalidate(lastItem->ExpanderBounds());
-		}
 	}
 
 	BMenuBar::MouseUp(where);
@@ -1049,4 +987,38 @@ TExpandoMenuBar::_FinishedDrag(bool invoke)
 	}
 	if (!invoke && fBarView->Dragging())
 		fBarView->DragStop(true);
+}
+
+
+void
+TExpandoMenuBar::_DoneTracking(BPoint point)
+{
+	TTeamMenuItem* lastItem = dynamic_cast<TTeamMenuItem*>(fLastClickedItem);
+
+	if (!lastItem->ExpanderBounds().Contains(point))
+		return;
+
+	lastItem->ToggleExpandState(true);
+	lastItem->SetArrowDirection(lastItem->IsExpanded()
+		? BControlLook::B_DOWN_ARROW
+		: BControlLook::B_RIGHT_ARROW);
+
+	Invalidate(lastItem->ExpanderBounds());
+}
+
+
+void
+TExpandoMenuBar::_Track(BPoint point, uint32)
+{
+	TTeamMenuItem* lastItem = dynamic_cast<TTeamMenuItem*>(fLastClickedItem);
+
+	if (lastItem->ExpanderBounds().Contains(point))
+		lastItem->SetArrowDirection(BControlLook::B_RIGHT_DOWN_ARROW);
+	else {
+		lastItem->SetArrowDirection(lastItem->IsExpanded()
+			? BControlLook::B_DOWN_ARROW
+			: BControlLook::B_RIGHT_ARROW);
+	}
+
+	Invalidate(lastItem->ExpanderBounds());
 }

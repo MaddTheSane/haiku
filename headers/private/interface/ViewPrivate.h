@@ -39,8 +39,10 @@ enum {
 	B_VIEW_LOW_COLOR_BIT		= 0x00008000,
 	B_VIEW_VIEW_COLOR_BIT		= 0x00010000,
 	B_VIEW_PATTERN_BIT			= 0x00020000,
+	B_VIEW_TRANSFORM_BIT		= 0x00040000,
+	B_VIEW_FILL_RULE_BIT		= 0x00080000,
 
-	B_VIEW_ALL_BITS				= 0x0003ffff,
+	B_VIEW_ALL_BITS				= 0x000fffff,
 
 	// these used for archiving only
 	B_VIEW_RESIZE_BIT			= 0x00001000,
@@ -111,18 +113,23 @@ class ViewState {
 		::drawing_mode		drawing_mode;
 		BRegion				clipping_region;
 		bool				clipping_region_used;
+
+		// transformation
 		BPoint				origin;
+		float				scale;
+		BAffineTransform	transform;
 
 		// line modes
 		join_mode			line_join;
 		cap_mode			line_cap;
 		float				miter_limit;
 
+		// fill rule
+		int32				fill_rule;
+
 		// alpha blending
 		source_alpha		alpha_source_mode;
 		alpha_function		alpha_function_mode;
-
-		float				scale;
 
 		// fonts
 		BFont				font;

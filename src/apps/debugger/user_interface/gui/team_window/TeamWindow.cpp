@@ -1,6 +1,6 @@
 /*
  * Copyright 2009-2012, Ingo Weinhold, ingo_weinhold@gmx.de.
- * Copyright 2010-2013, Rene Gollent, rene@gollent.com.
+ * Copyright 2010-2014, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 
@@ -21,12 +21,16 @@
 #include <MessageFilter.h>
 #include <MessageRunner.h>
 #include <Path.h>
+#include <PopUpMenu.h>
+#include <Query.h>
 #include <StringView.h>
 #include <TabView.h>
 #include <ScrollView.h>
 #include <SplitView.h>
 #include <TextView.h>
+#include <VolumeRoster.h>
 
+#include <AutoDeleter.h>
 #include <AutoLocker.h>
 
 #include "Breakpoint.h"
@@ -63,6 +67,7 @@ enum {
 	MSG_CHOOSE_DEBUG_REPORT_LOCATION	= 'ccrl',
 	MSG_DEBUG_REPORT_SAVED				= 'drsa',
 	MSG_LOCATE_SOURCE_IF_NEEDED			= 'lsin',
+	MSG_SOURCE_ENTRY_QUERY_COMPLETE		= 'seqc',
 	MSG_CLEAR_STACK_TRACE				= 'clst'
 };
 
@@ -130,7 +135,8 @@ TeamWindow::TeamWindow(::Team* team, UserInterfaceListener* listener)
 	fConsoleSplitView(NULL),
 	fBreakConditionConfigWindow(NULL),
 	fInspectorWindow(NULL),
-	fFilePanel(NULL)
+	fFilePanel(NULL),
+	fActiveSourceWorker(-1)
 {
 	fTeam->Lock();
 	BString name = fTeam->Name();
@@ -151,6 +157,11 @@ TeamWindow::~TeamWindow()
 		fStackTraceView->UnsetListener();
 	if (fSourceView != NULL)
 		fSourceView->UnsetListener();
+	if (fInspectorWindow != NULL) {
+		BMessenger messenger(fInspectorWindow);
+		if (messenger.LockTarget())
+			fInspectorWindow->Quit();
+	}
 
 	fTeam->RemoveListener(this);
 
@@ -163,6 +174,9 @@ TeamWindow::~TeamWindow()
 	_SetActiveThread(NULL);
 
 	delete fFilePanel;
+
+	if (fActiveSourceWorker > 0)
+		wait_for_thread(fActiveSourceWorker, NULL);
 }
 
 
@@ -222,8 +236,10 @@ TeamWindow::DispatchMessage(BMessage* message, BHandler* handler)
 		case B_COPY:
 		case B_SELECT_ALL:
 			BView* focusView = CurrentFocus();
-			if (focusView != NULL)
+			if (focusView != NULL) {
 				focusView->MessageReceived(message);
+				return;
+			}
 			break;
 	}
 	BWindow::DispatchMessage(message, handler);
@@ -373,23 +389,17 @@ TeamWindow::MessageReceived(BMessage* message)
 		}
 		case MSG_LOCATE_SOURCE_IF_NEEDED:
 		{
-			if (fActiveFunction != NULL
-				&& fActiveFunction->GetFunctionDebugInfo()
-					->SourceFile() != NULL && fActiveSourceCode != NULL
-				&& fActiveSourceCode->GetSourceFile() == NULL
-				&& fActiveFunction->GetFunction()->SourceCodeState()
-					!= FUNCTION_SOURCE_NOT_LOADED) {
-				try {
-					if (fFilePanel == NULL) {
-						fFilePanel = new BFilePanel(B_OPEN_PANEL,
-							new BMessenger(this));
-					}
-					fFilePanel->Show();
-				} catch (...) {
-					delete fFilePanel;
-					fFilePanel = NULL;
-				}
-			}
+			_HandleLocateSourceRequest();
+			break;
+		}
+		case MSG_SOURCE_ENTRY_QUERY_COMPLETE:
+		{
+			BStringList* entries;
+			if (message->FindPointer("entries", (void**)&entries) != B_OK)
+				break;
+			ObjectDeleter<BStringList> entryDeleter(entries);
+			_HandleLocateSourceRequest(entries);
+			fActiveSourceWorker = -1;
 			break;
 		}
 		case MSG_THREAD_RUN:
@@ -1537,6 +1547,44 @@ TeamWindow::_HandleWatchpointChanged(Watchpoint* watchpoint)
 }
 
 
+status_t
+TeamWindow::_RetrieveMatchingSourceWorker(void* arg)
+{
+	TeamWindow* window = (TeamWindow*)arg;
+
+	BStringList* entries = new(std::nothrow) BStringList();
+	if (entries == NULL)
+		return B_NO_MEMORY;
+	ObjectDeleter<BStringList> stringListDeleter(entries);
+
+	if (!window->Lock())
+		return B_BAD_VALUE;
+
+	BString path;
+	window->fActiveFunction->GetFunctionDebugInfo()->SourceFile()
+		->GetPath(path);
+	window->Unlock();
+
+	status_t error = window->_RetrieveMatchingSourceEntries(path, entries);
+	if (error != B_OK)
+		return error;
+
+	entries->Sort();
+	BMessenger messenger(window);
+	if (messenger.IsValid() && messenger.LockTarget()) {
+		if (window->fActiveSourceWorker == find_thread(NULL)) {
+			BMessage message(MSG_SOURCE_ENTRY_QUERY_COMPLETE);
+			message.AddPointer("entries", entries);
+			if (messenger.SendMessage(&message) == B_OK)
+				stringListDeleter.Detach();
+		}
+		window->Unlock();
+	}
+
+	return B_OK;
+}
+
+
 void
 TeamWindow::_HandleResolveMissingSourceFile(entry_ref& locatedPath)
 {
@@ -1574,6 +1622,138 @@ TeamWindow::_HandleResolveMissingSourceFile(entry_ref& locatedPath)
 			fListener->FunctionSourceCodeRequested(fActiveFunction);
 		}
 	}
+}
+
+
+void
+TeamWindow::_HandleLocateSourceRequest(BStringList* entries)
+{
+	if (fActiveFunction == NULL)
+		return;
+	else if (fActiveFunction->GetFunctionDebugInfo()->SourceFile() == NULL)
+		return;
+	else if (fActiveSourceCode == NULL)
+		return;
+	else if (fActiveSourceCode->GetSourceFile() != NULL)
+		return;
+	else if (fActiveFunction->GetFunction()->SourceCodeState()
+		== FUNCTION_SOURCE_NOT_LOADED) {
+		return;
+	}
+
+	if (entries == NULL) {
+		if (fActiveSourceWorker < 0) {
+			fActiveSourceWorker = spawn_thread(&_RetrieveMatchingSourceWorker,
+				"source file query worker", B_NORMAL_PRIORITY, this);
+			if (fActiveSourceWorker > 0)
+				resume_thread(fActiveSourceWorker);
+		}
+		return;
+	}
+
+	int32 count = entries->CountStrings();
+	if (count > 0) {
+		BPopUpMenu* menu = new(std::nothrow) BPopUpMenu("");
+		if (menu == NULL)
+			return;
+
+		BPrivate::ObjectDeleter<BPopUpMenu> menuDeleter(menu);
+		BMenuItem* item = NULL;
+		for (int32 i = 0; i < count; i++) {
+			item = new(std::nothrow) BMenuItem(entries->StringAt(i).String(),
+				NULL);
+			if (item == NULL || !menu->AddItem(item)) {
+				delete item;
+				return;
+			}
+		}
+
+		menu->AddSeparatorItem();
+		BMenuItem* manualItem = new(std::nothrow) BMenuItem(
+			"Locate manually" B_UTF8_ELLIPSIS, NULL);
+		if (manualItem == NULL || !menu->AddItem(manualItem)) {
+			delete manualItem;
+			return;
+		}
+
+		BPoint point;
+		fSourcePathView->GetMouse(&point, NULL, false);
+		fSourcePathView->ConvertToScreen(&point);
+		item = menu->Go(point, false, true);
+		if (item == NULL)
+			return;
+		else if (item != manualItem) {
+			// if the user picks to locate the entry manually,
+			// then fall through to the usual file panel logic
+			// as if we'd found no matches at all.
+			entry_ref ref;
+			if (get_ref_for_path(item->Label(), &ref) == B_OK) {
+				_HandleResolveMissingSourceFile(ref);
+				return;
+			}
+		}
+	}
+
+	try {
+		if (fFilePanel == NULL) {
+			fFilePanel = new BFilePanel(B_OPEN_PANEL,
+				new BMessenger(this));
+		}
+		fFilePanel->Show();
+	} catch (...) {
+		delete fFilePanel;
+		fFilePanel = NULL;
+	}
+}
+
+
+status_t
+TeamWindow::_RetrieveMatchingSourceEntries(const BString& path,
+	BStringList* _entries)
+{
+	BPath filePath(path);
+	status_t error = filePath.InitCheck();
+	if (error != B_OK)
+		return error;
+
+	_entries->MakeEmpty();
+
+	BQuery query;
+	BString predicate;
+	query.PushAttr("name");
+	query.PushString(filePath.Leaf());
+	query.PushOp(B_EQ);
+
+	error = query.GetPredicate(&predicate);
+	if (error != B_OK)
+		return error;
+
+	BVolumeRoster roster;
+	BVolume volume;
+	while (roster.GetNextVolume(&volume) == B_OK) {
+		if (!volume.KnowsQuery())
+			continue;
+
+		if (query.SetVolume(&volume) != B_OK)
+			continue;
+
+		error = query.SetPredicate(predicate.String());
+		if (error != B_OK)
+			continue;
+
+		if (query.Fetch() != B_OK)
+			continue;
+
+		entry_ref ref;
+		while (query.GetNextRef(&ref) == B_OK) {
+			filePath.SetTo(&ref);
+			_entries->Add(filePath.Path());
+		}
+
+		query.Clear();
+	}
+
+	return B_OK;
 }
 
 

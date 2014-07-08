@@ -3,7 +3,7 @@
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- * 		Alexandre Deckner <alex@zappotek.com>
+ *		Alexandre Deckner <alex@zappotek.com>
  */
 
 #include "BitmapTexture.h"
@@ -43,7 +43,8 @@ BitmapTexture::_Load(BBitmap* bitmap) {
 		0, GL_BGRA, GL_UNSIGNED_BYTE,
 		bitmap->Bits());
 
-	printf("BitmapTexture::_Load, loaded texture %u (%li, %li, %libits)\n",
+	printf("BitmapTexture::_Load, loaded texture %u "
+		"(%" B_PRIi32 ", %" B_PRIi32 ", %" B_PRIi32 "bits)\n",
 		fId, (int32) bitmap->Bounds().Width(),
 		(int32) bitmap->Bounds().Height(),
 		8 * bitmap->BytesPerRow() / (int)bitmap->Bounds().Width());

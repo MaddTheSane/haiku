@@ -238,10 +238,13 @@ StreamBase::StreamBase(BPositionIO* source, BLocker* sourceLock,
 
 StreamBase::~StreamBase()
 {
-	av_free(fIOContext->buffer);
-	av_free(fIOContext);
+	if (fContext != NULL)
+		avformat_close_input(&fContext);
 	av_free_packet(&fPacket);
 	av_free(fContext);
+	if (fIOContext != NULL)
+		av_free(fIOContext->buffer);
+	av_free(fIOContext);
 }
 
 
@@ -263,6 +266,7 @@ StreamBase::Open()
 		_Seek);
 	if (fIOContext == NULL) {
 		TRACE("StreamBase::Open() - avio_alloc_context() failed!\n");
+		av_free(buffer);
 		return B_ERROR;
 	}
 
@@ -273,6 +277,9 @@ StreamBase::Open()
 	if (avformat_open_input(&fContext, "", NULL, NULL) < 0) {
 		TRACE("StreamBase::Open() - avformat_open_input() failed!\n");
 		// avformat_open_input() frees the context in case of failure
+		fContext = NULL;
+		av_free(fIOContext);
+		fIOContext = NULL;
 		return B_NOT_SUPPORTED;
 	}
 
@@ -1560,7 +1567,7 @@ AVFormatReader::GetFileFormatInfo(media_file_format* mff)
 		return;
 	}
 
-	const DemuxerFormat* format = demuxer_format_for(context->iformat);
+	const media_file_format* format = demuxer_format_for(context->iformat);
 
 	mff->capabilities = media_file_format::B_READABLE
 		| media_file_format::B_KNOWS_ENCODED_VIDEO
@@ -1568,9 +1575,7 @@ AVFormatReader::GetFileFormatInfo(media_file_format* mff)
 		| media_file_format::B_IMPERFECTLY_SEEKABLE;
 
 	if (format != NULL) {
-		// TODO: Check if AVInputFormat has audio only and then use
-		// format->audio_family!
-		mff->family = format->video_family;
+		mff->family = format->family;
 	} else {
 		TRACE("  no DemuxerFormat for AVInputFormat!\n");
 		mff->family = B_MISC_FORMAT_FAMILY;
@@ -1772,5 +1777,3 @@ AVFormatReader::GetNextChunk(void* _cookie, const void** chunkBuffer,
 	Stream* cookie = reinterpret_cast<Stream*>(_cookie);
 	return cookie->GetNextChunk(chunkBuffer, chunkSize, mediaHeader);
 }
-
-

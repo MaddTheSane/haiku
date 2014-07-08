@@ -6,8 +6,8 @@
  *		Mattias Sundblad
  *		Andrew Bachmann
  */
-#ifndef REPLACE_WINDOW_H 
-#define REPLACE_WINDOW_H 
+#ifndef REPLACE_WINDOW_H
+#define REPLACE_WINDOW_H
 
 
 #include <Window.h>
@@ -29,10 +29,11 @@ class ReplaceWindow : public BWindow {
 
 		virtual void	MessageReceived(BMessage* message);
 		virtual void	DispatchMessage(BMessage* message, BHandler* handler);
+		virtual void	Show();
 
 	private:
 		void 			_SendMessage(uint32 what);
-		void 			_ChangeUI();		
+		void 			_ChangeUI();
 
 		BTextControl	*fSearchString;
 		BTextControl	*fReplaceString;

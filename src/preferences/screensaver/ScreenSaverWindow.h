@@ -1,77 +1,53 @@
 /*
- * Copyright 2003-2010, Haiku.
+ * Copyright 2003-2013 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Michael Phipps
- *		Jérôme Duval, jerome.duval@free.fr
  *		Axel Dörfler, axeld@pinc-software.de
+ *		Jérôme Duval, jerome.duval@free.fr
+ *		Michael Phipps
+ *		John Scipione, jscipione@gmail.com
  */
 #ifndef SCREEN_SAVER_WINDOW_H
 #define SCREEN_SAVER_WINDOW_H
 
 
+#include <DirectWindow.h>
+
 #include "PasswordWindow.h"
 #include "ScreenSaverSettings.h"
 
-#include <Box.h>
-#include <CheckBox.h>
-#include <FilePanel.h>
-#include <Slider.h>
-#include <ListView.h>
 
+class BMessage;
+class BRect;
 
-class BButton;
-class BTabView;
-class BTextView;
-
+class FadeView;
 class ModulesView;
-class ScreenCornerSelector;
-class ScreenSaverRunner;
-class TimeSlider;
+class TabView;
 
 
-class ScreenSaverWindow : public BWindow {
+class ScreenSaverWindow : public BDirectWindow {
 public:
 								ScreenSaverWindow();
 	virtual						~ScreenSaverWindow();
+
+	virtual	void				DirectConnected(direct_buffer_info* info);
 
 	virtual	void				MessageReceived(BMessage* message);
 	virtual	void				ScreenChanged(BRect frame, color_space space);
 	virtual	bool				QuitRequested();
 
 			void				LoadSettings();
-			void				SetMinimalSizeLimit(float width, float height);
-
-private:
-			void				_SetupFadeTab(BRect frame);
-			void				_UpdateTurnOffScreen();
-			void				_UpdateStatus();
 
 private:
 			float				fMinWidth;
 			float				fMinHeight;
 			ScreenSaverSettings	fSettings;
-			uint32				fTurnOffScreenFlags;
-
-			BView*				fFadeView;
-			ModulesView*		fModulesView;
-			BTabView*			fTabView;
-
-			BCheckBox*			fEnableCheckBox;
-			TimeSlider*			fRunSlider;
-
-			BCheckBox*			fTurnOffCheckBox;
-			TimeSlider*			fTurnOffSlider;
-			BTextView*			fTurnOffNotSupported;
-
-			BCheckBox*			fPasswordCheckBox;
-			TimeSlider*			fPasswordSlider;
-			BButton*			fPasswordButton;
 			PasswordWindow*		fPasswordWindow;
 
-			ScreenCornerSelector* fFadeNow;
-			ScreenCornerSelector* fFadeNever;
+			FadeView*			fFadeView;
+			ModulesView*		fModulesView;
+			TabView*			fTabView;
 };
 
 

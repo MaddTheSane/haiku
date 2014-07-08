@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2010 Haiku Inc. All rights reserved.
+ * Copyright 2004-2013 Haiku Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -14,6 +14,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <net/if.h>
+#include <net/route.h>
 #include <netinet/in.h>
 #include <resolv.h>
 #include <stdio.h>
@@ -28,10 +29,14 @@
 #include <FindDirectory.h>
 #include <NetworkDevice.h>
 #include <NetworkInterface.h>
+#include <NetworkRoster.h>
 #include <Path.h>
 #include <String.h>
 
 #include <AutoDeleter.h>
+
+
+// #pragma mark -
 
 
 Settings::Settings(const char* name)
@@ -51,63 +56,21 @@ Settings::~Settings()
 }
 
 
-static status_t
-GetDefaultGateway(BString& gateway)
+/*!	Returns all associated wireless networks. */
+std::vector<wireless_network>
+Settings::WirelessNetworks()
 {
-	// TODO: This method is here because BNetworkInterface
-	// doesn't yet have any route getting methods
+	std::vector<wireless_network> networks;
 
-	int socket = ::socket(AF_INET, SOCK_DGRAM, 0);
-	if (socket < 0)
-		return errno;
-
-	FileDescriptorCloser fdCloser(socket);
-
-	// Obtain gateway
-	ifconf config;
-	config.ifc_len = sizeof(config.ifc_value);
-	if (ioctl(socket, SIOCGRTSIZE, &config, sizeof(struct ifconf)) < 0)
-		return errno;
-
-	uint32 size = (uint32)config.ifc_value;
-	if (size == 0)
-		return B_ERROR;
-
-	void* buffer = malloc(size);
-	if (buffer == NULL)
-		return B_NO_MEMORY;
-
-	MemoryDeleter bufferDeleter(buffer);
-	config.ifc_len = size;
-	config.ifc_buf = buffer;
-
-	if (ioctl(socket, SIOCGRTTABLE, &config, sizeof(struct ifconf)) < 0)
-		return errno;
-
-	ifreq* interface = (ifreq*)buffer;
-	ifreq* end = (ifreq*)((uint8*)buffer + size);
-
-	while (interface < end) {
-		route_entry& route = interface->ifr_route;
-
-		if ((route.flags & RTF_GATEWAY) != 0) {
-			sockaddr_in* inetAddress = (sockaddr_in*)route.gateway;
-			gateway = inet_ntoa(inetAddress->sin_addr);
-		}
-
-		int32 addressSize = 0;
-		if (route.destination != NULL)
-			addressSize += route.destination->sa_len;
-		if (route.mask != NULL)
-			addressSize += route.mask->sa_len;
-		if (route.gateway != NULL)
-			addressSize += route.gateway->sa_len;
-
-		interface = (ifreq *)((addr_t)interface + IF_NAMESIZE
-			+ sizeof(route_entry) + addressSize);
+	BNetworkDevice device(fName);
+	if (device.IsWireless()) {
+		wireless_network wirelessNetwork;
+		uint32 cookie = 0;
+		while (device.GetNextAssociatedNetwork(cookie, wirelessNetwork) == B_OK)
+			networks.push_back(wirelessNetwork);
 	}
 
-	return B_OK;
+	return networks;
 }
 
 
@@ -124,28 +87,20 @@ Settings::ReadConfiguration()
 	fIP = address.Address().ToString();
 	fNetmask = address.Mask().ToString();
 
-	if (GetDefaultGateway(fGateway) != B_OK)
+	int family = AF_INET;
+	if (address.Address().Family() != AF_UNSPEC)
+		family = address.Address().Family();
+
+	BNetworkAddress gatewayAddress;
+	if (interface.GetDefaultRoute(family, gatewayAddress) != B_OK)
 		return;
+
+	fGateway = gatewayAddress.ToString();
 
 	uint32 flags = interface.Flags();
 
 	fAuto = (flags & (IFF_AUTO_CONFIGURED | IFF_CONFIGURING)) != 0;
 	fDisabled = (flags & IFF_UP) == 0;
-
-	// Read wireless network from interfaces
-
-	fWirelessNetwork.SetTo(NULL);
-
-	BNetworkDevice networkDevice(fName);
-	if (networkDevice.IsWireless()) {
-		uint32 networkIndex = 0;
-		wireless_network wirelessNetwork;
-		// TODO: We only get the first associated network for now
-		if (networkDevice.GetNextAssociatedNetwork(networkIndex,
-				wirelessNetwork) == B_OK) {
-			fWirelessNetwork.SetTo(wirelessNetwork.name);
-		}
-	}
 
 	// read resolv.conf for the dns.
 	fNameServers.MakeEmpty();

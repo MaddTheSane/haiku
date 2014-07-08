@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2013, Haiku, Inc. All Rights Reserved.
+ * Copyright 2006-2014, Haiku, Inc. All Rights Reserved.
  * Distributed under the terms of the MIT License.
  *
  * Support for i915 chipset and up based on the X driver,
@@ -72,6 +72,9 @@ struct pll_limits {
 	uint32			min_vco;
 	uint32			max_vco;
 };
+
+
+static void mode_fill_missing_bits(display_mode *, uint32);
 
 
 static status_t
@@ -283,6 +286,31 @@ compute_pll_divisors(const display_mode &current, pll_divisors& divisors,
 
 
 static void
+mode_fill_missing_bits(display_mode *mode, uint32 cntrl)
+{
+	uint32 value = read32(cntrl);
+
+	switch (value & DISPLAY_CONTROL_COLOR_MASK) {
+		case DISPLAY_CONTROL_RGB32:
+		default:
+			mode->space = B_RGB32;
+			break;
+		case DISPLAY_CONTROL_RGB16:
+			mode->space = B_RGB16;
+			break;
+		case DISPLAY_CONTROL_RGB15:
+			mode->space = B_RGB15;
+			break;
+		case DISPLAY_CONTROL_CMAP8:
+			mode->space = B_CMAP8;
+			break;
+	}
+
+	mode->flags = B_8_BIT_DAC | B_HARDWARE_CURSOR | B_PARALLEL_ACCESS | B_DPMS;
+}
+
+
+static void
 retrieve_current_mode(display_mode& mode, uint32 pllRegister)
 {
 	uint32 pll = read32(pllRegister);
@@ -411,27 +439,13 @@ retrieve_current_mode(display_mode& mode, uint32 pllRegister)
 	if (mode.virtual_height < mode.timing.v_display)
 		mode.virtual_height = mode.timing.v_display;
 
-	value = read32(controlRegister);
-	switch (value & DISPLAY_CONTROL_COLOR_MASK) {
-		case DISPLAY_CONTROL_RGB32:
-		default:
-			mode.space = B_RGB32;
-			break;
-		case DISPLAY_CONTROL_RGB16:
-			mode.space = B_RGB16;
-			break;
-		case DISPLAY_CONTROL_RGB15:
-			mode.space = B_RGB15;
-			break;
-		case DISPLAY_CONTROL_CMAP8:
-			mode.space = B_CMAP8;
-			break;
-	}
+	mode_fill_missing_bits(&mode, controlRegister);
 
 	mode.h_display_start = 0;
 	mode.v_display_start = 0;
-	mode.flags = B_8_BIT_DAC | B_HARDWARE_CURSOR | B_PARALLEL_ACCESS
-		| B_DPMS | B_SUPPORTS_OVERLAYS;
+	if (gInfo->overlay_registers != NULL) {
+		mode.flags |= B_SUPPORTS_OVERLAYS;
+	}
 }
 
 
@@ -532,12 +546,12 @@ set_frame_buffer_base()
 	uint32 baseRegister;
 	uint32 surfaceRegister;
 
-	if (gInfo->head_mode & HEAD_MODE_A_ANALOG) {
-		baseRegister = INTEL_DISPLAY_A_BASE;
-		surfaceRegister = INTEL_DISPLAY_A_SURFACE;
-	} else {
+	if (gInfo->head_mode & HEAD_MODE_B_DIGITAL) {
 		baseRegister = INTEL_DISPLAY_B_BASE;
 		surfaceRegister = INTEL_DISPLAY_B_SURFACE;
+	} else {
+		baseRegister = INTEL_DISPLAY_A_BASE;
+		surfaceRegister = INTEL_DISPLAY_A_SURFACE;
 	}
 
 	if (sharedInfo.device_type.InGroup(INTEL_TYPE_96x)
@@ -575,23 +589,33 @@ create_mode_list(void)
 	if (error == B_OK) {
 		edid_dump(&gInfo->edid_info);
 		gInfo->has_edid = true;
+		if (gInfo->shared_info->single_head_locked)
+			gInfo->head_mode = HEAD_MODE_A_ANALOG;
 	} else {
-		TRACE("getting EDID on port A (analog) failed : %s. "
+		TRACE("getting EDID on port A (analog) failed: %s. "
 			"Trying on port C (lvds)\n", strerror(error));
 		bus.cookie = (void*)INTEL_I2C_IO_C;
 		error = ddc2_read_edid1(&bus, &gInfo->edid_info, NULL, NULL);
 		if (error == B_OK) {
 			edid_dump(&gInfo->edid_info);
 			gInfo->has_edid = true;
+		} else if (gInfo->shared_info->has_vesa_edid_info) {
+			TRACE("getting EDID on port C failed: %s. Use VESA EDID info\n",
+				strerror(error));
+			memcpy(&gInfo->edid_info, &gInfo->shared_info->vesa_edid_info,
+				sizeof(edid1_info));
+			gInfo->has_edid = true;
 		} else {
-			TRACE("getting EDID on port C failed : %s\n",
+			TRACE("getting EDID on port C failed: %s\n",
 				strerror(error));
 
 			// We could not read any EDID info. Fallback to creating a list with
 			// only the mode set up by the BIOS.
 			// TODO: support lower modes via scaling and windowing
-			if ((gInfo->head_mode & HEAD_MODE_LVDS_PANEL) != 0
-					&& (gInfo->head_mode & HEAD_MODE_A_ANALOG) == 0) {
+			if (((gInfo->head_mode & HEAD_MODE_LVDS_PANEL) != 0
+					&& (gInfo->head_mode & HEAD_MODE_A_ANALOG) == 0)
+					|| ((gInfo->head_mode & HEAD_MODE_LVDS_PANEL) != 0 
+					&& gInfo->shared_info->got_vbt)) {
 				size_t size = (sizeof(display_mode) + B_PAGE_SIZE - 1)
 					& ~(B_PAGE_SIZE - 1);
 
@@ -602,7 +626,24 @@ create_mode_list(void)
 				if (area < B_OK)
 					return area;
 
-				memcpy(list, &gInfo->lvds_panel_mode, sizeof(display_mode));
+				// Prefer information dumped directly from VBT, as the BIOS
+				// one may have display scaling, but only do this if the VBT
+				// resolution is higher than the BIOS one.
+				if (gInfo->shared_info->got_vbt
+					&& gInfo->shared_info->current_mode.virtual_width
+						>= gInfo->lvds_panel_mode.virtual_width
+					&& gInfo->shared_info->current_mode.virtual_height
+						>= gInfo->lvds_panel_mode.virtual_height) {
+					memcpy(list, &gInfo->shared_info->current_mode,
+						sizeof(display_mode));
+					mode_fill_missing_bits(list, INTEL_DISPLAY_B_CONTROL);
+				} else {
+					memcpy(list, &gInfo->lvds_panel_mode,
+						sizeof(display_mode));
+
+					if (gInfo->shared_info->got_vbt)
+						TRACE("intel_extreme: ignoring VBT mode.");
+				}
 
 				gInfo->mode_list_area = area;
 				gInfo->mode_list = list;
@@ -714,11 +755,11 @@ intel_propose_display_mode(display_mode* target, const display_mode* low,
 status_t
 intel_set_display_mode(display_mode* mode)
 {
-	TRACE("%s(%" B_PRIu16 "x%" B_PRIu16 ")\n", __func__,
-		mode->virtual_width, mode->virtual_height);
-
 	if (mode == NULL)
 		return B_BAD_VALUE;
+
+	TRACE("%s(%" B_PRIu16 "x%" B_PRIu16 ")\n", __func__,
+		mode->virtual_width, mode->virtual_height);
 
 	display_mode target = *mode;
 
@@ -733,9 +774,9 @@ intel_set_display_mode(display_mode* mode)
 	uint32 colorMode, bytesPerRow, bitsPerPixel;
 	get_color_space_format(target, colorMode, bytesPerRow, bitsPerPixel);
 
-	// TODO: do not go further if the mode is identical to the current one.
-	// This would avoid the screen being off when switching workspaces when they
-	// have the same resolution.
+	// TODO stop here, when the requested mode is the same as the current one.
+	// This would avoid screen flickering when setting a mode that's already in
+	// place.
 
 #if 0
 static bool first = true;
@@ -1091,7 +1132,9 @@ if (first) {
 				pll |= DISPLAY_PLL_POST1_DIVIDE_2;
 		}
 
-		write32(INTEL_DISPLAY_A_PLL, pll);
+		// Programmer's Ref says we must allow the DPLL to "warm up" before starting the plane
+		// so mask its bit, wait, enable its bit
+		write32(INTEL_DISPLAY_A_PLL, pll & ~DISPLAY_PLL_NO_VGA_CONTROL);
 		read32(INTEL_DISPLAY_A_PLL);
 		spin(150);
 		write32(INTEL_DISPLAY_A_PLL, pll);

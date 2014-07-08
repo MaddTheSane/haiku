@@ -24,7 +24,8 @@
 
 #define MAX_DISPLAY 2
 	// Maximum displays (more then two requires AtomBIOS)
-
+#define MAX_GPIO_PINS   64
+	// Maximum possible GPIO pins in gGPIOInfo
 
 struct gpu_state {
 	uint32 d1vgaControl;
@@ -72,7 +73,7 @@ struct accelerant_info {
 
 	volatile uint32	dpms_mode;		// current driver dpms mode
 
-	uint16			maximumPixelClock;
+	uint32			maximumPixelClock;
 	uint32			displayClockFrequency;
 	uint32			dpExternalClock;
 
@@ -109,28 +110,33 @@ struct register_info {
 typedef struct {
 	bool	valid;
 
-	uint32	hwPin;		// GPIO hardware pin on GPU
-	bool	hwCapable;	// can do hw assisted i2c
+	uint32	hwPin;	// GPIO hardware pin on GPU
+	uint32	hwReg;	// GPIO register
+	uint32	hwMask;	// GPIO pin mask
 
-	uint32	sclMaskReg;
-	uint32	sdaMaskReg;
-	uint32	sclMask;
-	uint32	sdaMask;
+	struct {
+		bool valid;
+		bool hwCapable;	// can do hw assisted i2c
+		uint32 sclMaskReg;
+		uint32 sdaMaskReg;
+		uint32 sclMask;
+		uint32 sdaMask;
 
-	uint32	sclEnReg;
-	uint32	sdaEnReg;
-	uint32	sclEnMask;
-	uint32	sdaEnMask;
+		uint32 sclEnReg;
+		uint32 sdaEnReg;
+		uint32 sclEnMask;
+		uint32 sdaEnMask;
 
-	uint32	sclYReg;
-	uint32	sdaYReg;
-	uint32	sclYMask;
-	uint32	sdaYMask;
+		uint32 sclYReg;
+		uint32 sdaYReg;
+		uint32 sclYMask;
+		uint32 sdaYMask;
 
-	uint32	sclAReg;
-	uint32	sdaAReg;
-	uint32	sclAMask;
-	uint32	sdaAMask;
+		uint32 sclAReg;
+		uint32 sdaAReg;
+		uint32 sclAMask;
+		uint32 sdaAMask;
+	} i2c;
 } gpio_info;
 
 
@@ -138,7 +144,7 @@ struct encoder_info {
 	bool		valid;
 	uint16		objectID;
 	uint32		type;
-	uint32		flags;
+	uint32		capabilities;
 	uint32		linkEnumeration; // ex. linkb == GRAPH_OBJECT_ENUM_ID2
 	bool		isExternal;
 	bool		isDPBridge;
@@ -152,10 +158,10 @@ typedef struct {
 	uint32		type;
 	uint32		flags;
 	uint32		lvdsFlags;
-	uint16		gpioID;
+	uint16		i2cPinIndex; // id of gpio pin for i2c communications
+	uint16		hpdPinIndex; // id of gpio pin for hotplug detection
 	struct encoder_info encoder;
 	struct encoder_info encoderExternal;
-	// TODO struct radeon_hpd hpd;
 	dp_info		dpInfo;
 } connector_info;
 
@@ -188,7 +194,7 @@ extern accelerant_info* gInfo;
 extern atom_context* gAtomContext;
 extern display_info* gDisplay[MAX_DISPLAY];
 extern connector_info* gConnector[ATOM_MAX_SUPPORTED_DEVICE];
-extern gpio_info* gGPIOInfo[ATOM_MAX_SUPPORTED_DEVICE];
+extern gpio_info* gGPIOInfo[MAX_GPIO_PINS];
 
 
 // register access

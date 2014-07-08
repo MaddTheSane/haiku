@@ -1,5 +1,4 @@
-1	french	x-vnd.Haiku-libtracker	1762695842
-common	B_COMMON_DIRECTORY		commun
+1	french	x-vnd.Haiku-libtracker	2212190051
 OK	WidgetAttributeText		OK
 Icon view	VolumeWindow		Vue en icônes
 Add-ons	FilePanelPriv		Extensions
@@ -77,7 +76,6 @@ Preparing to empty Trash…	StatusWindow		Préparation au vidage de la Corbeille
 You cannot put the selected item(s) into the trash.	FSUtils		Vous ne pouvez pas déplacer l(es) élément(s) sélectionné(s) vers la corbeille.
 Disks	Model		Disques
 Create link	ContainerWindow		Créer un lien
-develop	B_COMMON_DEVELOP_DIRECTORY		développement
 Decrease size	DeskWindow		Diminuer la taille
 Size	ContainerWindow		Taille
 All disks	AutoMounterSettings		Tout les disques
@@ -102,6 +100,7 @@ New folder	FilePanelPriv		Nouveau dossier
 %name info	InfoWindow	InfoWindow Title	Informations sur %name
 Favorites	FavoritesMenu		Favoris
 Add-ons	VolumeWindow		Extensions
+\"%name\" is an unsupported executable.	FSUtils		« %name » n'est pas un exécutable supporté.
 Sorry, you can't copy items to the Trash.	PoseView		Désolé, vous ne pouvez pas copier des éléments dans la Corbeille.
 List view	VolumeWindow		Vue en liste
 matches wildcard expression	SelectionWindow		correspond à l'expression générique
@@ -149,7 +148,6 @@ Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Impos
 Sorry, saving more than one item is not allowed.	FilePanelPriv		Désolé, il n'est pas permis de sauvegarder plus d'un élément.
 Searching for disks to mount…	StatusWindow		Recherche des disques à monter…
 New folder	FSUtils		Nouveau dossier
-If you %ifYouDoAction the common folder, %osName may not behave properly!\n\nAre you sure you want to do this?\n\nTo %toDoAction the common folder anyway, hold down the Shift key and click \"%toConfirmAction\".	FSUtils		Si vous %ifYouDoAction le dossier commun, %osName pourrait ne pas se comporter correctement !\n\nÊtes vous sûr de vouloir effectuer cette opération ?\n\nPour %toDoAction le dossier commun quand même, maintenez la touche <Maj> enfoncée et cliquez sur « %toConfirmAction ».
 Free space color	SettingsView		Couleur de l'espace libre
 Cut	ContainerWindow		Couper
 Remove	FindPanel		Supprimer
@@ -205,7 +203,7 @@ Open	InfoWindow		Ouvrir
 64 x 64	ContainerWindow		64 x 64
 Replace all	FSUtils		Remplacer tout
 Preparing to restore items…	StatusWindow		Restauration des éléments en préparation...
-Replace other file	WidgetAttributeText		Remplacer un autre fichier
+Replace other file	WidgetAttributeText		Remplacer l'autre fichier
 Some of the selected items cannot be moved to the Trash. Would you like to delete them instead? (This operation cannot be reverted.)	PoseView		Certains des éléments sélectionnés ne peuvent pas être envoyés à la Corbeille. Voulez vous les supprimer ? (Cette opération est irrémédiable.)
 You cannot create a link to the root directory.	FSUtils		Vous ne pouvez pas créer un lien vers le répertoire racine.
 48 x 48	ContainerWindow		48 x 48
@@ -250,7 +248,6 @@ Mount settings…	SettingsView		Réglages du montage…
 Edit name	InfoWindow		Éditer le nom
 Could not open \"%name\" (%error). 	FSUtils		Impossible d'ouvrir « %name » (%error). 
 Paste	ContainerWindow		Coller
-optional	/boot/optional		optionnel
 Modified:	InfoWindow		Modifié :
 Error moving \"%name\".	FSUtils		Erreur au déplacement de « %name ».
 TiB	WidgetAttributeText		Tio
@@ -412,6 +409,7 @@ Paste layout	ContainerWindow		Coller la disposition
 Select	InfoWindow		Sélectionner
 Could not update permissions of file \"%name\". %error	FSUtils		Impossible de modifier les permissions du fichier « %name ». %error
 Select…	FilePanelPriv		Sélectionner…
+\"%name\" is a legacy executable. Please obtain an updated version or recompile the application.	FSUtils		« %name » est un exécutable ancien. Veuillez vous procurer une version mise à jour, ou recompiler l'application.
 There was an error resolving the link.	Tracker		Une erreur est survenue lors de la résolution du lien.
 %BytesPerSecond/s	StatusWindow		%BytesPerSecond/s
 You can't move or copy the trash.	FSUtils		Vous ne pouvez ni déplacer, ni copier la Corbeille.
@@ -431,6 +429,7 @@ New	ContainerWindow		Nouveau
 Name matches wildcard expression:###	SelectionWindow		Nom correspondant à l'expression générique : ###
 less than	FindPanel		inférieur à
 64 x 64	DeskWindow		64 x 64
+develop	B_SYSTEM_DEVELOP_DIRECTORY		développement
 Modified	ContainerWindow		Modifié
 Edit Query template	FindPanel		Modifier le modèle de requête
 Prompt	FSUtils		Invite

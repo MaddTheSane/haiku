@@ -124,18 +124,24 @@ device_open(const char* name, uint32 /*flags*/, void** _cookie)
 	mutex_lock(&gLock);
 
 	if (info->open_count == 0) {
-		// this device has been opened for the first time, so
-		// we allocate needed resources and initialize the structure
+		// This device hasn't been initialized yet, so we
+		// allocate needed resources and initialize the structure
 		info->init_status = radeon_hd_init(*info);
 		if (info->init_status == B_OK) {
-			info->open_count++;
+#ifdef DEBUG_COMMANDS
+			add_debugger_command("radeonhd_reg", getset_register,
+				"dumps or sets the specified radeon_hd register");
+#endif
 		}
 	}
 
-	mutex_unlock(&gLock);
-
-	if (info->init_status == B_OK)
+	if (info->init_status == B_OK) {
+		info->open_count++;
 		*_cookie = info;
+	} else
+		ERROR("%s: initialization failed!\n", __func__);
+
+	mutex_unlock(&gLock);
 
 	return info->init_status;
 }
@@ -160,7 +166,12 @@ device_free(void* data)
 		// release info structure
 		info->init_status = B_NO_INIT;
 		radeon_hd_uninit(*info);
+
+#ifdef DEBUG_COMMANDS
+        remove_debugger_command("radeonhd_reg", getset_register);
+#endif
 	}
+
 	mutex_unlock(&gLock);
 	return B_OK;
 }

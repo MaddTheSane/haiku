@@ -18,8 +18,8 @@ rule ProcessCommandLineArguments
 
 			# Print usage text.
 			case help : {
-				Echo "Individual targets (applications, libraries, drivers,...)"
-					" can be built by just" ;
+				Echo "Individual targets (applications, libraries, drivers,"
+					"...) can be built by just" ;
 				Echo "passing them as arguments to jam. The recommended method"
 					"to build or update a" ;
 				Echo "Haiku image or installation is to use a build profile"
@@ -30,12 +30,36 @@ rule ProcessCommandLineArguments
 				Echo "  jam @install update libbe.so" ;
 				Echo "  jam @vmware-image mount" ;
 				Echo ;
-				Echo "Default build profiles:" ;
-				Echo "  image         - A raw disk image." ;
-				Echo "  anyboot-image - A custom image for either CD or disk." ;
-				Echo "  cd-image      - An ISO9660 CD image." ;
-				Echo "  vmware-image  - A VMware disk image." ;
-				Echo "  install       - A Haiku installation in a directory." ;
+				Echo "Default build profiles (minimal set of packages and"
+					"configuration):" ;
+				Echo "  image            - A raw disk image." ;
+				Echo "  anyboot-image    - A custom image for either CD or"
+					"disk." ;
+				Echo "  cd-image         - An ISO9660 CD image." ;
+				Echo "  vmware-image     - A VMware disk image." ;
+				Echo "  install          - A Haiku installation in a"
+					"directory." ;
+				Echo ;
+				Echo "Nightly build profiles (small set of packages used in"
+                	"nightly builds and default configuration):" ;
+				Echo "  nightly-raw      - A raw disk image." ;
+				Echo "  nightly-anyboot  - A custom image for either CD or"
+					"disk." ;
+				Echo "  nightly-cd       - An ISO9660 CD image." ;
+				Echo "  nightly-vmware   - A VMware disk image." ;
+				Echo ;
+				Echo "Release build profiles (bigger and more complete set of"
+					"packages used in releases and default configuration):" ;
+				Echo "  release-raw      - A raw disk image." ;
+				Echo "  release-anyboot  - A custom image for either CD or"
+					"disk." ;
+				Echo "  release-cd       - An ISO9660 CD image." ;
+				Echo "  release-vmware   - A VMware disk image." ;
+				Echo ;
+				Echo "Bootstrap build profiles (minimal image used for"
+                	"initial build of HPKG packages):" ;
+				Echo "  bootstrap-raw    - A raw disk image." ;
+				Echo "  bootstrap-vmware - A VMware disk image." ;
 				Echo ;
 				Echo "Build profile actions:" ;
 				Echo "  build                - Build a Haiku"
@@ -43,12 +67,19 @@ rule ProcessCommandLineArguments
 				Echo "                         action, i.e. it can be"
 					"omitted." ;
 				Echo "  update <target> ...  - Update the specified targets in"
-					" the Haiku" ;
+					"the Haiku" ;
 				Echo "                         image/installation." ;
 				Echo "  update-all           - Update all targets in the Haiku"
 					"image/installation." ;
 				Echo "  mount                - Mount the Haiku image in the"
-					"bfs_shell." ;
+					" bfs_shell." ;
+				Echo ;
+				Echo "Package upload to (git.haiku-os.org/hpkg-upload):" ;
+				Echo "  jam upload-packages <packages ...> " ;
+				Echo ;
+				Echo "Remote repository creation (for testing a set of"
+					" packages):" ;
+				Echo "  jam build-remote-test-repository <packages ...> " ;
 				Echo ;
 				Echo "For more details on how to customize Haiku builds read" ;
 				Echo "build/jam/UserBuildConfig.ReadMe." ;
@@ -66,6 +97,27 @@ rule ProcessCommandLineArguments
 				}
 			}
 
+			# Copy the given set of local package files to the git repository
+			# server, where they will be used for creating a new repository
+			# during the push hook.
+			case upload-packages : {
+				UploadPackages $(JAM_TARGETS[1]) : $(JAM_TARGETS[2-]) ;
+				JAM_TARGETS = $(JAM_TARGETS[1]) ;
+				NotFile $(JAM_TARGETS) ;
+				Always $(JAM_TARGETS) ;
+			}
+
+			# Copy the given set of local package files to the remote repository
+			# and create a new version of that remote repository (useful for
+			# testing the package repository before pushing).
+			case build-remote-test-repository : {
+				BuildRemoteHaikuPortsRepository $(JAM_TARGETS[1])
+					: $(JAM_TARGETS[2-]) ;
+				JAM_TARGETS = $(JAM_TARGETS[1]) ;
+				NotFile $(JAM_TARGETS) ;
+				Always $(JAM_TARGETS) ;
+			}
+
 			# A target starting with "@" is a build profile.
 			case @* : {
 				HAIKU_BUILD_PROFILE = [ Match "@(.*)" : $(JAM_TARGETS[1]) ] ;
@@ -81,7 +133,9 @@ rule ProcessCommandLineArguments
 				if $(JAM_TARGETS[1]) in update-image update-vmware-image
 						update-install {
 					SetUpdateHaikuImageOnly 1 ;
+					HAIKU_PACKAGES_UPDATE_ONLY = 1 ;
 					HAIKU_INCLUDE_IN_IMAGE on $(JAM_TARGETS[2-]) = 1 ;
+					HAIKU_INCLUDE_IN_PACKAGES on $(JAM_TARGETS[2-]) = 1 ;
 
 					if $(JAM_TARGETS[1]) = update-image {
 						JAM_TARGETS = haiku-image ;

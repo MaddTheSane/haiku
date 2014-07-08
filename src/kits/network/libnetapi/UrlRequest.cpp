@@ -6,240 +6,232 @@
  *		Christophe Huriaux, c.huriaux@gmail.com
  */
 
-#include <new>
 
 #include <UrlRequest.h>
-#include <UrlProtocolHttp.h>
 #include <Debug.h>
+#include <stdio.h>
 
 
 BUrlRequest::BUrlRequest(const BUrl& url, BUrlProtocolListener* listener,
-	BUrlContext* context)
+	BUrlContext* context, const char* threadName, const char* protocolName)
 	:
-	fListener(listener),
-	fUrlProtocol(NULL),
-	fResult(url),
+	fUrl(url),
 	fContext(context),
-	fUrl(),
-	fInitStatus(B_ERROR)
+	fListener(listener),
+	fQuit(false),
+	fRunning(false),
+	fThreadStatus(B_NO_INIT),
+	fThreadId(0),
+	fThreadName(threadName),
+	fProtocol(protocolName)
 {
-	SetUrl(url);
-}
-
-
-BUrlRequest::BUrlRequest(const BUrlRequest& other)
-	:
-	fListener(NULL),
-	fUrlProtocol(NULL),
-	fResult(other.fUrl),
-	fContext(),
-	fUrl(),
-	fInitStatus(B_ERROR)
-{
-	*this = other;
 }
 
 
 BUrlRequest::~BUrlRequest()
 {
-	if (fUrlProtocol != NULL)
-		delete fUrlProtocol;
+	Stop();
 }
 
-// #pragma mark Request parameters modification
+
+// #pragma mark URL protocol thread management
 
 
-status_t
-BUrlRequest::SetUrl(const BUrl& url)
+thread_id
+BUrlRequest::Run()
 {
-	fUrl = url;
-	fResult.SetUrl(url);
-
-	if (fUrlProtocol != NULL && url.Protocol() == fUrl.Protocol()) {
-		fUrlProtocol->SetUrl(url);
-		return B_OK;
+	// Thread already running
+	if (fRunning) {
+		PRINT(("BUrlRequest::Run() : Oops, already running ! "
+			"[urlProtocol=%p]!\n", this));
+		return fThreadId;
 	}
 
-	fInitStatus = _SetupProtocol();
-	return fInitStatus;
-}
+	fThreadId = spawn_thread(BUrlRequest::_ThreadEntry, fThreadName,
+		B_NORMAL_PRIORITY, this);
 
+	if (fThreadId < B_OK)
+		return fThreadId;
 
-void
-BUrlRequest::SetContext(BUrlContext* context)
-{
-	fContext = context;
-
-	if (fUrlProtocol != NULL)
-		fUrlProtocol->SetContext(context);
-}
-
-
-void
-BUrlRequest::SetProtocolListener(BUrlProtocolListener* listener)
-{
-	fListener = listener;
-
-	if (fUrlProtocol != NULL)
-		fUrlProtocol->SetListener(listener);
-}
-
-
-bool
-BUrlRequest::SetProtocolOption(int32 option, void* value)
-{
-	if (fUrlProtocol == NULL)
-		return false;
-
-	fUrlProtocol->SetOption(option, value);
-	return true;
-}
-
-
-// #pragma mark Request parameters access
-
-
-const BUrlProtocol*
-BUrlRequest::Protocol()
-{
-	return fUrlProtocol;
-}
-
-
-const BUrlResult&
-BUrlRequest::Result()
-{
-	return fResult;
-}
-
-
-const BUrl&
-BUrlRequest::Url()
-{
-	return fUrl;
-}
-
-
-// #pragma mark Request control
-
-
-status_t
-BUrlRequest::Start()
-{
-	if (fUrlProtocol == NULL) {
-		PRINT(("BUrlRequest::Perform() : Oops, no BUrlProtocol defined!\n"));
-		return B_ERROR;
+	status_t launchErr = resume_thread(fThreadId);
+	if (launchErr < B_OK) {
+		PRINT(("BUrlRequest::Run() : Failed to resume thread %" B_PRId32 "\n",
+			fThreadId));
+		return launchErr;
 	}
 
-	thread_id protocolThread = fUrlProtocol->Run();
-
-	if (protocolThread < B_OK)
-		return protocolThread;
-
-	return B_OK;
+	fRunning = true;
+	return fThreadId;
 }
 
 
 status_t
 BUrlRequest::Pause()
 {
-	if (fUrlProtocol == NULL)
-		return B_ERROR;
-
-	return fUrlProtocol->Pause();
+	// TODO
+	return B_ERROR;
 }
 
 
 status_t
 BUrlRequest::Resume()
 {
-	if (fUrlProtocol == NULL)
-		return B_ERROR;
-
-	return fUrlProtocol->Resume();
+	// TODO
+	return B_ERROR;
 }
 
 
 status_t
-BUrlRequest::Abort()
+BUrlRequest::Stop()
 {
-	if (fUrlProtocol == NULL)
+	if (!fRunning)
 		return B_ERROR;
 
-	status_t returnCode = fUrlProtocol->Stop();
-	delete fUrlProtocol;
-	fUrlProtocol = NULL;
+	status_t threadStatus = B_OK;
+	fQuit = true;
 
-	return returnCode;
+	send_signal(fThreadId, SIGUSR1); // unblock blocking syscalls.
+	wait_for_thread(fThreadId, &threadStatus);
+	return threadStatus;
 }
 
 
-// #pragma mark Request informations
+// #pragma mark URL protocol parameters modification
 
 
 status_t
-BUrlRequest::InitCheck() const
+BUrlRequest::SetUrl(const BUrl& url)
 {
-	return fInitStatus;
+	// We should avoid to change URL while the thread is running ...
+	if (IsRunning())
+		return B_ERROR;
+
+	fUrl = url;
+	return B_OK;
 }
+
+
+status_t
+BUrlRequest::SetContext(BUrlContext* context)
+{
+	if (IsRunning())
+		return B_ERROR;
+
+	fContext = context;
+	return B_OK;
+}
+
+
+status_t
+BUrlRequest::SetListener(BUrlProtocolListener* listener)
+{
+	if (IsRunning())
+		return B_ERROR;
+
+	fListener = listener;
+	return B_OK;
+}
+
+
+// #pragma mark URL protocol parameters access
+
+
+const BUrl&
+BUrlRequest::Url() const
+{
+	return fUrl;
+}
+
+
+BUrlContext*
+BUrlRequest::Context() const
+{
+	return fContext;
+}
+
+
+BUrlProtocolListener*
+BUrlRequest::Listener() const
+{
+	return fListener;
+}
+
+
+const BString&
+BUrlRequest::Protocol() const
+{
+	return fProtocol;
+}
+
+
+// #pragma mark URL protocol informations
 
 
 bool
 BUrlRequest::IsRunning() const
 {
-	if (fUrlProtocol == NULL)
-		return false;
-
-	return fUrlProtocol->IsRunning();
+	return fRunning;
 }
 
 
 status_t
 BUrlRequest::Status() const
 {
-	if (fUrlProtocol == NULL)
-		return B_ERROR;
-
-	return fUrlProtocol->Status();
+	return fThreadStatus;
 }
 
 
-// #pragma mark Overloaded members
+// #pragma mark Thread management
 
 
-BUrlRequest&
-BUrlRequest::operator=(const BUrlRequest& other)
+static void
+empty(int)
 {
-	delete fUrlProtocol;
-	fUrlProtocol = NULL;
-	fUrl = other.fUrl;
-	fListener = other.fListener;
-	fContext = other.fContext;
-	fResult = BUrlResult(other.fUrl);
-	SetUrl(other.fUrl);
-
-	return *this;
 }
 
 
-status_t
-BUrlRequest::_SetupProtocol()
+/*static*/ int32
+BUrlRequest::_ThreadEntry(void* arg)
 {
-	// TODO: instanciate the correct BUrlProtocol w/ the services roster
-	delete fUrlProtocol;
-	fUrlProtocol = NULL;
+	// Setup an (empty) signal handler so we can be stopped by a signal,
+	// without the whole process being killed.
+	// TODO make connect() properly unlock when close() is called on the
+	// socket, and remove this.
+	struct sigaction action;
+	action.sa_handler = empty;
+	action.sa_mask = 0;
+	action.sa_flags = 0;
+	sigaction(SIGUSR1, &action, NULL);
 
-	if (fUrl.Protocol() == "http")
-		fUrlProtocol = new(std::nothrow) BUrlProtocolHttp(fUrl, false, "HTTP",
-			fListener, fContext, &fResult);
-	else if (fUrl.Protocol() == "https")
-		fUrlProtocol = new(std::nothrow) BUrlProtocolHttp(fUrl, true, "HTTPS",
-			fListener, fContext, &fResult);
-	else
-		return B_NO_HANDLER_FOR_PROTOCOL;
+	BUrlRequest* request = reinterpret_cast<BUrlRequest*>(arg);
+	request->fThreadStatus = B_BUSY;
 
-	if (fUrlProtocol == NULL)
-		return B_NO_MEMORY;
+	status_t protocolLoopExitStatus = request->_ProtocolLoop();
+
+	request->fRunning = false;
+	request->fThreadStatus = protocolLoopExitStatus;
+
+	if (request->fListener != NULL) {
+		request->fListener->RequestCompleted(request,
+			protocolLoopExitStatus == B_OK);
+	}
 
 	return B_OK;
+}
+
+
+void
+BUrlRequest::_EmitDebug(BUrlProtocolDebugMessage type,
+	const char* format, ...)
+{
+	if (fListener == NULL)
+		return;
+
+	va_list arguments;
+	va_start(arguments, format);
+
+	char debugMsg[1024];
+	vsnprintf(debugMsg, sizeof(debugMsg), format, arguments);
+	fListener->DebugMessage(this, type, debugMsg);
+	va_end(arguments);
 }

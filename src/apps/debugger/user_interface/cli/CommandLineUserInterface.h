@@ -1,5 +1,5 @@
 /*
- * Copyright 2011, Rene Gollent, rene@gollent.com.
+ * Copyright 2011-2014, Rene Gollent, rene@gollent.com.
  * Copyright 2012, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Distributed under the terms of the MIT License.
  */
@@ -21,7 +21,8 @@ class CommandLineUserInterface : public UserInterface,
 	public ::Team::Listener {
 public:
 								CommandLineUserInterface(bool saveReport,
-									const char* reportPath);
+									const char* reportPath,
+									thread_id reportTargetThread);
 	virtual						~CommandLineUserInterface();
 
 	virtual	const char*			ID() const;
@@ -33,6 +34,8 @@ public:
 									// shut down the UI *now* -- no more user
 									// feedback
 
+	virtual	bool				IsInteractive() const;
+
 	virtual status_t			LoadSettings(const TeamUiSettings* settings);
 	virtual status_t			SaveSettings(TeamUiSettings*& settings)	const;
 
@@ -42,6 +45,7 @@ public:
 	virtual	int32				SynchronouslyAskUser(const char* title,
 									const char* message, const char* choice1,
 									const char* choice2, const char* choice3);
+	virtual	status_t			SynchronouslyAskUserForFile(entry_ref* _ref);
 
 			void				Run();
 									// Called by the main thread, when
@@ -49,6 +53,8 @@ public:
 									// input loop.
 
 	// Team::Listener
+	virtual	void				ThreadStateChanged(
+									const Team::ThreadEvent& event);
 	virtual	void				DebugReportChanged(
 									const Team::DebugReportEvent& event);
 
@@ -76,11 +82,15 @@ private:
 									const CommandEntry* command1,
 									const CommandEntry* command2);
 
+			bool				_ReportTargetThreadStopNeeded() const;
+			void				_SubmitSaveReport();
+
 private:
 			CliContext			fContext;
 			CommandList			fCommands;
 			const char*			fReportPath;
 			bool				fSaveReport;
+			thread_id			fReportTargetThread;
 			sem_id				fShowSemaphore;
 			bool				fShown;
 	volatile bool				fTerminating;

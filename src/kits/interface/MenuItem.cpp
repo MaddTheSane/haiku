@@ -10,7 +10,6 @@
  *		John Scipione, jscipione@gmail.com
  */
 
-//!	Display item for BMenu class
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -186,7 +185,7 @@ BMenuItem::~BMenuItem()
 
 
 void
-BMenuItem::SetLabel(const char *string)
+BMenuItem::SetLabel(const char* string)
 {
 	if (fLabel != NULL) {
 		free(fLabel);
@@ -208,15 +207,15 @@ BMenuItem::SetLabel(const char *string)
 
 
 void
-BMenuItem::SetEnabled(bool state)
+BMenuItem::SetEnabled(bool enable)
 {
-	if (fEnabled == state)
+	if (fEnabled == enable)
 		return;
 
-	fEnabled = state;
+	fEnabled = enable;
 
 	if (fSubmenu != NULL)
-		fSubmenu->SetEnabled(state);
+		fSubmenu->SetEnabled(enable);
 
 	BMenu* menu = fSuper;
 	if (menu != NULL && menu->LockLooper()) {
@@ -227,11 +226,11 @@ BMenuItem::SetEnabled(bool state)
 
 
 void
-BMenuItem::SetMarked(bool state)
+BMenuItem::SetMarked(bool mark)
 {
-	fMark = state;
+	fMark = mark;
 
-	if (state && fSuper != NULL) {
+	if (mark && fSuper != NULL) {
 		MenuPrivate priv(fSuper);
 		priv.ItemMarked(this);
 	}
@@ -267,14 +266,16 @@ BMenuItem::SetTrigger(char trigger)
 
 
 void
-BMenuItem::SetShortcut(char ch, uint32 modifiers)
+BMenuItem::SetShortcut(char shortcut, uint32 modifiers)
 {
-	if (fShortcutChar != 0 && (fModifiers & B_COMMAND_KEY) && fWindow)
+	if (fShortcutChar != 0 && (fModifiers & B_COMMAND_KEY) != 0
+		&& fWindow != NULL) {
 		fWindow->RemoveShortcut(fShortcutChar, fModifiers);
+	}
 
-	fShortcutChar = ch;
+	fShortcutChar = shortcut;
 
-	if (ch != 0)
+	if (shortcut != 0)
 		fModifiers = modifiers | B_COMMAND_KEY;
 	else
 		fModifiers = 0;
@@ -359,7 +360,7 @@ BMenuItem::Frame() const
 
 
 void
-BMenuItem::GetContentSize(float* width, float* height)
+BMenuItem::GetContentSize(float* _width, float* _height)
 {
 	// TODO: Get rid of this. BMenu should handle this
 	// automatically. Maybe it's not even needed, since our
@@ -368,10 +369,10 @@ BMenuItem::GetContentSize(float* width, float* height)
 
 	fCachedWidth = fSuper->StringWidth(fLabel);
 
-	if (width)
-		*width = (float)ceil(fCachedWidth);
-	if (height)
-		*height = MenuPrivate(fSuper).FontHeight();
+	if (_width)
+		*_width = (float)ceil(fCachedWidth);
+	if (_height)
+		*_height = MenuPrivate(fSuper).FontHeight();
 }
 
 
@@ -498,7 +499,7 @@ BMenuItem::Draw()
 
 
 void
-BMenuItem::Highlight(bool flag)
+BMenuItem::Highlight(bool highlight)
 {
 	fSuper->Invalidate(Frame());
 }

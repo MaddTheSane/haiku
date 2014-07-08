@@ -1,103 +1,123 @@
 /*
- * Copyright (c) 2001-2005, Haiku.
+ * Copyright (c) 2001-2014 Haiku, Inc. All rights reserved.
+ * Distributed under the terms of the MIT License.
  *
- * This software is part of the Haiku distribution and is covered 
- * by the MIT license.
- *
- * Author: Daniel Reinhold (danielre@users.sf.net)
+ * Authors:
+ *		Daniel Reinhold, danielre@users.sf.net
+ *		John Scipione, jscipione@gmail.com
  */
 
-/**	Description: lists image info for all currently running teams */
+/*!	Lists image info for all currently running teams. */
 
 
-#include <OS.h>
+#include <ctype.h>
 #include <image.h>
-
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
+
+#include <OS.h>
 
 
 static status_t
 list_images_for_team_by_id(team_id id)
 {
-	team_info teamInfo;
 	image_info imageInfo;
 	int32 cookie = 0;
-	status_t status;
+	team_info teamInfo;
+	char* header;
+	char* format;
+	int i;
+	status_t result = get_team_info(id, &teamInfo);
+	if (id != 1 && result < B_OK)
+		return result;
 
-	status = get_team_info(id, &teamInfo);
-	if (id != 1 && status < B_OK)
-		return status;
+	i = asprintf(&header, "   ID   %*s   %*s  Seq#      Init# Name",
+		sizeof(uintptr_t) * 2, "Text", sizeof(uintptr_t) * 2, "Data");
+	if (i == -1)
+		return B_NO_MEMORY;
+
+	i = asprintf(&format, "%%5" B_PRId32 " 0x%%0%" B_PRIu32 PRIxPTR
+		" 0x%%0%" B_PRIu32 PRIxPTR "  %%4" B_PRId32 " %%10" B_PRIu32 " %%s\n",
+		sizeof(uintptr_t) * 2, sizeof(uintptr_t) * 2);
+	if (i == -1) {
+		free(header);
+		return B_NO_MEMORY;
+	}
 
 	if (id == 1)
 		printf("\nKERNEL TEAM:\n");
 	else
-		printf("\nTEAM %4ld (%s):\n", id, teamInfo.args);
-	printf("   ID                                                             name       text       data seq#      init#\n");
-	printf("------------------------------------------------------------------------------------------------------------\n");
+		printf("\nTEAM %4" B_PRId32 " (%s):\n", id, teamInfo.args);
 
-	while ((status = get_next_image_info(id, &cookie, &imageInfo)) == B_OK) {
-		printf("%5ld %64s %p %p %4ld %10lu\n",
-			imageInfo.id,
-			imageInfo.name,
-			imageInfo.text,
-			imageInfo.data,
-			imageInfo.sequence,
-			imageInfo.init_order);
+	puts(header);
+	for (i = 0; i < 80; i++)
+		putchar('-');
+
+	printf("\n");
+	while ((result = get_next_image_info(id, &cookie, &imageInfo)) == B_OK) {
+		printf(format, imageInfo.id, imageInfo.text, imageInfo.data,
+			imageInfo.sequence, imageInfo.init_order, imageInfo.name);
 	}
-	if (status != B_ENTRY_NOT_FOUND && status != EINVAL) {
-		printf("get images failed: %s\n", strerror(status));
-		return status;
+
+	free(header);
+	free(format);
+
+	if (result != B_ENTRY_NOT_FOUND && result != EINVAL) {
+		printf("get images failed: %s\n", strerror(result));
+		return result;
 	}
+
 	return B_OK;
 }
 
 
 static void
-list_images_for_team(const char *arg)
+list_images_for_team(const char* arg)
 {
 	int32 cookie = 0;
 	team_info info;
+	status_t result;
 
-	if (atoi(arg) > 0) {
-		if (list_images_for_team_by_id(atoi(arg)) == B_OK)
-			return;
-	}
+	if (atoi(arg) > 0 && list_images_for_team_by_id(atoi(arg)) == B_OK)
+		return;
 
-	// search for the team by name
+	/* search for the team by name */
 
 	while (get_next_team_info(&cookie, &info) >= B_OK) {
 		if (strstr(info.args, arg)) {
-			status_t status = list_images_for_team_by_id(info.team);
-			if (status != B_OK)
-				printf("\nCould not retrieve information about team %ld: %s\n",
-					info.team, strerror(status));
+			result = list_images_for_team_by_id(info.team);
+			if (result != B_OK) {
+				printf("\nCould not retrieve information about team %"
+					B_PRId32 ": %s\n", info.team, strerror(result));
+			}
 		}
 	}
 }
 
 
 int
-main(int argc, char **argv)
+main(int argc, char** argv)
 {
-	if (argc == 1) {
-		int32 cookie = 0;
-		team_info info;
+	int32 cookie = 0;
+	team_info info;
+	status_t result;
 
-		// list for all teams
+	if (argc == 1) {
+		/* list for all teams */
 		while (get_next_team_info(&cookie, &info) >= B_OK) {
-			status_t status = list_images_for_team_by_id(info.team);
-			if (status != B_OK)
-				printf("\nCould not retrieve information about team %ld: %s\n",
-					info.team, strerror(status));
+			result = list_images_for_team_by_id(info.team);
+			if (result != B_OK) {
+				printf("\nCould not retrieve information about team %"
+					B_PRId32 ": %s\n", info.team, strerror(result));
+			}
 		}
 	} else {
-		// list for each team_id on the command line
-		while (--argc)
-			list_images_for_team(*++argv);
+		/* list for each team_id on the command line */
+		while (--argc > 0 && ++argv != NULL)
+			list_images_for_team(*argv);
 	}
+
 	return 0;
 }
-

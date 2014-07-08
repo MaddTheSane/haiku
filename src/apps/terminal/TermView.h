@@ -81,7 +81,8 @@ public:
 			int					Columns() const;
 			BRect				SetTermSize(int rows, int cols,
 									bool notifyShell);
-			void				SetTermSize(BRect rect);
+			void				SetTermSize(BRect rect,
+									bool notifyShell = false);
 			void				GetTermSizeFromRect(const BRect &rect,
 									int *rows, int *columns);
 
@@ -274,6 +275,7 @@ private:
 			int					fFontAscent;
 			struct escapement_delta fEscapement;
 			bool				fEmulateBold;
+			bool				fBrightInsteadOfBold;
 
 			// frame resized flag.
 			bool				fFrameResized;

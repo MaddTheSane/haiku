@@ -155,8 +155,8 @@ class SetMinimalCommitment : public VMCacheTraceEntry {
 		virtual void AddDump(TraceOutput& out)
 		{
 			out.Print("vm cache set min commitment: cache: %p, "
-				"commitment: %lld -> %lld", fCache, fOldCommitment,
-				fCommitment);
+				"commitment: %" B_PRIdOFF " -> %" B_PRIdOFF, fCache,
+				fOldCommitment, fCommitment);
 		}
 
 	private:
@@ -178,8 +178,8 @@ class Resize : public VMCacheTraceEntry {
 
 		virtual void AddDump(TraceOutput& out)
 		{
-			out.Print("vm cache resize: cache: %p, size: %lld -> %lld", fCache,
-				fOldSize, fSize);
+			out.Print("vm cache resize: cache: %p, size: %" B_PRIdOFF " -> %"
+				B_PRIdOFF, fCache, fOldSize, fSize);
 		}
 
 	private:
@@ -323,8 +323,8 @@ class InsertPage : public VMCacheTraceEntry {
 
 		virtual void AddDump(TraceOutput& out)
 		{
-			out.Print("vm cache insert page: cache: %p, page: %p, offset: %lld",
-				fCache, fPage, fOffset);
+			out.Print("vm cache insert page: cache: %p, page: %p, offset: %"
+				B_PRIdOFF, fCache, fPage, fOffset);
 		}
 
 	private:
@@ -1383,8 +1383,7 @@ VMCache::_NotifyPageEvents(vm_page* page, uint32 events)
 		if (waiter->page == page && (waiter->events & events) != 0) {
 			// remove from list and unblock
 			*it = waiter->next;
-			InterruptsSpinLocker schedulerLocker(gSchedulerLock);
-			thread_unblock_locked(waiter->thread, B_OK);
+			thread_unblock(waiter->thread, B_OK);
 		} else
 			it = &waiter->next;
 	}

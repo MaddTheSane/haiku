@@ -6,6 +6,7 @@
 #define	_VIEW_H
 
 
+#include <AffineTransform.h>
 #include <Alignment.h>
 #include <Font.h>
 #include <Handler.h>
@@ -136,7 +137,7 @@ public:
 								BView(const char* name, uint32 flags,
 									BLayout* layout = NULL);
 								BView(BRect frame, const char* name,
-									uint32 resizeMask, uint32 flags);
+									uint32 resizingMode, uint32 flags);
 	virtual						~BView();
 
 								BView(BMessage* archive);
@@ -169,7 +170,7 @@ public:
 	virtual	void				MouseUp(BPoint where);
 	virtual	void				MouseMoved(BPoint where, uint32 code,
 									const BMessage* dragMessage);
-	virtual	void				WindowActivated(bool state);
+	virtual	void				WindowActivated(bool active);
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 	virtual	void				KeyUp(const char* bytes, int32 numBytes);
 	virtual	void				Pulse();
@@ -281,9 +282,18 @@ public:
 			cap_mode			LineCapMode() const;
 			float				LineMiterLimit() const;
 
-			void				SetOrigin(BPoint pt);
+			void				SetFillRule(int32 rule);
+			int32				FillRule() const;
+
+			void				SetOrigin(BPoint where);
 			void				SetOrigin(float x, float y);
 			BPoint				Origin() const;
+
+								// Works in addition to Origin and Scale.
+								// May be used in parallel or as a much
+								// more powerful alternative.
+			void				SetTransform(BAffineTransform transform);
+			BAffineTransform	Transform() const;
 
 			void				PushState();
 			void				PopState();
@@ -512,7 +522,7 @@ public:
 			void				ScrollBy(float dh, float dv);
 			void				ScrollTo(float x, float y);
 	virtual	void				ScrollTo(BPoint where);
-	virtual	void				MakeFocus(bool focusState = true);
+	virtual	void				MakeFocus(bool focus = true);
 			bool				IsFocus() const;
 
 	virtual	void				Show();
@@ -526,7 +536,7 @@ public:
 	virtual	void				GetPreferredSize(float* _width, float* _height);
 	virtual	void				ResizeToPreferred();
 
-			BScrollBar*			ScrollBar(orientation posture) const;
+			BScrollBar*			ScrollBar(orientation direction) const;
 
 	virtual	BHandler*			ResolveSpecifier(BMessage* message, int32 index,
 									BMessage* specifier, int32 form,
@@ -540,7 +550,7 @@ public:
 
 	virtual	status_t			Perform(perform_code code, void* data);
 
-	virtual	void				DrawAfterChildren(BRect r);
+	virtual	void				DrawAfterChildren(BRect updateRect);
 
 	// layout related
 
@@ -600,7 +610,7 @@ protected:
 
 	virtual	void				LayoutChanged();
 
-			void				ScrollWithMouseWheelDelta(BScrollBar*, float);
+			status_t			ScrollWithMouseWheelDelta(BScrollBar*, float);
 
 private:
 			void				_Layout(bool force, BLayoutContext* context);
@@ -630,7 +640,7 @@ private:
 	friend class BWindow;
 
 			void				_InitData(BRect frame, const char* name,
-									uint32 resizeMask, uint32 flags);
+									uint32 resizingMode, uint32 flags);
 			status_t			_SetViewBitmap(const BBitmap* bitmap,
 									BRect srcRect, BRect dstRect,
 									uint32 followFlags, uint32 options);
@@ -710,7 +720,7 @@ private:
 			bool				fAttached;
 			bool				_unused_bool1;
 			bool				_unused_bool2;
-			BPrivate::ViewState* fState;
+			::BPrivate::ViewState* fState;
 			BRect				fBounds;
 			BShelf*				fShelf;
 			uint32				fEventMask;

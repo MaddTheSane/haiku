@@ -1,4 +1,4 @@
-1	finnish	x-vnd.haiku-icon_o_matic	3933520036
+1	finnish	x-vnd.haiku-icon_o_matic	28048799
 Select All	Icon-O-Matic-PathManipulator		Valitse kaikki
 Add Style	Icon-O-Matic-AddStylesCmd		Lisää tyyli
 Color (#%02x%02x%02x)	Style name after dropping a color		Väri (#%02x%02x%02x)
@@ -12,7 +12,6 @@ New	Icon-O-Matic-Menu-File		Uusi
 Icon-O-Matic might not have interpreted all data from the SVG when it was loaded. By overwriting the original file, this information would now be lost.	Icon-O-Matic-SVGExport		Kuvakemaatti ei ehkä tulkitse kaikkia tietoja SVG:stä ohjelmaa ladattaessa. Jos alkuperäinen tiedosto korvataan, nämä tiedot menetetään.
 Paste Properties	Icon-O-Matic-Properties		Liittämisominaisuudet
 Stroke	Transformation		Piirto
-Save Icon	Dialog title		Tallenna kuvake
 Closed	Icon-O-Matic-PropertyNames		Suljettu
 Remove Path	Icon-O-Matic-RemovePathsCmd		Poista polku
 Add shape with path	Icon-O-Matic-Menu-Shape		Lisää hahmo polulla
@@ -79,6 +78,7 @@ Perspective	Transformation		Perspektiivi
 Move Transformer	Icon-O-Matic-MoveTransformersCmd		Siirrä muunnin
 Opacity	Icon-O-Matic-PropertyNames		Läpinäkymättömyys
 Add with path	Icon-O-Matic-ShapesList		Lisää polulla
+Export icon	Dialog title		Vie kuvake
 Gradient type	Icon-O-Matic-StyleTypes		Kaltevuustyyppi
 Icon-O-Matic	System name		Kuvakemaatti
 Cancel	Icon-O-Matic-Menu-Settings		Peru
@@ -108,7 +108,6 @@ Move Shapes	Icon-O-Matic-MoveShapesCommand		Siirrä hahmoja
 Remove Styles	Icon-O-Matic-RemoveStylesCmd		Poista tyylejä
 The text you are trying to import is quite long,are you sure?	Icon-O-Matic-StyledTextImport		Teksti, jota yrität tuoda, on aika pitkä. Oletko varma?
 Add	Icon-O-Matic-TransformersList		Lisää
-Export Icon	Dialog title		Vie kuvake
 Color	Icon-O-Matic-StyleTypes		Väri
 Settings…	Icon-O-Matic-SavePanel		Asetukset...
 Remove	Icon-O-Matic-PathManipulator		Poista
@@ -160,7 +159,6 @@ Snap to grid	Icon-O-Matic-Menu-Settings		Kiinnity rasteriin
 Remove	Icon-O-Matic-ShapesList		Poista
 Yes	Icon-O-Matic-StyledTextImport		Kyllä
 Transformation	Icon-O-Matic-TransformersList		Muunnos
-Save image	Icon-O-Matic-SavePanel		Tallenna kuva
 Add Styles	Icon-O-Matic-AddStylesCmd		Lisää tyylejä
 Remove Control Points	Icon-O-Matic-RemovePointsCmd		Poista ohjainpisteet
 Format	Icon-O-Matic-SavePanel		Muoto
@@ -193,6 +191,7 @@ Overwrite	Icon-O-Matic-SVGExport		Korvaa
 Freeze Shapes	Icon-O-Matic-FreezeTransformationCmd		Jähmetä hahmot
 Split Control Point	Icon-O-Matic-SplitPointsCmd		Halkaise ohjauspiste
 Open…	Icon-O-Matic-Menu-File		Avaa...
+Save icon	Dialog title		Tallenna kuvake
 Color (#%02x%02x%02x)	Icon-O-Matic-StyledTextImport		Väri (#%02x%02x%02x)
 Edit Gradient	Icon-O-Matic-SetGradientCmd		Muokkaa kaltevuutta
 Clean Up Path	Icon-O-Matic-CleanUpPathCmd		Nollaa polku

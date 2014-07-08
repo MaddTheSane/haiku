@@ -1,5 +1,5 @@
 /*
- * Copyright 2007-2010, Ingo Weinhold, ingo_weinhold@gmx.de.
+ * Copyright 2007-2014, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _FSSH_API_WRAPPER_H
@@ -50,6 +50,7 @@
 // #pragma mark - fssh_atomic.h
 
 #define atomic_set			fssh_atomic_set
+#define atomic_get_and_Set	fssh_atomic_get_and_set
 #define atomic_test_and_set	fssh_atomic_test_and_set
 #define atomic_add			fssh_atomic_add
 #define atomic_and			fssh_atomic_and
@@ -435,6 +436,10 @@
 #define B_SET_INTERRUPTABLE_IO		FSSH_B_SET_INTERRUPTABLE_IO
 #define B_FLUSH_DRIVE_CACHE			FSSH_B_FLUSH_DRIVE_CACHE
 #define B_GET_PATH_FOR_DEVICE		FSSH_B_GET_PATH_FOR_DEVICE
+#define B_GET_ICON_NAME				FSSH_B_GET_ICON_NAME
+#define B_GET_VECTOR_ICON			FSSH_B_GET_VECTOR_ICON
+#define B_GET_DEVICE_NAME			FSSH_B_GET_DEVICE_NAME
+#define B_TRIM_DEVICE				FSSH_B_TRIM_DEVICE
 #define B_GET_NEXT_OPEN_DEVICE		FSSH_B_GET_NEXT_OPEN_DEVICE
 #define B_ADD_FIXED_DRIVER			FSSH_B_ADD_FIXED_DRIVER
 #define B_REMOVE_FIXED_DRIVER		FSSH_B_REMOVE_FIXED_DRIVER
@@ -462,6 +467,7 @@
 #define driver_path				fssh_driver_path
 #define open_device_iterator	fssh_open_device_iterator
 #define device_icon				fssh_device_icon
+#define fs_trim_data			fssh_fs_trim_data
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -567,6 +573,8 @@
 #define B_BUSTED_PIPE			FSSH_B_BUSTED_PIPE
 #define B_UNSUPPORTED			FSSH_B_UNSUPPORTED
 #define B_PARTITION_TOO_SMALL	FSSH_B_PARTITION_TOO_SMALL
+#define B_PARTIAL_READ			FSSH_B_PARTIAL_READ
+#define B_PARTIAL_WRITE			FSSH_B_PARTIAL_WRITE
 
 /* POSIX Errors */
 #define E2BIG			FSSH_E2BIG

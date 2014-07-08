@@ -75,11 +75,11 @@ public:
 	virtual	void				MouseUp(BPoint where);
 	virtual	void				MouseMoved(BPoint where, uint32 code,
 									const BMessage* dragMessage);
-	virtual	void				WindowActivated(bool state);
+	virtual	void				WindowActivated(bool active);
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 	virtual	void				Pulse();
-	virtual	void				FrameResized(float width, float height);
-	virtual	void				MakeFocus(bool focusState = true);
+	virtual	void				FrameResized(float newWidth, float newHeight);
+	virtual	void				MakeFocus(bool focus = true);
 	virtual	void				MessageReceived(BMessage* message);
 
 	virtual	BHandler*			ResolveSpecifier(BMessage* message,
@@ -114,7 +114,7 @@ public:
 
 			int32				CountLines() const;
 			int32				CurrentLine() const;
-			void				GoToLine(int32 lineIndex);
+			void				GoToLine(int32 lineNumber);
 
 	virtual	void				Cut(BClipboard* clipboard);
 	virtual	void				Copy(BClipboard* clipboard);
@@ -159,8 +159,8 @@ public:
 
 	virtual	bool				CanEndLine(int32 offset);
 
-			float				LineWidth(int32 lineIndex = 0) const;
-			float				LineHeight(int32 lineIndex = 0) const;
+			float				LineWidth(int32 lineNumber = 0) const;
+			float				LineHeight(int32 lineNumber = 0) const;
 			float				TextHeight(int32 startLine,
 									int32 endLine) const;
 
@@ -292,10 +292,10 @@ private:
 
 			void				_HandleBackspace();
 			void				_HandleArrowKey(uint32 arrowKey,
-									bool commandKeyDown = false);
+									int32 modifiers = -1);
 			void				_HandleDelete();
 			void				_HandlePageKey(uint32 pageKey,
-									bool commandKeyDown = false);
+									int32 modifiers = -1);
 			void				_HandleAlphaKey(const char* bytes,
 									int32 numBytes);
 
@@ -382,6 +382,9 @@ private:
 			int32				_NextInitialByte(int32 offset) const;
 			int32				_PreviousInitialByte(int32 offset) const;
 
+			int32				_PreviousLineStart(int32 offset);
+			int32				_NextLineEnd(int32 offset);
+
 			int32				_PreviousWordBoundary(int32 offset);
 			int32				_NextWordBoundary(int32 offset);
 
@@ -449,10 +452,16 @@ private:
 			float				fMinTextRectWidth;
 			LayoutData*			fLayoutData;
 			int32				fLastClickOffset;
-			bool				fInstalledNavigateWordwiseShortcuts;
-			bool				fInstalledNavigateToTopOrBottomShortcuts;
-			bool				fInstalledSelectWordwiseShortcuts;
-			bool				fInstalledSelectToTopOrBottomShortcuts;
+
+			bool				fInstalledNavigateCommandWordwiseShortcuts;
+			bool				fInstalledNavigateOptionWordwiseShortcuts;
+			bool				fInstalledNavigateOptionLinewiseShortcuts;
+			bool				fInstalledNavigateHomeEndDocwiseShortcuts;
+
+			bool				fInstalledSelectCommandWordwiseShortcuts;
+			bool				fInstalledSelectOptionWordwiseShortcuts;
+			bool				fInstalledSelectOptionLinewiseShortcuts;
+			bool				fInstalledSelectHomeEndDocwiseShortcuts;
 
 			uint32				_reserved[6];
 };

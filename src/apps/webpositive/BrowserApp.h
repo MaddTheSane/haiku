@@ -35,10 +35,12 @@
 
 
 class BNetworkCookieJar;
+class BUrlContext;
 class DownloadWindow;
 class BrowserWindow;
 class SettingsMessage;
 class SettingsWindow;
+class ConsoleWindow;
 
 
 class BrowserApp : public BApplication {
@@ -57,9 +59,11 @@ private:
 			void				_RefsReceived(BMessage* message,
 									int32* pagesCreated = NULL,
 									bool* fullscreen = NULL);
-			void				_CreateNewPage(const BString& url,
-									bool fullscreen = false);
-			void				_CreateNewWindow(const BString& url,
+			BrowserWindow*		_CreateNewPage(const BString& url,
+									BrowserWindow* window = NULL,
+									bool fullscreen = false,
+									bool useBlankTab = true);
+			BrowserWindow*		_CreateNewWindow(const BString& url,
 									bool fullscreen = false);
 			void				_CreateNewTab(BrowserWindow* window,
 									const BString& url, bool select);
@@ -74,10 +78,11 @@ private:
 
 			SettingsMessage*	fSettings;
 			SettingsMessage*	fCookies;
-			BNetworkCookieJar*	fCookieJar;
+			BUrlContext*		fContext;
 
 			DownloadWindow*		fDownloadWindow;
 			SettingsWindow*		fSettingsWindow;
+			ConsoleWindow*		fConsoleWindow;
 };
 
 

@@ -10,7 +10,8 @@ if $(TARGET_PLATFORM) != haiku {
 		# Unfortunately we get more than we want, namely all POSIX headers.
 }
 
-UsePrivateHeaders kernel net ;
+UsePrivateKernelHeaders ;
+UsePrivateHeaders net ;
 
 KernelAddon loopback :
 	loopback.cpp
@@ -19,7 +20,3 @@ KernelAddon loopback :
 # Installation
 HaikuInstall install-networking : /boot/home/config/add-ons/kernel/haiku_network/devices
 	: loopback ;
-
-Package haiku-networkingkit-cvs :
-	haiku :
-	boot home config add-ons kernel haiku_network protocols ;

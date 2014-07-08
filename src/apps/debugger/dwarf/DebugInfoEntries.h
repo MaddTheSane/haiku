@@ -1,6 +1,6 @@
 /*
  * Copyright 2009, Ingo Weinhold, ingo_weinhold@gmx.de.
- * Copyright 2013, Rene Gollent, rene@gollent.com.
+ * Copyright 2013-2014, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 #ifndef DEBUG_INFO_ENTRIES_H
@@ -281,6 +281,8 @@ public:
 	virtual	const char*			Description() const;
 	virtual	DebugInfoEntry*		AbstractOrigin() const;
 
+	virtual DebugInfoEntry*		SignatureType() const;
+
 	virtual	bool				IsDeclaration() const;
 
 	virtual	status_t			AddAttribute_accessibility(uint16 attributeName,
@@ -296,6 +298,8 @@ public:
 									uint16 attributeName,
 									const AttributeValue& value);
 										// TODO: !interface
+	virtual	status_t			AddAttribute_signature(uint16 attributeName,
+									const AttributeValue& value);
 
 // TODO:
 // DW_AT_visibility			// !interface
@@ -307,6 +311,7 @@ protected:
 			const char*			fDescription;
 			DeclarationLocation	fDeclarationLocation;
 			DebugInfoEntry*		fAbstractOrigin;
+			DebugInfoEntry*		fSignatureType;
 			uint8				fAccessibility;
 			bool				fDeclaration;
 };
@@ -1628,6 +1633,14 @@ private:
 class DIETypeUnit : public DIECompileUnitBase {
 public:
 								DIETypeUnit();
+
+	virtual	uint16				Tag() const;
+};
+
+
+class DIERValueReferenceType : public DIEReferenceType {
+public:
+								DIERValueReferenceType();
 
 	virtual	uint16				Tag() const;
 };

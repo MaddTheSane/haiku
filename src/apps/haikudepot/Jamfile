@@ -1,0 +1,88 @@
+SubDir HAIKU_TOP src apps haikudepot ;
+
+UsePrivateHeaders interface shared package ;
+
+# source directories
+local sourceDirs =
+	textview
+;
+
+local sourceDir ;
+for sourceDir in $(sourceDirs) {
+	SEARCH_SOURCE += [ FDirName $(HAIKU_TOP) src apps haikudepot $(sourceDir) ] ;
+}
+
+SEARCH_SOURCE += [ FDirName $(HAIKU_TOP) src servers package ] ;
+
+local textDocumentSources =
+	Bullet.cpp
+	BulletData.cpp
+	CharacterStyle.cpp
+	CharacterStyleData.cpp
+	MarkupParser.cpp
+	Paragraph.cpp
+	ParagraphLayout.cpp
+	ParagraphStyle.cpp
+	ParagraphStyleData.cpp
+	TextDocument.cpp
+	TextDocumentLayout.cpp
+	TextDocumentView.cpp
+	TextEditor.cpp
+	TextListener.cpp
+	TextSelection.cpp
+	TextSpan.cpp
+	TextView.cpp
+;
+
+Application HaikuDepot :
+	App.cpp
+	BitmapButton.cpp
+	BitmapView.cpp
+	DecisionProvider.cpp
+	FilterView.cpp
+	JobStateListener.cpp
+	main.cpp
+	MainWindow.cpp
+	Model.cpp
+	PackageAction.cpp
+	PackageActionHandler.cpp
+	PackageInfo.cpp
+	PackageInfoListener.cpp
+	PackageInfoView.cpp
+	PackageListView.cpp
+	PackageManager.cpp
+	RatePackageWindow.cpp
+	support.cpp
+	WebAppInterface.cpp
+
+	# package_daemon
+	ProblemWindow.cpp
+	ResultWindow.cpp
+
+	# text view stuff
+	$(textDocumentSources)
+
+	: be package bnetapi translation libcolumnlistview.a libshared.a
+		$(TARGET_LIBSTDC++) $(TARGET_LIBSUPC++) localestub
+	: HaikuDepot.rdef
+;
+
+DoCatalogs HaikuDepot :
+	x-vnd.Haiku-HaikuDepot
+	:
+	App.cpp
+	FilterView.cpp
+	MainWindow.cpp
+	Model.cpp
+	PackageInfoView.cpp
+	PackageListView.cpp
+	PackageManager.cpp
+	RatePackageWindow.cpp
+;
+
+Application TextDocumentTest :
+	TextDocumentTest.cpp
+	$(textDocumentSources)
+
+	: be translation libshared.a $(TARGET_LIBSUPC++)
+;

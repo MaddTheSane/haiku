@@ -1,56 +1,55 @@
 /*
- * Copyright 2003-2006, Haiku.
+ * Copyright 2003-2013 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Michael Phipps
- *		Jérôme Duval, jerome.duval@free.fr
  *		Axel Dörfler, axeld@pinc-software.de
+ *		Jérôme Duval, jerome.duval@free.fr
+ *		Michael Phipps
+ *		John Scipione, jscipione@gmail.com
  */
 #ifndef SCREEN_SAVER_RUNNER_H
 #define SCREEN_SAVER_RUNNER_H
 
 
-#include <SupportDefs.h>
-#include <DirectWindow.h>
+#include <ScreenSaver.h>
+#include <View.h>
+#include <Window.h>
 
-class BScreenSaver;
-class BView;
-class ScreenSaverSettings;
+#include "ScreenSaverSettings.h"
 
 
 class ScreenSaverRunner {
-	public:
-		ScreenSaverRunner(BWindow* window, BView* view,
-			bool preview, ScreenSaverSettings& settings);
-		~ScreenSaverRunner();
+public:
+								ScreenSaverRunner(BWindow* window,
+									BView* view,
+									ScreenSaverSettings& settings);
+								~ScreenSaverRunner();
 
-		BScreenSaver* ScreenSaver() const;
-		bool HasStarted() const;
+			BScreenSaver*		ScreenSaver() const { return fSaver; };
 
-		status_t Run();
-		void Quit();
+			status_t			Run();
+			void				Quit();
 
-		void Suspend();
-		void Resume();
+			status_t			Suspend();
+			status_t			Resume();
 
-	private:
-		void _LoadAddOn();
-		void _CleanUp();
-		static status_t _ThreadFunc(void* data);
-		void _Run();
+private:
+			void				_LoadAddOn();
+			void				_CleanUp();
+	static	status_t			_ThreadFunc(void* data);
+			status_t			_Run();
 
-		BScreenSaver*		fSaver;
-		BWindow*			fWindow;
-		BDirectWindow*		fDirectWindow;
-		BView*				fView;
-		ScreenSaverSettings& fSettings;
-		bool				fPreview;
-		bool				fHasStarted;
+			BWindow*			fWindow;
+			BView*				fView;
+			bool				fIsDirectDraw;
+			ScreenSaverSettings& fSettings;
 
-		image_id			fAddonImage;
-		thread_id			fThread;
-		volatile bool		fQuitting;
+			BScreenSaver*		fSaver;
+
+			image_id			fAddonImage;
+			thread_id			fThread;
+			volatile bool		fQuitting;
 };
 
 #endif // SCREEN_SAVER_RUNNER_H

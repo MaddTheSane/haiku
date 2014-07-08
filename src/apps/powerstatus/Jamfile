@@ -2,7 +2,7 @@ SubDir HAIKU_TOP src apps powerstatus ;
 
 SetSubDirSupportedPlatformsBeOSCompatible ;
 
-UsePrivateHeaders shared ;
+UsePrivateHeaders interface shared ;
 UsePrivateSystemHeaders ;
 
 Application PowerStatus :
@@ -13,7 +13,7 @@ Application PowerStatus :
 	PowerStatusWindow.cpp
 	PowerStatusView.cpp
 	PowerStatus.cpp
-	: be libshared.a $(TARGET_LIBSUPC++) $(HAIKU_LOCALE_LIBS)
+	: be libshared.a $(TARGET_LIBSUPC++) localestub
 	: PowerStatus.rdef
 ;
 DoCatalogs PowerStatus :

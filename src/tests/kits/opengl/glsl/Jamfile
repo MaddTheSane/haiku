@@ -1,20 +1,17 @@
 SubDir HAIKU_TOP src tests kits opengl glsl ;
-SubDirSysHdrs $(HAIKU_MESA_HEADERS) ;
-
-SetSubDirSupportedPlatformsBeOSCompatible ;
-
-if $(TARGET_PLATFORM) != haiku {
-	# Needed for <GL/glut.h>, not present in R5.
-	# Unfortunately we also get the other headers there,
-	# that we don't really want.
-	UsePublicHeaders opengl ;
-}
+UseBuildFeatureHeaders mesa ;
+UseBuildFeatureHeaders glu ;
+UseLibraryHeaders glut ;
 
 local shadersources =
 	shaderutil.c
 ;
 
-Includes [ FGristFiles $(shadersources) ] : $(HAIKU_MESA_HEADERS_DEPENDENCY) ;
+Includes [ FGristFiles $(shadersources) ]
+	:
+	[ BuildFeatureAttribute mesa : headers ]
+	[ BuildFeatureAttribute glu : headers ]
+;
 
 StaticLibrary libshaderutil.a :
 	$(shadersources)
@@ -22,5 +19,8 @@ StaticLibrary libshaderutil.a :
 
 SimpleTest brick :
 	brick.c
-	: libshaderutil.a be GL
+	:
+	libshaderutil.a be libglut.so
+	[ BuildFeatureAttribute mesa : library ]
+	[ BuildFeatureAttribute glu : library ]
 ;

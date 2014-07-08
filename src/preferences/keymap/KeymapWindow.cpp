@@ -1,12 +1,13 @@
 /*
- * Copyright 2004-2010 Haiku Inc. All rights reserved.
+ * Copyright 2004-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Sandor Vroemisse
- *		Jérôme Duval
  *		Alexandre Deckner, alex@zappotek.com
- *		Axel Dörfler, axeld@pinc-software.de.
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		Jérôme Duval
+ *		John Scipione, jscipione@gmai.com
+ *		Sandor Vroemisse
  */
 
 
@@ -21,7 +22,7 @@
 #include <Directory.h>
 #include <File.h>
 #include <FindDirectory.h>
-#include <GroupLayoutBuilder.h>
+#include <LayoutBuilder.h>
 #include <ListView.h>
 #include <Locale.h>
 #include <MenuBar.h>
@@ -37,6 +38,7 @@
 #include "KeyboardLayoutView.h"
 #include "KeymapApplication.h"
 #include "KeymapListItem.h"
+#include "KeymapNames.h"
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -55,6 +57,7 @@ static const uint32 kMsgMenuFontChanged = 'mMFC';
 static const uint32 kMsgSystemMapSelected = 'SmST';
 static const uint32 kMsgUserMapSelected = 'UmST';
 
+static const uint32 kMsgDefaultKeymap = 'Dflt';
 static const uint32 kMsgRevertKeymap = 'Rvrt';
 static const uint32 kMsgKeymapUpdated = 'kMup';
 
@@ -67,17 +70,26 @@ static const uint32 kMsgDeadKeyTildeChanged = 'dkTc';
 static const char* kDeadKeyTriggerNone = "<none>";
 
 static const char* kCurrentKeymapName = "(Current)";
+static const char* kDefaultKeymapName = "US-International";
+
+
+static int
+compare_key_list_items(const void* a, const void* b)
+{
+	KeymapListItem* item1 = *(KeymapListItem**)a;
+	KeymapListItem* item2 = *(KeymapListItem**)b;
+	return BLocale::Default()->StringCompare(item1->Text(), item2->Text());
+}
 
 
 KeymapWindow::KeymapWindow()
 	:
-	BWindow(BRect(80, 50, 880, 380), B_TRANSLATE_SYSTEM_NAME("Keymap"),
+	BWindow(BRect(80, 50, 650, 300), B_TRANSLATE_SYSTEM_NAME("Keymap"),
 		B_TITLED_WINDOW, B_ASYNCHRONOUS_CONTROLS | B_AUTO_UPDATE_SIZE_LIMITS)
 {
-	SetLayout(new BGroupLayout(B_VERTICAL));
-
 	fKeyboardLayoutView = new KeyboardLayoutView("layout");
 	fKeyboardLayoutView->SetKeymap(&fCurrentMap);
+	fKeyboardLayoutView->SetExplicitMinSize(BSize(B_SIZE_UNSET, 192));
 
 	fTextControl = new BTextControl(B_TRANSLATE("Sample and clipboard:"),
 		"", NULL);
@@ -85,27 +97,33 @@ KeymapWindow::KeymapWindow()
 	fSwitchShortcutsButton = new BButton("switch", "",
 		new BMessage(kMsgSwitchShortcuts));
 
-	fRevertButton = new BButton("revertButton", B_TRANSLATE("Revert"),
-		new BMessage(kMsgRevertKeymap));
-
 	// controls pane
-	AddChild(BGroupLayoutBuilder(B_VERTICAL)
+	BLayoutBuilder::Group<>(this, B_VERTICAL)
 		.Add(_CreateMenu())
-		.Add(BGroupLayoutBuilder(B_HORIZONTAL, 10)
+		.AddGroup(B_HORIZONTAL)
+			.SetInsets(B_USE_DEFAULT_SPACING, 0, B_USE_DEFAULT_SPACING,
+				B_USE_DEFAULT_SPACING)
 			.Add(_CreateMapLists(), 0.25)
-			.Add(BGroupLayoutBuilder(B_VERTICAL, 10)
+			.AddGroup(B_VERTICAL)
 				.Add(fKeyboardLayoutView)
-				//.Add(new BStringView("text label", "Sample and clipboard:"))
-				.Add(BGroupLayoutBuilder(B_HORIZONTAL, 10)
+				.AddGroup(B_HORIZONTAL)
 					.Add(_CreateDeadKeyMenuField(), 0.0)
 					.AddGlue()
-					.Add(fSwitchShortcutsButton))
+					.Add(fSwitchShortcutsButton)
+					.End()
 				.Add(fTextControl)
 				.AddGlue(0.0)
-				.Add(BGroupLayoutBuilder(B_HORIZONTAL, 10)
-					.AddGlue(0.0)
-					.Add(fRevertButton)))
-			.SetInsets(10, 10, 10, 10)));
+				.AddGroup(B_HORIZONTAL)
+					.Add(fDefaultsButton = new BButton("defaultsButton",
+						B_TRANSLATE("Defaults"),
+							new BMessage(kMsgDefaultKeymap)))
+					.Add(fRevertButton = new BButton("revertButton",
+						B_TRANSLATE("Revert"), new BMessage(kMsgRevertKeymap)))
+					.AddGlue()
+					.End()
+				.End()
+			.End()
+		.End();
 
 	fKeyboardLayoutView->SetTarget(fTextControl->TextView());
 	fTextControl->MakeFocus();
@@ -201,7 +219,7 @@ KeymapWindow::MessageReceived(BMessage* message)
 		case B_SAVE_REQUESTED:
 		{
 			entry_ref ref;
-			const char *name;
+			const char* name;
 			if (message->FindRef("directory", &ref) == B_OK
 				&& message->FindString("name", &name) == B_OK) {
 				BDirectory directory(&ref);
@@ -244,7 +262,7 @@ KeymapWindow::MessageReceived(BMessage* message)
 
 		case kMsgMenuFontChanged:
 		{
-			BMenuItem *item = fFontMenu->FindMarked();
+			BMenuItem* item = fFontMenu->FindMarked();
 			if (item != NULL) {
 				BFont font;
 				font.SetFamilyAndStyle(item->Label(), NULL);
@@ -292,6 +310,11 @@ KeymapWindow::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case kMsgDefaultKeymap:
+			_DefaultKeymap();
+			_UpdateButtons();
+			break;
+
 		case kMsgRevertKeymap:
 			_RevertKeymap();
 			_UpdateButtons();
@@ -299,31 +322,62 @@ KeymapWindow::MessageReceived(BMessage* message)
 
 		case kMsgUpdateModifierKeys:
 		{
-			uint32 keycode;
+			uint32 keyCode;
+			bool unset;
+			if (message->FindBool("unset", &unset) != B_OK)
+				unset = false;
 
-			if (message->FindUInt32("left_shift_key", &keycode) == B_OK)
-				fCurrentMap.SetModifier(keycode, B_LEFT_SHIFT_KEY);
+			if (message->FindUInt32("left_shift_key", &keyCode) == B_OK) {
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode,
+					B_LEFT_SHIFT_KEY);
+			}
 
-			if (message->FindUInt32("right_shift_key", &keycode) == B_OK)
-				fCurrentMap.SetModifier(keycode, B_RIGHT_SHIFT_KEY);
+			if (message->FindUInt32("right_shift_key", &keyCode) == B_OK) {
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode,
+					B_RIGHT_SHIFT_KEY);
+			}
 
-			if (message->FindUInt32("left_control_key", &keycode) == B_OK)
-				fCurrentMap.SetModifier(keycode, B_LEFT_CONTROL_KEY);
+			if (message->FindUInt32("left_control_key", &keyCode) == B_OK) {
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode,
+					B_LEFT_CONTROL_KEY);
+			}
 
-			if (message->FindUInt32("right_control_key", &keycode) == B_OK)
-				fCurrentMap.SetModifier(keycode, B_RIGHT_CONTROL_KEY);
+			if (message->FindUInt32("right_control_key", &keyCode) == B_OK) {
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode,
+					B_RIGHT_CONTROL_KEY);
+			}
 
-			if (message->FindUInt32("left_option_key", &keycode) == B_OK)
-				fCurrentMap.SetModifier(keycode, B_LEFT_OPTION_KEY);
+			if (message->FindUInt32("left_option_key", &keyCode) == B_OK) {
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode,
+					B_LEFT_OPTION_KEY);
+			}
 
-			if (message->FindUInt32("right_option_key", &keycode) == B_OK)
-				fCurrentMap.SetModifier(keycode, B_RIGHT_OPTION_KEY);
+			if (message->FindUInt32("right_option_key", &keyCode) == B_OK) {
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode,
+					B_RIGHT_OPTION_KEY);
+			}
 
-			if (message->FindUInt32("left_command_key", &keycode) == B_OK)
-				fCurrentMap.SetModifier(keycode, B_LEFT_COMMAND_KEY);
+			if (message->FindUInt32("left_command_key", &keyCode) == B_OK) {
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode,
+					B_LEFT_COMMAND_KEY);
+			}
 
-			if (message->FindUInt32("right_command_key", &keycode) == B_OK)
-				fCurrentMap.SetModifier(keycode, B_RIGHT_COMMAND_KEY);
+			if (message->FindUInt32("right_command_key", &keyCode) == B_OK) {
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode,
+					B_RIGHT_COMMAND_KEY);
+			}
+
+			if (message->FindUInt32("menu_key", &keyCode) == B_OK)
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode, B_MENU_KEY);
+
+			if (message->FindUInt32("caps_key", &keyCode) == B_OK)
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode, B_CAPS_LOCK);
+
+			if (message->FindUInt32("num_key", &keyCode) == B_OK)
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode, B_NUM_LOCK);
+
+			if (message->FindUInt32("scroll_key", &keyCode) == B_OK)
+				fCurrentMap.SetModifier(unset ? 0x00 : keyCode, B_SCROLL_LOCK);
 
 			_UpdateButtons();
 			fKeyboardLayoutView->SetKeymap(&fCurrentMap);
@@ -445,8 +499,8 @@ KeymapWindow::_CreateMenu()
 
 	for (int32 i = 0; i < numFamilies; i++) {
 		if (get_font_family(i, &family, &flags) == B_OK) {
-			BMenuItem *item =
-				new BMenuItem(family, new BMessage(kMsgMenuFontChanged));
+			BMenuItem* item
+				= new BMenuItem(family, new BMessage(kMsgMenuFontChanged));
 			fFontMenu->AddItem(item);
 
 			if (!strcmp(family, currentFamily))
@@ -537,12 +591,12 @@ KeymapWindow::_CreateMapLists()
 	_SetListViewSize(fSystemListView);
 	_SetListViewSize(fUserListView);
 
-	return BGroupLayoutBuilder(B_VERTICAL)
+	return BLayoutBuilder::Group<>(B_VERTICAL)
 		.Add(new BStringView("system", B_TRANSLATE("System:")))
 		.Add(systemScroller, 3)
 		.Add(new BStringView("user", B_TRANSLATE("User:")))
 		.Add(userScroller)
-		.TopView();
+		.View();
 }
 
 
@@ -550,9 +604,10 @@ void
 KeymapWindow::_AddKeyboardLayouts(BMenu* menu)
 {
 	directory_which dataDirectories[] = {
+		B_USER_NONPACKAGED_DATA_DIRECTORY,
 		B_USER_DATA_DIRECTORY,
-		B_COMMON_DATA_DIRECTORY,
-		B_BEOS_DATA_DIRECTORY
+		B_SYSTEM_NONPACKAGED_DATA_DIRECTORY,
+		B_SYSTEM_DATA_DIRECTORY,
 	};
 
 	for (uint32 i = 0;
@@ -561,7 +616,8 @@ KeymapWindow::_AddKeyboardLayouts(BMenu* menu)
 		if (find_directory(dataDirectories[i], &path) != B_OK)
 			continue;
 
-		path.Append("KeyboardLayouts");
+		if (path.Append("KeyboardLayouts") != B_OK)
+			continue;
 
 		BDirectory directory;
 		if (directory.SetTo(path.Path()) == B_OK)
@@ -586,7 +642,7 @@ KeymapWindow::_AddKeyboardLayoutMenu(BMenu* menu, BDirectory directory)
 		BDirectory subdirectory;
 		subdirectory.SetTo(&ref);
 		if (subdirectory.InitCheck() == B_OK) {
-			BMenu* submenu = new BMenu(ref.name);
+			BMenu* submenu = new BMenu(B_TRANSLATE_NOCOLLECT(ref.name));
 
 			_AddKeyboardLayoutMenu(submenu, subdirectory);
 			menu->AddItem(submenu);
@@ -594,7 +650,8 @@ KeymapWindow::_AddKeyboardLayoutMenu(BMenu* menu, BDirectory directory)
 			BMessage* message = new BMessage(kChangeKeyboardLayout);
 
 			message->AddRef("ref", &ref);
-			menu->AddItem(new BMenuItem(ref.name, message));
+			menu->AddItem(new BMenuItem(B_TRANSLATE_NOCOLLECT(ref.name),
+				message));
 		}
 	}
 }
@@ -735,6 +792,8 @@ KeymapWindow::_UpdateButtons()
 		_UseKeymap();
 	}
 
+	fDefaultsButton->SetEnabled(
+		fCurrentMapName.ICompare(kDefaultKeymapName) != 0);
 	fRevertButton->SetEnabled(fCurrentMap != fPreviousMap);
 
 	_UpdateDeadKeyMenu();
@@ -760,6 +819,20 @@ KeymapWindow::_SwitchShortcutKeys()
 
 	fKeyboardLayoutView->SetKeymap(&fCurrentMap);
 	_UpdateButtons();
+}
+
+
+//!	Restores the default keymap.
+void
+KeymapWindow::_DefaultKeymap()
+{
+	fCurrentMap.RestoreSystemDefault();
+	fAppliedMap = fCurrentMap;
+
+	fKeyboardLayoutView->SetKeymap(&fCurrentMap);
+
+	fCurrentMapName = _GetActiveKeymapName();
+	_SelectCurrentMap();
 }
 
 
@@ -811,7 +884,7 @@ KeymapWindow::_UseKeymap()
 void
 KeymapWindow::_FillSystemMaps()
 {
-	BListItem *item;
+	BListItem* item;
 	while ((item = fSystemListView->RemoveItem(static_cast<int32>(0))))
 		delete item;
 
@@ -827,9 +900,12 @@ KeymapWindow::_FillSystemMaps()
 
 	if (directory.SetTo(path.Path()) == B_OK) {
 		while (directory.GetNextRef(&ref) == B_OK) {
-			fSystemListView->AddItem(new KeymapListItem(ref));
+			fSystemListView->AddItem(
+				new KeymapListItem(ref, B_TRANSLATE_NOCOLLECT(ref.name)));
 		}
 	}
+
+	fSystemListView->SortItems(&compare_key_list_items);
 }
 
 
@@ -859,6 +935,8 @@ KeymapWindow::_FillUserMaps()
 			fUserListView->AddItem(new KeymapListItem(ref));
 		}
 	}
+
+	fUserListView->SortItems(&compare_key_list_items);
 }
 
 
@@ -893,7 +971,8 @@ KeymapWindow::_GetCurrentKeymap(entry_ref& ref)
 BString
 KeymapWindow::_GetActiveKeymapName()
 {
-	BString mapName = kCurrentKeymapName;	// safe default
+	BString mapName = kCurrentKeymapName;
+		// safe default
 
 	entry_ref ref;
 	_GetCurrentKeymap(ref);
@@ -957,7 +1036,7 @@ KeymapWindow::_LoadSettings(BRect& windowFrame, BString& keyboardLayout)
 {
 	BScreen screen(this);
 
-	windowFrame.Set(-1, -1, 799, 329);
+	windowFrame.Set(-1, -1, 669, 357);
 	// See if we can use a larger default size
 	if (screen.Frame().Width() > 1200) {
 		windowFrame.right = 899;
@@ -1042,9 +1121,9 @@ KeymapWindow::_GetMarkedKeyboardLayoutPath(BMenu* menu)
 			return _GetMarkedKeyboardLayoutPath(submenu);
 		else {
 			if (item->IsMarked()
-			    && item->Message()->FindRef("ref", &ref) == B_OK) {
+				&& item->Message()->FindRef("ref", &ref) == B_OK) {
 				path.SetTo(&ref);
-		        return path;
+				return path;
 			}
 		}
 	}

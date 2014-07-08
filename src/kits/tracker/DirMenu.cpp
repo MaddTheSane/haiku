@@ -35,6 +35,7 @@ All rights reserved.
 // ToDo:
 // get rid of fMenuBar, SetMenuBar and related mess
 
+
 #include <Catalog.h>
 #include <Debug.h>
 #include <Directory.h>
@@ -56,6 +57,9 @@ All rights reserved.
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "DirMenu"
+
+
+//	#pragma mark - BDirMenu
 
 
 BDirMenu::BDirMenu(BMenuBar* bar, BMessenger target, uint32 command,
@@ -115,10 +119,9 @@ BDirMenu::Populate(const BEntry* startEntry, BWindow* originatingWindow,
 				// if we're at the root directory skip "mnt" and
 				// go straight to "/"
 				parent.SetTo("/");
+				parent.GetEntry(&entry);
 			} else
-				entry.GetParent(&parent);
-
-			parent.GetEntry(&entry);
+				FSGetParentVirtualDirectoryAware(entry, entry);
 		}
 
 		BDirectory desktopDir;
@@ -135,9 +138,7 @@ BDirMenu::Populate(const BEntry* startEntry, BWindow* originatingWindow,
 				kAttrPoseInfoForeign, B_RAW_TYPE, 0, &info, sizeof(PoseInfo),
 				&PoseInfo::EndianSwap);
 
-			BDirectory parent;
-			entry.GetParent(&parent);
-
+			BEntry parentEntry;
 			bool hitRoot = false;
 
 			BDirectory dir(&entry);
@@ -146,8 +147,9 @@ BDirMenu::Populate(const BEntry* startEntry, BWindow* originatingWindow,
 				// if we're at the root directory skip "mnt" and
 				// go straight to "/"
 				hitRoot = true;
-				parent.SetTo("/");
-			}
+				parentEntry.SetTo("/");
+			} else
+				FSGetParentVirtualDirectoryAware(entry, parentEntry);
 
 			if (showDesktop) {
 				BEntry root("/");
@@ -174,7 +176,9 @@ BDirMenu::Populate(const BEntry* startEntry, BWindow* originatingWindow,
 				break;
 			}
 
-			parent.GetEntry(&entry);
+			entry = parentEntry;
+			if (entry.InitCheck() != B_OK)
+				break;
 		}
 
 		// select last item in menu
@@ -269,8 +273,8 @@ BDirMenu::AddDisksIconToMenu(bool atEnd)
 	BMessage* message = new BMessage(fCommand);
 	message->AddRef(fEntryName.String(), model.EntryRef());
 
-	ModelMenuItem* item = new ModelMenuItem(&model,	B_TRANSLATE("Disks"),
-		message);
+	ModelMenuItem* item = new ModelMenuItem(&model,
+		B_TRANSLATE(B_DISKS_DIR_NAME), message);
 	if (atEnd)
 		AddItem(item);
 	else

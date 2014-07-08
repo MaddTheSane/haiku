@@ -1,21 +1,22 @@
 SubDir HAIKU_TOP src apps debugger ;
 
-CCFLAGS +=  -Werror ;
-C++FLAGS += -Werror ;
-
 UseHeaders [ FDirName $(HAIKU_TOP) headers compatibility bsd ] : true ;
 
 # for syscall_numbers.h
-UseHeaders [ FDirName $(HAIKU_COMMON_DEBUG_OBJECT_DIR) system kernel ] ;
+UseHeaders [ FDirName $(TARGET_COMMON_DEBUG_OBJECT_DIR_$(TARGET_PACKAGING_ARCH))
+	system kernel ] ;
 
-UsePrivateHeaders app debug interface kernel shared libroot ;
+UsePrivateHeaders app debug interface kernel package shared libroot ;
 UsePrivateSystemHeaders ;
+
+LINKFLAGS += -Wl,--exclude-libs,ALL ;
 
 SEARCH_SOURCE += [ FDirName $(SUBDIR) arch ] ;
 SEARCH_SOURCE += [ FDirName $(SUBDIR) arch x86 ] ;
 SEARCH_SOURCE += [ FDirName $(SUBDIR) arch x86_64 ] ;
 SEARCH_SOURCE += [ FDirName $(SUBDIR) controllers ] ;
 SEARCH_SOURCE += [ FDirName $(SUBDIR) debug_info ] ;
+SEARCH_SOURCE += [ FDirName $(SUBDIR) debug_info loading_state_handlers ] ;
 SEARCH_SOURCE += [ FDirName $(SUBDIR) debug_managers ] ;
 SEARCH_SOURCE += [ FDirName $(SUBDIR) debugger_interface ] ;
 SEARCH_SOURCE += [ FDirName $(SUBDIR) elf ] ;
@@ -66,7 +67,7 @@ SourceHdrs
 # since syscall_numbers.h is generated on the fly, we need to explicitly
 # let Jam know about the dependency.
 Includes [ FGristFiles TeamDebugger.cpp ]
-	: <syscalls>syscall_numbers.h ;
+	: <syscalls!$(TARGET_PACKAGING_ARCH)>syscall_numbers.h ;
 
 Application Debugger :
 	Debugger.cpp
@@ -102,6 +103,7 @@ Application Debugger :
 	DebuggerTeamDebugInfo.cpp
 	DwarfFunctionDebugInfo.cpp
 	DwarfImageDebugInfo.cpp
+	DwarfImageDebugInfoLoadingState.cpp
 	DwarfStackFrameDebugInfo.cpp
 	DwarfTeamDebugInfo.cpp
 	DwarfTypeFactory.cpp
@@ -111,12 +113,19 @@ Application Debugger :
 	FunctionInstance.cpp
 	GlobalTypeLookup.cpp
 	ImageDebugInfo.cpp
+	ImageDebugInfoLoadingState.cpp
 	ImageDebugInfoProvider.cpp
+	ImageDebugLoadingStateHandler.cpp
+	ImageDebugLoadingStateHandlerRoster.cpp
 	NoOpStackFrameDebugInfo.cpp
 	SpecificImageDebugInfo.cpp
+	SpecificImageDebugInfoLoadingState.cpp
 	SpecificTeamDebugInfo.cpp
 	StackFrameDebugInfo.cpp
 	TeamDebugInfo.cpp
+
+	# debug_info/loading_state_handlers
+	DwarfLoadingStateHandler.cpp
 
 	# debugger_interface
 	DebugEvent.cpp
@@ -184,6 +193,7 @@ Application Debugger :
 	BreakpointSetting.cpp
 	GuiTeamUiSettings.cpp
 	SettingsManager.cpp
+	TeamFileManagerSettings.cpp
 	TeamSettings.cpp
 	TeamUiSettings.cpp
 	TeamUiSettingsFactory.cpp
@@ -341,14 +351,13 @@ Application Debugger :
 	<bin>debug_utils.a
 	libcolumnlistview.a
 	libshared.a
-	libshared.a
 	libexpression_parser.a
 	libmapm.a
 	libedit.a
 	libncurses.a
 
 	$(TARGET_LIBSTDC++)
-	be tracker libbsd.so libdebug.so
+	be package tracker libbsd.so libdebug.so
 
 	: Debugger.rdef
 ;

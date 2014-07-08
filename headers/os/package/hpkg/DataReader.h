@@ -1,5 +1,5 @@
 /*
- * Copyright 2009,2011, Haiku, Inc.
+ * Copyright 2009-2014, Haiku, Inc.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _PACKAGE__HPKG__DATA_READER_H_
@@ -7,6 +7,9 @@
 
 
 #include <SupportDefs.h>
+
+
+class BDataIO;
 
 
 namespace BPackageKit {
@@ -23,9 +26,22 @@ public:
 };
 
 
+class BAbstractBufferedDataReader : public BDataReader {
+public:
+	virtual						~BAbstractBufferedDataReader();
+
+	virtual	status_t			ReadData(off_t offset, void* buffer,
+									size_t size);
+	virtual	status_t			ReadDataToOutput(off_t offset, size_t size,
+									BDataIO* output) = 0;
+};
+
+
 class BFDDataReader : public BDataReader {
 public:
 								BFDDataReader(int fd);
+
+			void				SetFD(int fd);
 
 	virtual	status_t			ReadData(off_t offset, void* buffer,
 									size_t size);
@@ -50,12 +66,14 @@ private:
 };
 
 
-class BBufferDataReader : public BDataReader {
+class BBufferDataReader : public BAbstractBufferedDataReader {
 public:
 								BBufferDataReader(const void* data, size_t size);
 
 	virtual	status_t			ReadData(off_t offset, void* buffer,
 									size_t size);
+	virtual	status_t			ReadDataToOutput(off_t offset, size_t size,
+									BDataIO* output);
 
 private:
 			const void*			fData;

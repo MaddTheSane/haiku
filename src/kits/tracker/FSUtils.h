@@ -37,13 +37,13 @@ All rights reserved.
 
 #include <FindDirectory.h>
 #include <List.h>
+#include <ObjectList.h>
 #include <Point.h>
 #include <StorageDefs.h>
 
 #include <vector>
 
 #include "Model.h"
-#include "ObjectList.h"
 
 
 // APIs/code in FSUtils.h and FSUtils.cpp is slated for a major cleanup
@@ -159,6 +159,8 @@ private:
 
 
 #define B_DESKTOP_DIR_NAME "Desktop"
+#define B_DISKS_DIR_NAME "Disks"
+#define B_TRASH_DIR_NAME "Trash"
 
 #ifndef _IMPEXP_TRACKER
 #define _IMPEXP_TRACKER
@@ -237,6 +239,10 @@ status_t FSCreateNewFolder(const entry_ref*);
 status_t FSRecursiveCreateFolder(const char* path);
 void FSMakeOriginalName(BString &name, const BDirectory* destDir,
 	const char* suffix = 0);
+
+status_t FSGetParentVirtualDirectoryAware(const BEntry& entry, entry_ref& _ref);
+status_t FSGetParentVirtualDirectoryAware(const BEntry& entry, BEntry& _entry);
+status_t FSGetParentVirtualDirectoryAware(const BEntry& entry, BNode& _node);
 
 status_t TrackerLaunch(const entry_ref* app, bool async);
 status_t TrackerLaunch(const BMessage* refs, bool async,

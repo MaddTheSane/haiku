@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2009, Haiku Inc.
+ * Copyright 2001-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _APPLICATION_H
@@ -21,7 +21,9 @@ class BMessageRunner;
 class BResources;
 class BServer;
 class BWindow;
+
 struct app_info;
+
 
 namespace BPrivate {
 	class PortLink;
@@ -137,8 +139,8 @@ private:
 	static	BResources*			sAppResources;
 
 			const char*			fAppName;
-			BPrivate::PortLink*	fServerLink;
-			BPrivate::ServerMemoryAllocator* fServerAllocator;
+			::BPrivate::PortLink*	fServerLink;
+			::BPrivate::ServerMemoryAllocator* fServerAllocator;
 
 			void*				fCursorData;
 			bigtime_t			fPulseRate;
@@ -151,9 +153,11 @@ private:
 			bool				fReadyToRunCalled;
 };
 
+
 // Global Objects
 
 extern BApplication* be_app;
 extern BMessenger be_app_messenger;
+
 
 #endif	// _APPLICATION_H

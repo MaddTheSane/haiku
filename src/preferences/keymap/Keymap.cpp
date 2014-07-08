@@ -17,6 +17,8 @@
 
 #include <ByteOrder.h>
 #include <File.h>
+#include <FindDirectory.h>
+#include <Path.h>
 
 #include <input_globals.h>
 
@@ -26,7 +28,7 @@ static const uint32 kModifierKeys = B_SHIFT_KEY | B_CAPS_LOCK | B_CONTROL_KEY
 
 
 static void
-print_key(char *chars, int32 offset, bool last = false)
+print_key(char* chars, int32 offset, bool last = false)
 {
 	int size = chars[offset++];
 
@@ -44,7 +46,7 @@ print_key(char *chars, int32 offset, bool last = false)
 		default:
 		{
 			// 2-, 3-, or 4-byte UTF-8 character
-			char *str = new char[size + 1];
+			char* str = new char[size + 1];
 			strncpy(str, &chars[offset], size);
 			str[size] = 0;
 			fputs(str, stdout);
@@ -333,6 +335,23 @@ Keymap::SetDeadKeyTrigger(dead_key_index deadKeyIndex, const BString& trigger)
 		if (fModificationMessage != NULL)
 			fTarget.SendMessage(fModificationMessage);
 	}
+}
+
+
+status_t
+Keymap::RestoreSystemDefault()
+{
+	BPath path;
+	status_t status = find_directory(B_USER_SETTINGS_DIRECTORY, &path);
+	if (status != B_OK)
+		return status;
+
+	path.Append("Key_map");
+
+	BEntry entry(path.Path());
+	entry.Remove();
+
+	return Use();
 }
 
 

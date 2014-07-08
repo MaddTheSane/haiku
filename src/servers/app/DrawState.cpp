@@ -19,6 +19,7 @@
 
 #include <Region.h>
 
+#include "AlphaMask.h"
 #include "LinkReceiver.h"
 #include "LinkSender.h"
 #include "ServerProtocolStructs.h"
@@ -28,66 +29,76 @@ using std::nothrow;
 
 
 DrawState::DrawState()
-	: fOrigin(0.0, 0.0),
-	  fCombinedOrigin(0.0, 0.0),
-	  fScale(1.0),
-	  fCombinedScale(1.0),
-	  fClippingRegion(NULL),
+	:
+	fOrigin(0.0f, 0.0f),
+	fCombinedOrigin(0.0f, 0.0f),
+	fScale(1.0f),
+	fCombinedScale(1.0f),
+	fTransform(),
+	fCombinedTransform(),
+	fClippingRegion(NULL),
+	fAlphaMask(NULL),
 
-	  fHighColor((rgb_color){ 0, 0, 0, 255 }),
-	  fLowColor((rgb_color){ 255, 255, 255, 255 }),
-	  fPattern(kSolidHigh),
+	fHighColor((rgb_color){ 0, 0, 0, 255 }),
+	fLowColor((rgb_color){ 255, 255, 255, 255 }),
+	fPattern(kSolidHigh),
 
-	  fDrawingMode(B_OP_COPY),
-	  fAlphaSrcMode(B_PIXEL_ALPHA),
-	  fAlphaFncMode(B_ALPHA_OVERLAY),
+	fDrawingMode(B_OP_COPY),
+	fAlphaSrcMode(B_PIXEL_ALPHA),
+	fAlphaFncMode(B_ALPHA_OVERLAY),
 
-	  fPenLocation(0.0, 0.0),
-	  fPenSize(1.0),
+	fPenLocation(0.0f, 0.0f),
+	fPenSize(1.0f),
 
-	  fFontAliasing(false),
-	  fSubPixelPrecise(false),
-	  fLineCapMode(B_BUTT_CAP),
-	  fLineJoinMode(B_MITER_JOIN),
-	  fMiterLimit(B_DEFAULT_MITER_LIMIT),
-	  fPreviousState(NULL)
+	fFontAliasing(false),
+	fSubPixelPrecise(false),
+	fLineCapMode(B_BUTT_CAP),
+	fLineJoinMode(B_MITER_JOIN),
+	fMiterLimit(B_DEFAULT_MITER_LIMIT),
+	fFillRule(B_NONZERO),
+	fPreviousState(NULL)
 {
 	fUnscaledFontSize = fFont.Size();
 }
 
 
-DrawState::DrawState(DrawState* from)
-	: fOrigin(0.0, 0.0),
-	  fCombinedOrigin(from->fCombinedOrigin),
-	  fScale(1.0),
-	  fCombinedScale(from->fCombinedScale),
-	  fClippingRegion(NULL),
+DrawState::DrawState(const DrawState& other)
+	:
+	fOrigin(other.fOrigin),
+	fCombinedOrigin(other.fCombinedOrigin),
+	fScale(other.fScale),
+	fCombinedScale(other.fCombinedScale),
+	fTransform(other.fTransform),
+	fCombinedTransform(other.fCombinedTransform),
+	fClippingRegion(NULL),
+	fAlphaMask(NULL),
 
-	  fHighColor(from->fHighColor),
-	  fLowColor(from->fLowColor),
-	  fPattern(from->fPattern),
+	fHighColor(other.fHighColor),
+	fLowColor(other.fLowColor),
+	fPattern(other.fPattern),
 
-	  fDrawingMode(from->fDrawingMode),
-	  fAlphaSrcMode(from->fAlphaSrcMode),
-	  fAlphaFncMode(from->fAlphaFncMode),
+	fDrawingMode(other.fDrawingMode),
+	fAlphaSrcMode(other.fAlphaSrcMode),
+	fAlphaFncMode(other.fAlphaFncMode),
 
-	  fPenLocation(from->fPenLocation),
-	  fPenSize(from->fPenSize),
+	fPenLocation(other.fPenLocation),
+	fPenSize(other.fPenSize),
 
-	  fFont(from->fFont),
-	  fFontAliasing(from->fFontAliasing),
+	fFont(other.fFont),
+	fFontAliasing(other.fFontAliasing),
 
-	  fSubPixelPrecise(from->fSubPixelPrecise),
+	fSubPixelPrecise(other.fSubPixelPrecise),
 
-	  fLineCapMode(from->fLineCapMode),
-	  fLineJoinMode(from->fLineJoinMode),
-	  fMiterLimit(from->fMiterLimit),
+	fLineCapMode(other.fLineCapMode),
+	fLineJoinMode(other.fLineJoinMode),
+	fMiterLimit(other.fMiterLimit),
+	fFillRule(other.fFillRule),
 
-	  // Since fScale is reset to 1.0, the unscaled
-	  // font size is the current size of the font
-	  // (which is from->fUnscaledFontSize * from->fCombinedScale)
-	  fUnscaledFontSize(from->fUnscaledFontSize),
-	  fPreviousState(from)
+	// Since fScale is reset to 1.0, the unscaled
+	// font size is the current size of the font
+	// (which is from->fUnscaledFontSize * from->fCombinedScale)
+	fUnscaledFontSize(other.fUnscaledFontSize),
+	fPreviousState(NULL)
 {
 }
 
@@ -96,13 +107,25 @@ DrawState::~DrawState()
 {
 	delete fClippingRegion;
 	delete fPreviousState;
+	if (fAlphaMask != NULL)
+		fAlphaMask->ReleaseReference();
 }
 
 
 DrawState*
 DrawState::PushState()
 {
-	DrawState* next = new (nothrow) DrawState(this);
+	DrawState* next = new (nothrow) DrawState(*this);
+
+	if (next != NULL) {
+		// Prepare state as derived from this state
+		next->fOrigin = BPoint(0.0, 0.0);
+		next->fScale = 1.0;
+		next->fTransform.Reset();
+		next->fPreviousState = this;
+		next->SetAlphaMask(fAlphaMask);
+	}
+
 	return next;
 }
 
@@ -125,55 +148,56 @@ DrawState::ReadFontFromLink(BPrivate::LinkReceiver& link)
 	uint16 mask;
 	link.Read<uint16>(&mask);
 
-	if (mask & B_FONT_FAMILY_AND_STYLE) {
+	if ((mask & B_FONT_FAMILY_AND_STYLE) != 0) {
 		uint32 fontID;
 		link.Read<uint32>(&fontID);
 		fFont.SetFamilyAndStyle(fontID);
 	}
 
-	if (mask & B_FONT_SIZE) {
+	if ((mask & B_FONT_SIZE) != 0) {
 		float size;
 		link.Read<float>(&size);
-		fFont.SetSize(size);
+		fUnscaledFontSize = size;
+		fFont.SetSize(fUnscaledFontSize * fCombinedScale);
 	}
 
-	if (mask & B_FONT_SHEAR) {
+	if ((mask & B_FONT_SHEAR) != 0) {
 		float shear;
 		link.Read<float>(&shear);
 		fFont.SetShear(shear);
 	}
 
-	if (mask & B_FONT_ROTATION) {
+	if ((mask & B_FONT_ROTATION) != 0) {
 		float rotation;
 		link.Read<float>(&rotation);
 		fFont.SetRotation(rotation);
 	}
 
-	if (mask & B_FONT_FALSE_BOLD_WIDTH) {
+	if ((mask & B_FONT_FALSE_BOLD_WIDTH) != 0) {
 		float falseBoldWidth;
 		link.Read<float>(&falseBoldWidth);
 		fFont.SetFalseBoldWidth(falseBoldWidth);
 	}
 
-	if (mask & B_FONT_SPACING) {
+	if ((mask & B_FONT_SPACING) != 0) {
 		uint8 spacing;
 		link.Read<uint8>(&spacing);
 		fFont.SetSpacing(spacing);
 	}
 
-	if (mask & B_FONT_ENCODING) {
+	if ((mask & B_FONT_ENCODING) != 0) {
 		uint8 encoding;
-		link.Read<uint8>((uint8*)&encoding);
+		link.Read<uint8>(&encoding);
 		fFont.SetEncoding(encoding);
 	}
 
-	if (mask & B_FONT_FACE) {
+	if ((mask & B_FONT_FACE) != 0) {
 		uint16 face;
 		link.Read<uint16>(&face);
 		fFont.SetFace(face);
 	}
 
-	if (mask & B_FONT_FLAGS) {
+	if ((mask & B_FONT_FLAGS) != 0) {
 		uint32 flags;
 		link.Read<uint32>(&flags);
 		fFont.SetFlags(flags);
@@ -196,19 +220,23 @@ DrawState::ReadFromLink(BPrivate::LinkReceiver& link)
 	fDrawingMode = info.drawingMode;
 	fOrigin = info.origin;
 	fScale = info.scale;
+	fTransform = info.transform;
 	fLineJoinMode = info.lineJoin;
 	fLineCapMode = info.lineCap;
 	fMiterLimit = info.miterLimit;
+	fFillRule = info.fillRule;
 	fAlphaSrcMode = info.alphaSourceMode;
 	fAlphaFncMode = info.alphaFunctionMode;
 	fFontAliasing = info.fontAntialiasing;
 
-	if (fPreviousState) {
+	if (fPreviousState != NULL) {
 		fCombinedOrigin = fPreviousState->fCombinedOrigin + fOrigin;
 		fCombinedScale = fPreviousState->fCombinedScale * fScale;
+		fCombinedTransform = fPreviousState->fCombinedTransform * fTransform;
 	} else {
 		fCombinedOrigin = fOrigin;
 		fCombinedScale = fScale;
+		fCombinedTransform = fTransform;
 	}
 
 
@@ -257,9 +285,11 @@ DrawState::WriteToLink(BPrivate::LinkSender& link) const
 	info.viewStateInfo.drawingMode = fDrawingMode;
 	info.viewStateInfo.origin = fOrigin;
 	info.viewStateInfo.scale = fScale;
+	info.viewStateInfo.transform = fTransform;
 	info.viewStateInfo.lineJoin = fLineJoinMode;
 	info.viewStateInfo.lineCap = fLineCapMode;
 	info.viewStateInfo.miterLimit = fMiterLimit;
+	info.viewStateInfo.fillRule = fFillRule;
 	info.viewStateInfo.alphaSourceMode = fAlphaSrcMode;
 	info.viewStateInfo.alphaFunctionMode = fAlphaFncMode;
 	info.viewStateInfo.fontAntialiasing = fFontAliasing;
@@ -270,7 +300,7 @@ DrawState::WriteToLink(BPrivate::LinkSender& link) const
 
 	// TODO: Could be optimized, but is low prio, since most views do not
 	// use a custom clipping region...
-	if (fClippingRegion) {
+	if (fClippingRegion != NULL) {
 		int32 clippingRectCount = fClippingRegion->CountRects();
 		link.Attach<int32>(clippingRectCount);
 		for (int i = 0; i < clippingRectCount; i++)
@@ -283,13 +313,13 @@ DrawState::WriteToLink(BPrivate::LinkSender& link) const
 
 
 void
-DrawState::SetOrigin(const BPoint& origin)
+DrawState::SetOrigin(BPoint origin)
 {
 	fOrigin = origin;
 
 	// NOTE: the origins of earlier states are never expected to
 	// change, only the topmost state ever changes
-	if (fPreviousState) {
+	if (fPreviousState != NULL) {
 		fCombinedOrigin.x = fPreviousState->fCombinedOrigin.x
 			+ fOrigin.x * fPreviousState->fCombinedScale;
 		fCombinedOrigin.y = fPreviousState->fCombinedOrigin.y
@@ -303,21 +333,39 @@ DrawState::SetOrigin(const BPoint& origin)
 void
 DrawState::SetScale(float scale)
 {
-	if (fScale != scale) {
-		fScale = scale;
+	if (fScale == scale)
+		return;
 
-		// NOTE: the scales of earlier states are never expected to
-		// change, only the topmost state ever changes
-		if (fPreviousState)
-			fCombinedScale = fPreviousState->fCombinedScale * fScale;
-		else
-			fCombinedScale = fScale;
+	fScale = scale;
 
-		// update font size
-		// NOTE: This is what makes the call potentially expensive,
-		// hence the introductory check
-		fFont.SetSize(fUnscaledFontSize * fCombinedScale);
-	}
+	// NOTE: the scales of earlier states are never expected to
+	// change, only the topmost state ever changes
+	if (fPreviousState != NULL)
+		fCombinedScale = fPreviousState->fCombinedScale * fScale;
+	else
+		fCombinedScale = fScale;
+
+	// update font size
+	// NOTE: This is what makes the call potentially expensive,
+	// hence the introductory check
+	fFont.SetSize(fUnscaledFontSize * fCombinedScale);
+}
+
+
+void
+DrawState::SetTransform(BAffineTransform transform)
+{
+	if (fTransform == transform)
+		return;
+
+	fTransform = transform;
+
+	// NOTE: the transforms of earlier states are never expected to
+	// change, only the topmost state ever changes
+	if (fPreviousState != NULL)
+		fCombinedTransform = fPreviousState->fCombinedTransform * fTransform;
+	else
+		fCombinedTransform = fTransform;
 }
 
 
@@ -325,10 +373,10 @@ void
 DrawState::SetClippingRegion(const BRegion* region)
 {
 	if (region) {
-		if (fClippingRegion)
+		if (fClippingRegion != NULL)
 			*fClippingRegion = *region;
 		else
-			fClippingRegion = new (nothrow) BRegion(*region);
+			fClippingRegion = new(nothrow) BRegion(*region);
 	} else {
 		delete fClippingRegion;
 		fClippingRegion = NULL;
@@ -339,9 +387,9 @@ DrawState::SetClippingRegion(const BRegion* region)
 bool
 DrawState::HasClipping() const
 {
-	if (fClippingRegion)
+	if (fClippingRegion != NULL)
 		return true;
-	if (fPreviousState)
+	if (fPreviousState != NULL)
 		return fPreviousState->HasClipping();
 	return false;
 }
@@ -357,19 +405,47 @@ DrawState::HasAdditionalClipping() const
 bool
 DrawState::GetCombinedClippingRegion(BRegion* region) const
 {
-	if (fClippingRegion) {
+	if (fClippingRegion != NULL) {
 		BRegion localTransformedClipping(*fClippingRegion);
 		Transform(&localTransformedClipping);
 
-		if (fPreviousState && fPreviousState->GetCombinedClippingRegion(region))
+		if (fPreviousState != NULL
+			&& fPreviousState->GetCombinedClippingRegion(region)) {
 			localTransformedClipping.IntersectWith(region);
+		}
 		*region = localTransformedClipping;
 		return true;
 	} else {
-		if (fPreviousState)
+		if (fPreviousState != NULL)
 			return fPreviousState->GetCombinedClippingRegion(region);
 	}
 	return false;
+}
+
+
+void
+DrawState::SetAlphaMask(AlphaMask* mask)
+{
+	// NOTE: In BeOS, it wasn't possible to clip to a BPicture and keep
+	// regular custom clipping to a BRegion at the same time.
+	if (fAlphaMask == mask)
+		return;
+
+	if (mask != NULL)
+		mask->AcquireReference();
+	if (fAlphaMask != NULL)
+		fAlphaMask->ReleaseReference();
+	fAlphaMask = mask;
+	if (fAlphaMask != NULL && fPreviousState != NULL)
+		fAlphaMask->SetPrevious(fPreviousState->fAlphaMask);
+		
+}
+
+
+AlphaMask*
+DrawState::GetAlphaMask() const
+{
+	return fAlphaMask;
 }
 
 
@@ -461,14 +537,14 @@ DrawState::InverseTransform(BPoint* point) const
 
 
 void
-DrawState::SetHighColor(const rgb_color& color)
+DrawState::SetHighColor(rgb_color color)
 {
 	fHighColor = color;
 }
 
 
 void
-DrawState::SetLowColor(const rgb_color& color)
+DrawState::SetLowColor(rgb_color color)
 {
 	fLowColor = color;
 }
@@ -497,19 +573,15 @@ DrawState::SetBlendingMode(source_alpha srcMode, alpha_function fncMode)
 
 
 void
-DrawState::SetPenLocation(const BPoint& location)
+DrawState::SetPenLocation(BPoint location)
 {
-	// TODO: Needs to be in local coordinate system!
-	// There is going to be some work involved in
-	// other parts of app_server...
 	fPenLocation = location;
 }
 
 
-const BPoint&
+BPoint
 DrawState::PenLocation() const
 {
-	// TODO: See above
 	return fPenLocation;
 }
 
@@ -558,30 +630,30 @@ DrawState::SetFont(const ServerFont& font, uint32 flags)
 		fFont.SetSize(fUnscaledFontSize * fCombinedScale);
 	} else {
 		// family & style
-		if (flags & B_FONT_FAMILY_AND_STYLE)
+		if ((flags & B_FONT_FAMILY_AND_STYLE) != 0)
 			fFont.SetFamilyAndStyle(font.GetFamilyAndStyle());
 		// size
-		if (flags & B_FONT_SIZE) {
+		if ((flags & B_FONT_SIZE) != 0) {
 			fUnscaledFontSize = font.Size();
 			fFont.SetSize(fUnscaledFontSize * fCombinedScale);
 		}
 		// shear
-		if (flags & B_FONT_SHEAR)
+		if ((flags & B_FONT_SHEAR) != 0)
 			fFont.SetShear(font.Shear());
 		// rotation
-		if (flags & B_FONT_ROTATION)
+		if ((flags & B_FONT_ROTATION) != 0)
 			fFont.SetRotation(font.Rotation());
 		// spacing
-		if (flags & B_FONT_SPACING)
+		if ((flags & B_FONT_SPACING) != 0)
 			fFont.SetSpacing(font.Spacing());
 		// encoding
-		if (flags & B_FONT_ENCODING)
+		if ((flags & B_FONT_ENCODING) != 0)
 			fFont.SetEncoding(font.Encoding());
 		// face
-		if (flags & B_FONT_FACE)
+		if ((flags & B_FONT_FACE) != 0)
 			fFont.SetFace(font.Face());
 		// flags
-		if (flags & B_FONT_FLAGS)
+		if ((flags & B_FONT_FLAGS) != 0)
 			fFont.SetFlags(font.Flags());
 	}
 }
@@ -623,10 +695,20 @@ DrawState::SetMiterLimit(float limit)
 
 
 void
+DrawState::SetFillRule(int32 fillRule)
+{
+	fFillRule = fillRule;
+}
+
+
+void
 DrawState::PrintToStream() const
 {
 	printf("\t Origin: (%.1f, %.1f)\n", fOrigin.x, fOrigin.y);
 	printf("\t Scale: %.2f\n", fScale);
+	printf("\t Transform: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f\n",
+		fTransform.sx, fTransform.shy, fTransform.shx,
+		fTransform.sy, fTransform.tx, fTransform.ty);
 
 	printf("\t Pen Location and Size: (%.1f, %.1f) - %.2f (%.2f)\n",
 		   fPenLocation.x, fPenLocation.y, PenSize(), fPenSize);
@@ -644,7 +726,7 @@ DrawState::PrintToStream() const
 	printf("\t LineCap: %d\t LineJoin: %d\t MiterLimit: %.2f\n",
 		   (int16)fLineCapMode, (int16)fLineJoinMode, fMiterLimit);
 
-	if (fClippingRegion)
+	if (fClippingRegion != NULL)
 		fClippingRegion->PrintToStream();
 
 	printf("\t ===== Font Data =====\n");

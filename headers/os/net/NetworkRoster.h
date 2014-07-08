@@ -8,10 +8,11 @@
 
 #include <Locker.h>
 #include <NetworkNotifications.h>
-
+#include <ObjectList.h>
 
 class BMessenger;
 class BNetworkInterface;
+struct route_entry;
 struct wireless_network;
 
 
@@ -29,6 +30,9 @@ public:
 			status_t			RemoveInterface(const char* name);
 			status_t			RemoveInterface(
 									const BNetworkInterface& interface);
+
+			status_t			GetRoutes(int family,
+									BObjectList<route_entry>& routes) const;
 
 			int32				CountPersistentNetworks() const;
 			status_t			GetNextPersistentNetwork(uint32* cookie,

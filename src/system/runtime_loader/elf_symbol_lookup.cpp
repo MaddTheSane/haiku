@@ -474,13 +474,13 @@ find_undefined_symbol_add_on(image_t* rootImage, image_t* image,
 
 int
 resolve_symbol(image_t* rootImage, image_t* image, elf_sym* sym,
-	SymbolLookupCache* cache, addr_t* symAddress)
+	SymbolLookupCache* cache, addr_t* symAddress, image_t** symbolImage)
 {
 	uint32 index = sym - image->syms;
 
 	// check the cache first
 	if (cache->IsSymbolValueCached(index)) {
-		*symAddress = cache->SymbolValueAt(index);
+		*symAddress = cache->SymbolValueAt(index, symbolImage);
 		return B_OK;
 	}
 
@@ -514,6 +514,7 @@ resolve_symbol(image_t* rootImage, image_t* image, elf_sym* sym,
 	}
 
 	enum {
+		SUCCESS,
 		ERROR_NO_SYMBOL,
 		ERROR_WRONG_TYPE,
 		ERROR_NOT_EXPORTED,
@@ -521,6 +522,7 @@ resolve_symbol(image_t* rootImage, image_t* image, elf_sym* sym,
 	};
 	uint32 lookupError = ERROR_UNPATCHED;
 
+	bool tlsSymbol = sym->Type() == STT_TLS;
 	void* location = NULL;
 	if (sharedSym == NULL) {
 		// symbol not found at all
@@ -538,14 +540,20 @@ resolve_symbol(image_t* rootImage, image_t* image, elf_sym* sym,
 		sharedImage = NULL;
 	} else {
 		// symbol is fine, get its location
-		location = (void*)(sharedSym->st_value
-			+ sharedImage->regions[0].delta);
+		location = (void*)sharedSym->st_value;
+		if (!tlsSymbol) {
+			location
+				= (void*)((addr_t)location + sharedImage->regions[0].delta);
+		} else
+			lookupError = SUCCESS;
 	}
 
-	patch_undefined_symbol(rootImage, image, symName, &sharedImage, &location,
-		&type);
+	if (!tlsSymbol) {
+		patch_undefined_symbol(rootImage, image, symName, &sharedImage,
+			&location, &type);
+	}
 
-	if (location == NULL) {
+	if (location == NULL && lookupError != SUCCESS) {
 		switch (lookupError) {
 			case ERROR_NO_SYMBOL:
 				FATAL("%s: Could not resolve symbol '%s'\n",
@@ -571,8 +579,10 @@ resolve_symbol(image_t* rootImage, image_t* image, elf_sym* sym,
 		return B_MISSING_SYMBOL;
 	}
 
-	cache->SetSymbolValueAt(index, (addr_t)location);
+	cache->SetSymbolValueAt(index, (addr_t)location, sharedImage);
 
+	if (symbolImage)
+		*symbolImage = sharedImage;
 	*symAddress = (addr_t)location;
 	return B_OK;
 }

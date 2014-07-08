@@ -15,12 +15,14 @@
 #include "FontManager.h"
 #include "PatternHandler.h"
 #include "ServerFont.h"
+#include "Transformable.h"
 
 #include "defines.h"
 
 #include <agg_conv_curve.h>
 #include <agg_path_storage.h>
 
+#include <AffineTransform.h>
 #include <Font.h>
 #include <Rect.h>
 
@@ -38,7 +40,6 @@ class FontCacheReference;
 class RenderingBuffer;
 class ServerBitmap;
 class ServerFont;
-class Transformable;
 
 
 class Painter {
@@ -51,15 +52,22 @@ public:
 			void				DetachFromBuffer();
 			BRect				Bounds() const;
 
-			void				ConstrainClipping(const BRegion* region);
-			const BRegion*		ClippingRegion() const
-									{ return fClippingRegion; }
-
 			void				SetDrawState(const DrawState* data,
 									int32 xOffset = 0,
 									int32 yOffset = 0);
 
+			void				ConstrainClipping(const BRegion* region);
+			const BRegion*		ClippingRegion() const
+									{ return fClippingRegion; }
+
 								// object settings
+			void				SetTransform(BAffineTransform transform,
+									int32 xOffset = 0,
+									int32 yOffset = 0);
+
+	inline	bool				IsIdentityTransform() const
+									{ return fIdentityTransform; }
+
 			void				SetHighColor(const rgb_color& color);
 	inline	rgb_color			HighColor() const
 									{ return fPatternHandler.HighColor(); }
@@ -73,6 +81,7 @@ public:
 									{ return fPenSize; }
 			void				SetStrokeMode(cap_mode lineCap,
 									join_mode joinMode, float miterLimit);
+			void				SetFillRule(int32 fillRule);
 			void				SetPattern(const pattern& p,
 									bool drawingText = false);
 	inline	pattern				Pattern() const
@@ -228,14 +237,21 @@ public:
 
 			BRect				InvertRect(const BRect& r) const;
 
+	inline	BRect				TransformAndClipRect(BRect rect) const;
 	inline	BRect				ClipRect(BRect rect) const;
+	inline	BRect				TransformAlignAndClipRect(BRect rect) const;
 	inline	BRect				AlignAndClipRect(BRect rect) const;
+	inline	BRect				AlignRect(BRect rect) const;
 
 
 private:
-			void				_Transform(BPoint* point,
+			float				_Align(float coord, bool round,
+									bool centerOffset) const;
+			void				_Align(BPoint* point, bool round,
+									bool centerOffset) const;
+			void				_Align(BPoint* point,
 									bool centerOffset = true) const;
-			BPoint				_Transform(const BPoint& point,
+			BPoint				_Align(const BPoint& point,
 									bool centerOffset = true) const;
 			BRect				_Clipped(const BRect& rect) const;
 
@@ -247,6 +263,12 @@ private:
 								// drawing functions stroke/fill
 			BRect				_DrawTriangle(BPoint pt1, BPoint pt2,
 									BPoint pt3, bool fill) const;
+
+			void				_IterateShapeData(const int32& opCount,
+									const uint32* opList, const int32& ptCount,
+									const BPoint* points,
+									const BPoint& viewToScreenOffset,
+									float viewScale) const;
 
 			template<typename sourcePixel>
 			void				_TransparentMagicToAlpha(sourcePixel *buffer,
@@ -294,9 +316,25 @@ private:
 			template<class VertexSource>
 			BRect				_StrokePath(VertexSource& path) const;
 			template<class VertexSource>
+			BRect				_StrokePath(VertexSource& path,
+									cap_mode capMode) const;
+			template<class VertexSource>
 			BRect				_FillPath(VertexSource& path) const;
+			template<class VertexSource>
+			BRect				_RasterizePath(VertexSource& path) const;
+
+			template<class VertexSource>
+			BRect				_FillPath(VertexSource& path,
+									const BGradient& gradient) const;
+			template<class VertexSource>
+			BRect				_RasterizePath(VertexSource& path,
+									const BGradient& gradient) const;
+
 			void				_CalcLinearGradientTransform(BPoint startPoint,
 									BPoint endPoint, agg::trans_affine& mtx,
+									float gradient_d2 = 100.0f) const;
+			void				_CalcRadialGradientTransform(BPoint center,
+									agg::trans_affine& mtx,
 									float gradient_d2 = 100.0f) const;
 
 			void				_MakeGradient(const BGradient& gradient,
@@ -306,40 +344,38 @@ private:
 			template<class Array>
 			void				_MakeGradient(Array& array,
 									const BGradient& gradient) const;
-			template<class VertexSource>
-			BRect				_FillPath(VertexSource& path,
-									const BGradient& gradient) const;
-			template<class VertexSource>
-			void				_FillPathGradientLinear(VertexSource& path,
-									const BGradientLinear& linear) const;
-			template<class VertexSource>
-			void				_FillPathGradientRadial(VertexSource& path,
-									const BGradientRadial& radial) const;
-			template<class VertexSource>
-			void				_FillPathGradientRadialFocus(VertexSource& path,
-									const BGradientRadialFocus& focus) const;
-			template<class VertexSource>
-			void				_FillPathGradientDiamond(VertexSource& path,
-									const BGradientDiamond& diamond) const;
-			template<class VertexSource>
-			void				_FillPathGradientConic(VertexSource& path,
-									const BGradientConic& conic) const;
 
+			template<class VertexSource, typename GradientFunction>
+			void				_RasterizePath(VertexSource& path,
+									const BGradient& gradient,
+									GradientFunction function,
+									agg::trans_affine& gradientTransform) const;
+
+private:
 	mutable	agg::rendering_buffer fBuffer;
 
 	// AGG rendering and rasterization classes
 			pixfmt				fPixelFormat;
 	mutable	renderer_base		fBaseRenderer;
 
+	// Regular drawing mode: pixel-aligned, no alpha masking
 	mutable	scanline_unpacked_type fUnpackedScanline;
 	mutable	scanline_packed_type fPackedScanline;
+	mutable	rasterizer_type		fRasterizer;
+	mutable	renderer_type		fRenderer;
+
+	// Fast mode: no antialiasing needed (horizontal/vertical lines, ...)
+	mutable	renderer_bin_type	fRendererBin;
+
+	// Subpixel mode
 	mutable	scanline_packed_subpix_type fSubpixPackedScanline;
 	mutable	scanline_unpacked_subpix_type fSubpixUnpackedScanline;
 	mutable	rasterizer_subpix_type fSubpixRasterizer;
-	mutable	rasterizer_type		fRasterizer;
 	mutable	renderer_subpix_type fSubpixRenderer;
-	mutable	renderer_type		fRenderer;
-	mutable	renderer_bin_type	fRendererBin;
+
+	// Alpha-Masked mode: for ClipToPicture
+	// (this uses the standard rasterizer and renderer)
+	mutable	scanline_unpacked_masked_type* fMaskedUnpackedScanline;
 
 	mutable	agg::path_storage	fPath;
 	mutable	agg::conv_curve<agg::path_storage> fCurve;
@@ -349,7 +385,9 @@ private:
 			bool				fValidClipping : 1;
 			bool				fDrawingText : 1;
 			bool				fAttached : 1;
+			bool				fIdentityTransform : 1;
 
+			Transformable		fTransform;
 			float				fPenSize;
 			const BRegion*		fClippingRegion;
 			drawing_mode		fDrawingMode;
@@ -369,6 +407,21 @@ private:
 
 
 inline BRect
+Painter::TransformAndClipRect(BRect rect) const
+{
+	rect.left = floorf(rect.left);
+	rect.top = floorf(rect.top);
+	rect.right = ceilf(rect.right);
+	rect.bottom = ceilf(rect.bottom);
+
+	if (!fIdentityTransform)
+		rect = fTransform.TransformBounds(rect);
+
+	return _Clipped(rect);
+}
+
+
+inline BRect
 Painter::ClipRect(BRect rect) const
 {
 	rect.left = floorf(rect.left);
@@ -382,6 +435,23 @@ Painter::ClipRect(BRect rect) const
 inline BRect
 Painter::AlignAndClipRect(BRect rect) const
 {
+	return _Clipped(AlignRect(rect));
+}
+
+
+inline BRect
+Painter::TransformAlignAndClipRect(BRect rect) const
+{
+	rect = AlignRect(rect);
+	if (!fIdentityTransform)
+		rect = fTransform.TransformBounds(rect);
+	return _Clipped(rect);
+}
+
+
+inline BRect
+Painter::AlignRect(BRect rect) const
+{
 	rect.left = floorf(rect.left);
 	rect.top = floorf(rect.top);
 	if (fSubpixelPrecise) {
@@ -391,7 +461,8 @@ Painter::AlignAndClipRect(BRect rect) const
 		rect.right = floorf(rect.right);
 		rect.bottom = floorf(rect.bottom);
 	}
-	return _Clipped(rect);
+
+	return rect;
 }
 
 

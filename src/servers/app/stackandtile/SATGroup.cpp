@@ -1,9 +1,10 @@
 /*
- * Copyright 2010, Haiku.
+ * Copyright 2010-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Clemens Zeidler <haiku@clemens-zeidler.de>
+ *		John Scipione, jscipione@gmail.com
+ *		Clemens Zeidler, haiku@clemens-zeidler.de
  */
 
 
@@ -787,9 +788,9 @@ Tab::CompareFunction(const Tab* tab1, const Tab* tab2)
 SATGroup::SATGroup()
 	:
 	fHorizontalTabsSorted(false),
-	fVerticalTabsSorted(false)
+	fVerticalTabsSorted(false),
+	fActiveWindow(NULL)
 {
-	
 }
 
 
@@ -929,6 +930,20 @@ SATWindow*
 SATGroup::WindowAt(int32 index)
 {
 	return fSATWindowList.ItemAt(index);
+}
+
+
+SATWindow*
+SATGroup::ActiveWindow() const
+{
+	return fActiveWindow;
+}
+
+
+void
+SATGroup::SetActiveWindow(SATWindow* window)
+{
+	fActiveWindow = window;
 }
 
 

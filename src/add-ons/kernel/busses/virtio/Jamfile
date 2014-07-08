@@ -7,10 +7,5 @@ UsePrivateHeaders kernel virtio ;
 KernelAddon virtio_pci :
 	virtio_pci.cpp
 
-	kernel_cpp.cpp
-	;
-
-SEARCH on [ FGristFiles
-		kernel_cpp.cpp
-	] = [ FDirName $(HAIKU_TOP) src system kernel util ] ;
-
+	: $(TARGET_KERNEL_LIBSUPC++)
+;

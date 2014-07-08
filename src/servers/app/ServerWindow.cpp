@@ -51,8 +51,11 @@
 #include "clipping.h"
 #include "utf8_functions.h"
 
+#include "AlphaMask.h"
 #include "AppServer.h"
 #include "AutoDeleter.h"
+#include "BBitmapBuffer.h"
+#include "BitmapManager.h"
 #include "Desktop.h"
 #include "DirectWindowInfo.h"
 #include "DrawingEngine.h"
@@ -599,7 +602,7 @@ ServerWindow::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			int32 showLevel;
 			if (link.Read<int32>(&showLevel) == B_OK) {
 				DTRACE(("ServerWindow %s: Message AS_SHOW_OR_HIDE_WINDOW, "
-					"show level: %d\n", Title(), showLevel));
+					"show level: %ld\n", Title(), showLevel));
 
 				fWindow->SetShowLevel(showLevel);
 				if (showLevel <= 0)
@@ -1526,6 +1529,31 @@ fDesktop->LockSingleWindow();
 
 			break;
 		}
+		case AS_VIEW_SET_FILL_RULE:
+		{
+			DTRACE(("ServerWindow %s: Message AS_VIEW_SET_FILL_RULE: "
+				"View: %s\n", Title(), fCurrentView->Name()));
+			int32 fillRule;
+			if (link.Read<int32>(&fillRule) != B_OK)
+				break;
+
+			fCurrentView->CurrentState()->SetFillRule(fillRule);
+			fWindow->GetDrawingEngine()->SetFillRule(fillRule);
+
+			break;
+		}
+		case AS_VIEW_GET_FILL_RULE:
+		{
+			DTRACE(("ServerWindow %s: Message AS_VIEW_GET_FILL_RULE: "
+				"View: %s\n", Title(), fCurrentView->Name()));
+			int32 fillRule = fCurrentView->CurrentState()->FillRule();
+
+			fLink.StartMessage(B_OK);
+			fLink.Attach<int32>(fillRule);
+			fLink.Flush();
+
+			break;
+		}
 		case AS_VIEW_PUSH_STATE:
 		{
 			DTRACE(("ServerWindow %s: Message AS_VIEW_PUSH_STATE: View: "
@@ -1569,6 +1597,36 @@ fDesktop->LockSingleWindow();
 
 			fLink.StartMessage(B_OK);
 			fLink.Attach<float>(scale);
+			fLink.Flush();
+			break;
+		}
+		case AS_VIEW_SET_TRANSFORM:
+		{
+			BAffineTransform transform;
+			if (link.Read<BAffineTransform>(&transform) != B_OK)
+				break;
+
+			DTRACE(("ServerWindow %s: Message AS_VIEW_SET_TRANSFORM: "
+				"View: %s -> transform: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f\n",
+				Title(), fCurrentView->Name(), transform.sx, transform.shy,
+				transform.shx, transform.sy, transform.tx, transform.ty));
+
+			fCurrentView->CurrentState()->SetTransform(transform);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+		case AS_VIEW_GET_TRANSFORM:
+		{
+			BAffineTransform transform
+				= fCurrentView->CurrentState()->Transform();
+
+			DTRACE(("ServerWindow %s: Message AS_VIEW_GET_TRANSFORM: "
+				"View: %s -> transform: %.2f, %.2f, %.2f, %.2f, %.2f, %.2f\n",
+				Title(), fCurrentView->Name(), transform.sx, transform.shy,
+				transform.shx, transform.sy, transform.tx, transform.ty));
+
+			fLink.StartMessage(B_OK);
+			fLink.Attach<BAffineTransform>(transform);
 			fLink.Flush();
 			break;
 		}
@@ -1861,13 +1919,17 @@ fDesktop->LockSingleWindow();
 			DTRACE(("ServerWindow %s: Message AS_VIEW_CLIP_TO_PICTURE: "
 				"View: %s\n", Title(), fCurrentView->Name()));
 
-			// TODO: you are not allowed to use View regions here!!!
-
 			int32 pictureToken;
 			BPoint where;
 			bool inverse = false;
 
 			link.Read<int32>(&pictureToken);
+			if (pictureToken < 0) {
+				fCurrentView->SetAlphaMask(NULL);
+				_UpdateDrawState(fCurrentView);
+				break;
+			}
+
 			link.Read<BPoint>(&where);
 			if (link.Read<bool>(&inverse) != B_OK)
 				break;
@@ -1876,11 +1938,12 @@ fDesktop->LockSingleWindow();
 			if (picture == NULL)
 				break;
 
-			BRegion region;
-			// TODO: I think we also need the BView's token
-			// I think PictureToRegion would fit better into the View class (?)
-			if (PictureToRegion(picture, region, inverse, where) == B_OK)
-				fCurrentView->SetUserClipping(&region);
+			AlphaMask* mask = new(std::nothrow) AlphaMask(
+				picture, inverse, where, *fCurrentView->CurrentState());
+			fCurrentView->SetAlphaMask(mask);
+			if (mask != NULL)
+				mask->ReleaseReference();
+			_UpdateDrawState(fCurrentView);
 
 			picture->ReleaseReference();
 			break;
@@ -2413,14 +2476,16 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				Title()));
 
 			BRect rect;
-			float xrad,yrad;
+			float xRadius;
+			float yRadius;
 			link.Read<BRect>(&rect);
-			link.Read<float>(&xrad);
-			if (link.Read<float>(&yrad) != B_OK)
+			link.Read<float>(&xRadius);
+			if (link.Read<float>(&yRadius) != B_OK)
 				break;
 
 			fCurrentView->ConvertToScreenForDrawing(&rect);
-			drawingEngine->DrawRoundRect(rect, xrad, yrad,
+			float scale = fCurrentView->CurrentState()->CombinedScale();
+			drawingEngine->DrawRoundRect(rect, xRadius * scale, yRadius * scale,
 				code == AS_FILL_ROUNDRECT);
 			break;
 		}
@@ -2936,10 +3001,24 @@ ServerWindow::_DispatchPictureMessage(int32 code, BPrivate::LinkReceiver& link)
 		case AS_VIEW_SET_SCALE:
 		{
 			float scale;
-			link.Read<float>(&scale);
+			if (link.Read<float>(&scale) != B_OK)
+				break;
+
 			picture->WriteSetScale(scale);
 
 			fCurrentView->SetScale(scale);
+			_UpdateDrawState(fCurrentView);
+			break;
+		}
+		case AS_VIEW_SET_TRANSFORM:
+		{
+			BAffineTransform transform;
+			if (link.Read<BAffineTransform>(&transform) != B_OK)
+				break;
+
+			picture->WriteSetTransform(transform);
+
+			fCurrentView->CurrentState()->SetTransform(transform);
 			_UpdateDrawState(fCurrentView);
 			break;
 		}
@@ -3619,8 +3698,13 @@ ServerWindow::_UpdateDrawState(View* view)
 	// is being drawn? probably not... otherwise the
 	// "offsets" passed below would need to be updated again
 	DrawingEngine* drawingEngine = fWindow->GetDrawingEngine();
-	if (view && drawingEngine) {
+	if (view != NULL && drawingEngine != NULL) {
 		BPoint leftTop(0, 0);
+		if (view->GetAlphaMask() != NULL) {
+			view->ConvertToScreen(&leftTop);
+ 			view->GetAlphaMask()->Update(view->Bounds(), leftTop);
+			leftTop = BPoint(0, 0);
+		}
 		view->ConvertToScreenForDrawing(&leftTop);
 		drawingEngine->SetDrawState(view->CurrentState(), leftTop.x, leftTop.y);
 	}
@@ -3748,14 +3832,4 @@ ServerWindow::_DirectWindowSetFullScreen(bool enable)
 	}
 
 	fDesktop->SetWindowFeel(fWindow, feel);
-}
-
-
-status_t
-ServerWindow::PictureToRegion(ServerPicture* picture, BRegion& region,
-	bool inverse, BPoint where)
-{
-	fprintf(stderr, "ServerWindow::PictureToRegion() not implemented\n");
-	region.MakeEmpty();
-	return B_ERROR;
 }

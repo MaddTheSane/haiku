@@ -1,30 +1,42 @@
+/*
+ * Copyright 2005-2013, Haiku, Inc.
+ * Distributed under the terms of the MIT license.
+ *
+ * Authors:
+ *		Nathan Whitehorn
+ */
+
+
+#include "power_button_monitor.h"
+
 #include <Messenger.h>
 #include <Roster.h>
 
 #include <RosterPrivate.h>
 
-#include "power_button_monitor.h"
 
-
-PowerButtonMonitor::PowerButtonMonitor() : BHandler ("power_button_monitor") {
-	power_button_fd = open("/dev/power/button/power",O_RDONLY);
+PowerButtonMonitor::PowerButtonMonitor()
+{
+	fFD = open("/dev/power/button/power", O_RDONLY);
 }
 
-PowerButtonMonitor::~PowerButtonMonitor() {
-	if (power_button_fd > 0)
-		close(power_button_fd);
+
+PowerButtonMonitor::~PowerButtonMonitor()
+{
+	if (fFD > 0)
+		close(fFD);
 }
 
-void PowerButtonMonitor::MessageReceived(BMessage *msg) {
-	if (msg->what != POLL_POWER_BUTTON_STATUS)
+
+void
+PowerButtonMonitor::HandleEvent()
+{
+	if (fFD <= 0)
 		return;
-		
-	if (power_button_fd <= 0)
-		return;
-		
+
 	uint8 button_pressed;
-	read(power_button_fd,&button_pressed,1);
-	
+	read(fFD, &button_pressed, 1);
+
 	if (button_pressed) {
 		BRoster roster;
 		BRoster::Private rosterPrivate(roster);

@@ -11,6 +11,7 @@
 
 #include <libroot_private.h>
 #include <pthread_private.h>
+#include <runtime_loader.h>
 #include <thread_defs.h>
 #include <tls.h>
 #include <syscalls.h>
@@ -70,6 +71,8 @@ _thread_do_exit_work(void)
 
 	tls_set(TLS_ON_EXIT_THREAD_SLOT, NULL);
 
+	__gRuntimeLoader->destroy_thread_tls();
+
 	__pthread_destroy_thread();
 }
 
@@ -110,6 +113,7 @@ spawn_thread(thread_func entry, const char *name, int32 priority, void *data)
 
 	__pthread_init_creation_attributes(NULL, thread, &thread_entry, entry,
 		thread, name, &attributes);
+	thread->flags |= THREAD_DETACHED;
 
 	attributes.priority = priority;
 
@@ -256,4 +260,3 @@ snooze_until(bigtime_t timeout, int timeBase)
 {
 	return _kern_snooze_etc(timeout, timeBase, B_ABSOLUTE_TIMEOUT, NULL);
 }
-

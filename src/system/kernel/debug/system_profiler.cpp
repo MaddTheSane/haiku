@@ -199,8 +199,8 @@ private:
 			bool				fWaitObjectNotificationsRequested;
 			Thread* volatile	fWaitingProfilerThread;
 			bool				fProfilingActive;
-			bool				fReentered[B_MAX_CPU_COUNT];
-			CPUProfileData		fCPUData[B_MAX_CPU_COUNT];
+			bool				fReentered[SMP_MAX_CPUS];
+			CPUProfileData		fCPUData[SMP_MAX_CPUS];
 			WaitObject*			fWaitObjectBuffer;
 			int32				fWaitObjectCount;
 			WaitObjectList		fUsedWaitObjects;
@@ -210,7 +210,7 @@ private:
 
 
 /*!	Notifies the profiler thread when the profiling buffer is full enough.
-	The caller must hold the scheduler lock and fLock.
+	The caller must hold fLock.
 */
 inline void
 SystemProfiler::_MaybeNotifyProfilerThreadLocked()
@@ -220,6 +220,7 @@ SystemProfiler::_MaybeNotifyProfilerThreadLocked()
 		int cpu = smp_get_current_cpu();
 		fReentered[cpu] = true;
 
+		SpinLocker _(fWaitingProfilerThread->scheduler_lock);
 		thread_unblock_locked(fWaitingProfilerThread, B_OK);
 
 		fWaitingProfilerThread = NULL;
@@ -234,11 +235,13 @@ SystemProfiler::_MaybeNotifyProfilerThread()
 	if (fWaitingProfilerThread == NULL)
 		return;
 
-	InterruptsSpinLocker schedulerLocker(gSchedulerLock);
-	SpinLocker locker(fLock);
+	InterruptsSpinLocker locker(fLock);
 
 	_MaybeNotifyProfilerThreadLocked();
 }
+
+
+// #pragma mark - SystemProfiler public
 
 
 SystemProfiler::SystemProfiler(team_id team, const area_info& userAreaInfo,
@@ -298,18 +301,15 @@ SystemProfiler::~SystemProfiler()
 	// inactive.
 	InterruptsSpinLocker locker(fLock);
 	if (fWaitingProfilerThread != NULL) {
-		InterruptsSpinLocker schedulerLocker(gSchedulerLock);
-		thread_unblock_locked(fWaitingProfilerThread, B_OK);
+		thread_unblock(fWaitingProfilerThread, B_OK);
 		fWaitingProfilerThread = NULL;
 	}
 	fProfilingActive = false;
 	locker.Unlock();
 
 	// stop scheduler listening
-	if (fSchedulerNotificationsRequested) {
-		InterruptsSpinLocker schedulerLocker(gSchedulerLock);
+	if (fSchedulerNotificationsRequested)
 		scheduler_remove_listener(this);
-	}
 
 	// stop wait object listening
 	if (fWaitObjectNotificationsRequested) {
@@ -499,8 +499,6 @@ SystemProfiler::Init()
 		fThreadNotificationsEnabled = true;
 	}
 
-	InterruptsSpinLocker schedulerLocker(gSchedulerLock);
-
 	fProfilingActive = true;
 
 	// start scheduler and wait object listening
@@ -508,7 +506,7 @@ SystemProfiler::Init()
 		scheduler_add_listener(this);
 		fSchedulerNotificationsRequested = true;
 
-		SpinLocker waitObjectLocker(gWaitObjectListenerLock);
+		InterruptsSpinLocker waitObjectLocker(gWaitObjectListenerLock);
 		add_wait_object_listener(this);
 		fWaitObjectNotificationsRequested = true;
 		waitObjectLocker.Unlock();
@@ -521,8 +519,6 @@ SystemProfiler::Init()
 				ThreadScheduled(thread, thread);
 		}
 	}
-
-	schedulerLocker.Unlock();
 
 	// I/O scheduling
 	if ((fFlags & B_SYSTEM_PROFILER_IO_SCHEDULING_EVENTS) != 0) {
@@ -572,12 +568,9 @@ SystemProfiler::NextBuffer(size_t bytesRead, uint64* _droppedEvents)
 		Thread* thread = thread_get_current_thread();
 		fWaitingProfilerThread = thread;
 
-		InterruptsSpinLocker schedulerLocker(gSchedulerLock);
-
 		thread_prepare_to_block(thread, B_CAN_INTERRUPT,
 			THREAD_BLOCK_TYPE_OTHER, "system profiler buffer");
 
-		schedulerLocker.Unlock();
 		locker.Unlock();
 
 		status_t error = thread_block_with_timeout(B_RELATIVE_TIMEOUT, 1000000);
@@ -606,6 +599,9 @@ SystemProfiler::NextBuffer(size_t bytesRead, uint64* _droppedEvents)
 
 	return B_OK;
 }
+
+
+// #pragma mark - NotificationListener interface
 
 
 void
@@ -738,12 +734,15 @@ SystemProfiler::EventOccurred(NotificationService& service,
 }
 
 
+// #pragma mark - SchedulerListener interface
+
+
 void
 SystemProfiler::ThreadEnqueuedInRunQueue(Thread* thread)
 {
 	int cpu = smp_get_current_cpu();
 
-	SpinLocker locker(fLock, false, !fReentered[cpu]);
+	InterruptsSpinLocker locker(fLock, false, !fReentered[cpu]);
 		// When re-entering, we already hold the lock.
 
 	system_profiler_thread_enqueued_in_run_queue* event
@@ -774,7 +773,7 @@ SystemProfiler::ThreadRemovedFromRunQueue(Thread* thread)
 {
 	int cpu = smp_get_current_cpu();
 
-	SpinLocker locker(fLock, false, !fReentered[cpu]);
+	InterruptsSpinLocker locker(fLock, false, !fReentered[cpu]);
 		// When re-entering, we already hold the lock.
 
 	system_profiler_thread_removed_from_run_queue* event
@@ -800,7 +799,7 @@ SystemProfiler::ThreadScheduled(Thread* oldThread, Thread* newThread)
 {
 	int cpu = smp_get_current_cpu();
 
-	SpinLocker locker(fLock, false, !fReentered[cpu]);
+	InterruptsSpinLocker locker(fLock, false, !fReentered[cpu]);
 		// When re-entering, we already hold the lock.
 
 	// If the old thread starts waiting, handle the wait object.
@@ -826,6 +825,9 @@ SystemProfiler::ThreadScheduled(Thread* oldThread, Thread* newThread)
 	// unblock the profiler thread, if necessary
 	_MaybeNotifyProfilerThreadLocked();
 }
+
+
+// #pragma mark - WaitObjectListener interface
 
 
 void
@@ -854,6 +856,9 @@ SystemProfiler::RWLockInitialized(rw_lock* lock)
 {
 	_WaitObjectCreated((addr_t)lock, THREAD_BLOCK_TYPE_RW_LOCK);
 }
+
+
+// #pragma mark - SystemProfiler private
 
 
 bool

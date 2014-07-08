@@ -624,6 +624,15 @@ FontEngine::PrepareGlyph(uint32 glyphIndex)
 	loadFlags |= fGlyphRendering == glyph_ren_subpix ?
 		FT_LOAD_TARGET_LCD : FT_LOAD_TARGET_NORMAL;
 
+	// Load unscaled and without hinting to get precise advance values
+	// for B_CHAR_SPACING
+	fLastError = FT_Load_Glyph(fFace, glyphIndex, loadFlags
+		| FT_LOAD_NO_HINTING | FT_LOAD_NO_SCALE);
+
+	fPreciseAdvanceX = (double)fFace->glyph->advance.x / fFace->units_per_EM;
+	fPreciseAdvanceY = (double)fFace->glyph->advance.y / fFace->units_per_EM;
+
+	// Need to load again with hinting.
 	fLastError = FT_Load_Glyph(fFace, glyphIndex, loadFlags);
 
 	if (fLastError != 0)
@@ -631,6 +640,7 @@ FontEngine::PrepareGlyph(uint32 glyphIndex)
 
 	fAdvanceX = int26p6_to_dbl(fFace->glyph->advance.x);
 	fAdvanceY = int26p6_to_dbl(fFace->glyph->advance.y);
+
 	fInsetLeft = int26p6_to_dbl(fFace->glyph->metrics.horiBearingX);
 	fInsetRight = int26p6_to_dbl(fFace->glyph->metrics.horiBearingX
 		+ fFace->glyph->metrics.width - fFace->glyph->metrics.horiAdvance);

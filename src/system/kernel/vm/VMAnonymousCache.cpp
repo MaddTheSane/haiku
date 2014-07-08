@@ -1484,11 +1484,11 @@ swap_init_post_modules()
 					// User specified a size / volume that seems valid
 					swapAutomatic = false;
 					swapSize = atoll(size);
-					strncpy(selectedVolume.name, volume,
+					strlcpy(selectedVolume.name, volume,
 						sizeof(selectedVolume.name));
-					strncpy(selectedVolume.device, device,
+					strlcpy(selectedVolume.device, device,
 						sizeof(selectedVolume.device));
-					strncpy(selectedVolume.filesystem, filesystem,
+					strlcpy(selectedVolume.filesystem, filesystem,
 						sizeof(selectedVolume.filesystem));
 					selectedVolume.capacity = atoll(capacity);
 				} else {
@@ -1498,8 +1498,8 @@ swap_init_post_modules()
 						"using automatic swap\n", __func__);
 				}
 			}
-			unload_driver_settings(settings);
 		}
+		unload_driver_settings(settings);
 	}
 
 	if (swapAutomatic) {
@@ -1566,8 +1566,8 @@ swap_init_post_modules()
 	if (swapDeviceID == gBootDevice)
 		path = kDefaultSwapPath;
 	else {
-		vfs_entry_ref_to_path(info.dev, info.root,
-			".", path.LockBuffer(), path.BufferSize());
+		vfs_entry_ref_to_path(info.dev, info.root, ".", true, path.LockBuffer(),
+			path.BufferSize());
 		path.UnlockBuffer();
 		path.Append("swap");
 	}
@@ -1667,11 +1667,11 @@ swap_total_swap_pages()
 
 
 void
-swap_get_info(struct system_memory_info* info)
+swap_get_info(system_info* info)
 {
 #if ENABLE_SWAP_SUPPORT
-	info->max_swap_space = (uint64)swap_total_swap_pages() * B_PAGE_SIZE;
-	info->free_swap_space = (uint64)swap_available_pages() * B_PAGE_SIZE;
+	info->max_swap_pages = swap_total_swap_pages();
+	info->free_swap_pages = swap_available_pages();
 #else
 	info->max_swap_space = 0;
 	info->free_swap_space = 0;

@@ -95,6 +95,15 @@ x86_set_tls_context(Thread* thread)
 }
 
 
+static addr_t
+arch_randomize_stack_pointer(addr_t value)
+{
+	STATIC_ASSERT(MAX_RANDOM_VALUE >= B_PAGE_SIZE - 1);
+	value -= random_value() & (B_PAGE_SIZE - 1);
+	return value & ~addr_t(0xf);
+}
+
+
 static uint8*
 get_signal_stack(Thread* thread, iframe* frame, struct sigaction* action)
 {
@@ -104,7 +113,8 @@ get_signal_stack(Thread* thread, iframe* frame, struct sigaction* action)
 			&& (frame->user_sp < thread->signal_stack_base
 				|| frame->user_sp >= thread->signal_stack_base
 					+ thread->signal_stack_size)) {
-		return (uint8*)(thread->signal_stack_base + thread->signal_stack_size);
+		addr_t stackTop = thread->signal_stack_base + thread->signal_stack_size;
+		return (uint8*)arch_randomize_stack_pointer(stackTop);
 	}
 
 	// We are going to use the stack that we are already on. We must not touch
@@ -155,7 +165,7 @@ void
 arch_thread_init_kthread_stack(Thread* thread, void* _stack, void* _stackTop,
 	void (*function)(void*), const void* data)
 {
-	addr_t* stackTop = (addr_t*)_stackTop;
+	uintptr_t* stackTop = static_cast<uintptr_t*>(_stackTop);
 
 	TRACE("arch_thread_init_kthread_stack: stack top %p, function %p, data: "
 		"%p\n", _stackTop, function, data);
@@ -163,23 +173,11 @@ arch_thread_init_kthread_stack(Thread* thread, void* _stack, void* _stackTop,
 	// Save the stack top for system call entry.
 	thread->arch_info.syscall_rsp = (uint64*)thread->kernel_stack_top;
 
-	// x86_64 uses registers for argument passing, first argument in RDI,
-	// however we don't save RDI on every context switch (there is no need
-	// for us to: it is not callee-save, and only contains the first argument
-	// to x86_context_switch). However, this presents a problem since we
-	// cannot store the argument for the entry function here. Therefore, we
-	// save the function address in R14 and the argument in R15 (which are
-	// restored), and then set up the stack to initially call a wrapper
-	// function which passes the argument correctly.
+	thread->arch_info.instruction_pointer
+		= reinterpret_cast<uintptr_t>(x86_64_thread_entry);
 
-	*--stackTop = 0;							// Dummy return address.
-	*--stackTop = (addr_t)x86_64_thread_entry;	// Wrapper function.
-	*--stackTop = (addr_t)data;					// R15: argument.
-	*--stackTop = (addr_t)function;				// R14: entry function.
-	*--stackTop = 0;							// R13.
-	*--stackTop = 0;							// R12.
-	*--stackTop = 0;							// RBP.
-	*--stackTop = 0;							// RBX.
+	*--stackTop = uintptr_t(data);
+	*--stackTop = uintptr_t(function);
 
 	// Save the stack position.
 	thread->arch_info.current_stack = stackTop;
@@ -195,15 +193,6 @@ arch_thread_dump_info(void* info)
 	kprintf("\tsyscall_rsp: %p\n", thread->syscall_rsp);
 	kprintf("\tuser_rsp: %p\n", thread->user_rsp);
 	kprintf("\tfpu_state at %p\n", thread->fpu_state);
-}
-
-
-static addr_t
-arch_randomize_stack_pointer(addr_t value)
-{
-	STATIC_ASSERT(MAX_RANDOM_VALUE >= B_PAGE_SIZE - 1);
-	value -= random_value() & (B_PAGE_SIZE - 1);
-	return value & ~addr_t(0xf);
 }
 
 
@@ -237,11 +226,11 @@ arch_thread_enter_userspace(Thread* thread, addr_t entry, void* args1,
 	frame.si = (uint64)args2;
 	frame.di = (uint64)args1;
 	frame.ip = entry;
-	frame.cs = USER_CODE_SEG;
+	frame.cs = USER_CODE_SELECTOR;
 	frame.flags = X86_EFLAGS_RESERVED1 | X86_EFLAGS_INTERRUPT
 		| (3 << X86_EFLAGS_IO_PRIVILEG_LEVEL_SHIFT);
 	frame.sp = stackTop;
-	frame.ss = USER_DATA_SEG;
+	frame.ss = USER_DATA_SELECTOR;
 
 	// Return to userland. Never returns.
 	x86_initial_return_to_userland(thread, &frame);

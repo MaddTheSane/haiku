@@ -1,6 +1,12 @@
 /*
  * Copyright 2006-2010, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2014 Haiku, Inc. All rights reserved.
+ *
  * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		John Scipione, jscipione@gmail.com
  */
 
 
@@ -9,36 +15,47 @@
 #include <stdio.h>
 
 #include <Catalog.h>
+#include <ControlLook.h>
 #include <Locale.h>
 #include <ObjectList.h>
+
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Attribute ListView"
 
+
 const struct type_map kTypeMap[] = {
-	{B_TRANSLATE("String"),		B_STRING_TYPE},
-	{B_TRANSLATE("Boolean"),		B_BOOL_TYPE},
-	{B_TRANSLATE("Integer 8 bit"),	B_INT8_TYPE},
-	{B_TRANSLATE("Integer 16 bit"),	B_INT16_TYPE},
-	{B_TRANSLATE("Integer 32 bit"),	B_INT32_TYPE},
-	{B_TRANSLATE("Integer 64 bit"),	B_INT64_TYPE},
-	{B_TRANSLATE("Float"),			B_FLOAT_TYPE},
-	{B_TRANSLATE("Double"),			B_DOUBLE_TYPE},
-	{B_TRANSLATE("Time"),			B_TIME_TYPE},
-	{NULL,							0}
+	{ B_TRANSLATE("String"),         B_STRING_TYPE },
+	{ B_TRANSLATE("Boolean"),        B_BOOL_TYPE   },
+	{ B_TRANSLATE("Integer 8 bit"),  B_INT8_TYPE   },
+	{ B_TRANSLATE("Integer 16 bit"), B_INT16_TYPE  },
+	{ B_TRANSLATE("Integer 32 bit"), B_INT32_TYPE  },
+	{ B_TRANSLATE("Integer 64 bit"), B_INT64_TYPE  },
+	{ B_TRANSLATE("Float"),          B_FLOAT_TYPE  },
+	{ B_TRANSLATE("Double"),         B_DOUBLE_TYPE },
+	{ B_TRANSLATE("Time"),           B_TIME_TYPE   },
+	{ NULL,                          0             }
 };
+
 
 // TODO: in the future, have a (private) Tracker API that exports these
 //	as well as a nice GUI for them.
 const struct display_as_map kDisplayAsMap[] = {
-	{B_TRANSLATE("Default"),	NULL,		{}},
-	{B_TRANSLATE("Checkbox"),	B_TRANSLATE("checkbox"),
-		{B_BOOL_TYPE, B_INT8_TYPE, B_INT16_TYPE, B_INT32_TYPE}},
-	{B_TRANSLATE("Duration"),	B_TRANSLATE("duration"),
-		{B_TIME_TYPE, B_INT8_TYPE, B_INT16_TYPE, B_INT32_TYPE, B_INT64_TYPE}},
-	{B_TRANSLATE("Rating"),		B_TRANSLATE("rating"),
-		{B_INT8_TYPE, B_INT16_TYPE, B_INT32_TYPE}},
-	{NULL,			NULL,		{}}
+	{ B_TRANSLATE("Default"),	NULL,
+		{}
+	},
+	{ B_TRANSLATE("Checkbox"),	B_TRANSLATE("checkbox"),
+		{ B_BOOL_TYPE, B_INT8_TYPE, B_INT16_TYPE, B_INT32_TYPE }
+	},
+	{ B_TRANSLATE("Duration"),	B_TRANSLATE("duration"),
+		{ B_TIME_TYPE, B_INT8_TYPE, B_INT16_TYPE, B_INT32_TYPE, B_INT64_TYPE }
+	},
+	{ B_TRANSLATE("Rating"),	B_TRANSLATE("rating"),
+		{ B_INT8_TYPE, B_INT16_TYPE, B_INT32_TYPE }
+	},
+	{ NULL,						NULL,
+		{}
+	}
 };
 
 
@@ -131,12 +148,12 @@ create_attribute_item(BMessage& attributes, int32 index)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - AttributeItem
 
 
 AttributeItem::AttributeItem(const char* name, const char* publicName,
-		type_code type, const char* displayAs, int32 alignment,
-		int32 width, bool visible, bool editable)
+	type_code type, const char* displayAs, int32 alignment,
+	int32 width, bool visible, bool editable)
 	:
 	BStringItem(publicName),
 	fName(name),
@@ -180,31 +197,44 @@ AttributeItem::DrawItem(BView* owner, BRect frame, bool drawEverything)
 {
 	BStringItem::DrawItem(owner, frame, drawEverything);
 
+	BString type;
+	name_for_type(type, fType, fDisplayAs.String());
+	const char* typeString = type.String();
+	if (typeString == NULL)
+		return;
+
 	rgb_color highColor = owner->HighColor();
 	rgb_color lowColor = owner->LowColor();
 
+	// set the low color
 	if (IsSelected())
-		owner->SetLowColor(tint_color(lowColor, B_DARKEN_2_TINT));
-
-	rgb_color black = {0, 0, 0, 255};
-
-	if (!IsEnabled())
-		owner->SetHighColor(tint_color(black, B_LIGHTEN_2_TINT));
+		owner->SetLowColor(ui_color(B_LIST_SELECTED_BACKGROUND_COLOR));
 	else
-		owner->SetHighColor(black);
+		owner->SetLowColor(ui_color(B_LIST_BACKGROUND_COLOR));
 
-	owner->MovePenTo(frame.left + frame.Width() / 2.0f + 5.0f,
+	// set the high color
+	if (!IsEnabled()) {
+		rgb_color textColor = ui_color(B_LIST_ITEM_TEXT_COLOR);
+		if (textColor.red + textColor.green + textColor.blue > 128 * 3)
+			owner->SetHighColor(tint_color(textColor, B_DARKEN_2_TINT));
+		else
+			owner->SetHighColor(tint_color(textColor, B_LIGHTEN_2_TINT));
+	} else {
+		if (IsSelected())
+			owner->SetHighColor(ui_color(B_LIST_SELECTED_ITEM_TEXT_COLOR));
+		else
+			owner->SetHighColor(ui_color(B_LIST_ITEM_TEXT_COLOR));
+	}
+
+	// move the pen into position
+	owner->MovePenTo(frame.left + frame.Width() / 2.0f
+			+ be_control_look->DefaultLabelSpacing(),
 		owner->PenLocation().y);
 
-	BString type;
-	name_for_type(type, fType, fDisplayAs.String());
-	owner->DrawString(type.String());
+	// draw the type string
+	owner->DrawString(typeString);
 
-	owner->SetHighColor(tint_color(owner->ViewColor(), B_DARKEN_1_TINT));
-
-	float middle = frame.left + frame.Width() / 2.0f;
-	owner->StrokeLine(BPoint(middle, 0.0f), BPoint(middle, frame.bottom));
-
+	// set the high color and low color back to the original
 	owner->SetHighColor(highColor);
 	owner->SetLowColor(lowColor);
 }
@@ -247,11 +277,12 @@ AttributeItem::operator!=(const AttributeItem& other) const
 }
 
 
-//	#pragma mark -
+//	#pragma mark - AttributeListView
 
 
 AttributeListView::AttributeListView(const char* name)
-	: BListView(name, B_SINGLE_SELECTION_LIST,
+	:
+	BListView(name, B_SINGLE_SELECTION_LIST,
 		B_WILL_DRAW | B_NAVIGABLE | B_FULL_UPDATE_ON_RESIZE | B_FRAME_EVENTS)
 {
 }
@@ -266,9 +297,9 @@ AttributeListView::~AttributeListView()
 void
 AttributeListView::_DeleteItems()
 {
-	for (int32 i = CountItems(); i-- > 0;) {
+	for (int32 i = CountItems() - 1; i >= 0; i--)
 		delete ItemAt(i);
-	}
+
 	MakeEmpty();
 }
 
@@ -362,9 +393,9 @@ AttributeListView::Draw(BRect updateRect)
 {
 	BListView::Draw(updateRect);
 
-	SetHighColor(tint_color(ViewColor(), B_DARKEN_1_TINT));
+	SetHighColor(tint_color(ui_color(B_PANEL_BACKGROUND_COLOR),
+		B_DARKEN_2_TINT));
 
 	float middle = Bounds().Width() / 2.0f;
 	StrokeLine(BPoint(middle, 0.0f), BPoint(middle, Bounds().bottom));
 }
-

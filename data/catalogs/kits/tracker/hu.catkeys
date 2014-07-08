@@ -1,5 +1,4 @@
-1	hungarian	x-vnd.Haiku-libtracker	1762695842
-common	B_COMMON_DIRECTORY		Közös
+1	hungarian	x-vnd.Haiku-libtracker	2212190051
 OK	WidgetAttributeText		Rendben
 Icon view	VolumeWindow		Ikon nézet
 Add-ons	FilePanelPriv		Kiegészítők
@@ -77,7 +76,6 @@ Preparing to empty Trash…	StatusWindow		Felkészülés a Szemetes ürítésér
 You cannot put the selected item(s) into the trash.	FSUtils		A kijelölt elem(ek) nem rakható(k) a Szemetesbe.
 Disks	Model		Lemezek
 Create link	ContainerWindow		Hivatkozás készítése
-develop	B_COMMON_DEVELOP_DIRECTORY		Fejlesztés
 Decrease size	DeskWindow		Méret csökkentése
 Size	ContainerWindow		Méret
 All disks	AutoMounterSettings		Összes lemez
@@ -102,6 +100,7 @@ New folder	FilePanelPriv		Új mappa
 %name info	InfoWindow	InfoWindow Title	%name
 Favorites	FavoritesMenu		Kedvencek
 Add-ons	VolumeWindow		Kiegészítők
+\"%name\" is an unsupported executable.	FSUtils		\"%name\" egy nem támogatott futtatható fájl.
 Sorry, you can't copy items to the Trash.	PoseView		Sajnáljuk, de nem lehet a Szemetesbe másolni.
 List view	VolumeWindow		Lista nézet
 matches wildcard expression	SelectionWindow		megfelel a helyettesítő kifejezésnek
@@ -149,7 +148,6 @@ Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Nem s
 Sorry, saving more than one item is not allowed.	FilePanelPriv		Sajnálom, de egyszerre csak egy elemet lehet elmenteni.
 Searching for disks to mount…	StatusWindow		Csatolandó lemezek keresése…
 New folder	FSUtils		Új mappa
-If you %ifYouDoAction the common folder, %osName may not behave properly!\n\nAre you sure you want to do this?\n\nTo %toDoAction the common folder anyway, hold down the Shift key and click \"%toConfirmAction\".	FSUtils		Ha %ifYouDoAction a közös mappát, akkor lehet, hogy a %osName nem fog megfelelően működni!\n\nBiztosan folytatni akarja?\n\nHogy %toDoAction a közös mappát, tartsa lenyomva a „Shift”-et, és kattintson a „%toConfirmAction” gombra.
 Free space color	SettingsView		Szabad terület színe
 Cut	ContainerWindow		Kivágás
 Remove	FindPanel		Eltávolítás
@@ -250,7 +248,6 @@ Mount settings…	SettingsView		Csatolási beállítások…
 Edit name	InfoWindow		Név szerkesztése
 Could not open \"%name\" (%error). 	FSUtils		Nem sikerült megnyitni: %name\n\t%error
 Paste	ContainerWindow		Beillesztés
-optional	/boot/optional		Választható
 Modified:	InfoWindow		Módosítva:
 Error moving \"%name\".	FSUtils		Hiba történt a fájl (%name) mozgatása közben.
 TiB	WidgetAttributeText		TiB
@@ -412,6 +409,7 @@ Paste layout	ContainerWindow		Elrendezés beillesztése
 Select	InfoWindow		Kijelölés
 Could not update permissions of file \"%name\". %error	FSUtils		Nem sikerült módosítani a fájl (%name) jogosultságait.\n\t%error
 Select…	FilePanelPriv		Kijelölés…
+\"%name\" is a legacy executable. Please obtain an updated version or recompile the application.	FSUtils		\"%name\" egy régebbi futtatható fájl. Frissítés vagy újra felépítés szükséges.
 There was an error resolving the link.	Tracker		Hiba történt a hivatkozás feloldása során.
 %BytesPerSecond/s	StatusWindow		%BytesPerSecond/mp
 You can't move or copy the trash.	FSUtils		A Szemetest nem lehet mozgatni vagy másolni.
@@ -431,6 +429,7 @@ New	ContainerWindow		Új
 Name matches wildcard expression:###	SelectionWindow		A név illeszkedik ezekre a helyettesítőkarakterekre:###
 less than	FindPanel		kisebb, mint
 64 x 64	DeskWindow		64 x 64
+develop	B_SYSTEM_DEVELOP_DIRECTORY		Fejlesztés
 Modified	ContainerWindow		Módosítva
 Edit Query template	FindPanel		Keresési sablon szerkesztése
 Prompt	FSUtils		Kérdés

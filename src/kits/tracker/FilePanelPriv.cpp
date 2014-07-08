@@ -33,23 +33,9 @@ All rights reserved.
 */
 
 
-#include "Attributes.h"
-#include "AttributeStream.h"
-#include "AutoLock.h"
-#include "Commands.h"
-#include "DesktopPoseView.h"
-#include "DirMenu.h"
-#include "FavoritesMenu.h"
 #include "FilePanelPriv.h"
-#include "FSUtils.h"
-#include "FSClipboard.h"
-#include "IconMenuItem.h"
-#include "MimeTypes.h"
-#include "NavMenu.h"
-#include "PoseView.h"
-#include "Tracker.h"
-#include "tracker_private.h"
-#include "Utilities.h"
+
+#include <string.h>
 
 #include <Alert.h>
 #include <Application.h>
@@ -76,7 +62,23 @@ All rights reserved.
 #include <Volume.h>
 #include <VolumeRoster.h>
 
-#include <string.h>
+#include "Attributes.h"
+#include "AttributeStream.h"
+#include "AutoLock.h"
+#include "Commands.h"
+#include "DesktopPoseView.h"
+#include "DirMenu.h"
+#include "FavoritesMenu.h"
+#include "FSUtils.h"
+#include "FSClipboard.h"
+#include "IconMenuItem.h"
+#include "MimeTypes.h"
+#include "NavMenu.h"
+#include "PoseView.h"
+#include "Tracker.h"
+#include "Utilities.h"
+
+#include "tracker_private.h"
 
 
 const char* kDefaultFilePanelTemplate = "FilePanelSettings";
@@ -616,7 +618,7 @@ TFilePanel::Init(const BMessage*)
 	favorites->AddItem(new BMenuItem(B_TRANSLATE("Add current folder"),
 		new BMessage(kAddCurrentDir)));
 	favorites->AddItem(new BMenuItem(
-		B_TRANSLATE("Edit favorites"B_UTF8_ELLIPSIS),
+		B_TRANSLATE("Edit favorites" B_UTF8_ELLIPSIS),
 		new BMessage(kEditFavorites)));
 
 	fMenuBar->AddItem(favorites);
@@ -938,7 +940,7 @@ TFilePanel::AddWindowContextMenus(BMenu* menu)
 	menu->AddItem(item);
 	menu->AddSeparatorItem();
 
-	item = new BMenuItem(B_TRANSLATE("Select"B_UTF8_ELLIPSIS),
+	item = new BMenuItem(B_TRANSLATE("Select" B_UTF8_ELLIPSIS),
 		new BMessage(kShowSelectionWindow), 'A', B_SHIFT_KEY);
 	item->SetTarget(PoseView());
 	menu->AddItem(item);
@@ -1163,8 +1165,9 @@ TFilePanel::MessageReceived(BMessage* message)
 			BPath homePath;
 			entry_ref ref;
 			if (find_directory(B_USER_DIRECTORY, &homePath) != B_OK
-				|| get_ref_for_path(homePath.Path(), &ref) != B_OK)
+				|| get_ref_for_path(homePath.Path(), &ref) != B_OK) {
 				break;
+			}
 
 			SetTo(&ref);
 			break;
@@ -1271,6 +1274,7 @@ TFilePanel::MessageReceived(BMessage* message)
 
 		default:
 			_inherited::MessageReceived(message);
+			break;
 	}
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2012, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2001-2013, Axel Dörfler, axeld@pinc-software.de.
  * This file may be used under the terms of the MIT License.
  */
 
@@ -1190,6 +1190,68 @@ BlockAllocator::_CheckGroup(int32 groupIndex) const
 #endif	// DEBUG_ALLOCATION_GROUPS
 
 
+status_t
+BlockAllocator::Trim(uint64 offset, uint64 size, uint64& trimmedSize)
+{
+	const uint32 kTrimRanges = 128;
+	fs_trim_data* trimData = (fs_trim_data*)malloc(sizeof(fs_trim_data)
+		+ sizeof(uint64) * kTrimRanges);
+	if (trimData == NULL)
+		return B_NO_MEMORY;
+
+	MemoryDeleter deleter(trimData);
+	RecursiveLocker locker(fLock);
+
+	// TODO: take given offset and size into account!
+	int32 lastGroup = fNumGroups - 1;
+	uint32 firstBlock = 0;
+	uint32 firstBit = 0;
+	uint64 currentBlock = 0;
+	uint32 blockShift = fVolume->BlockShift();
+
+	uint64 firstFree = 0;
+	size_t freeLength = 0;
+
+	trimData->range_count = 0;
+	trimmedSize = 0;
+
+	AllocationBlock cached(fVolume);
+	for (int32 groupIndex = 0; groupIndex <= lastGroup; groupIndex++) {
+		AllocationGroup& group = fGroups[groupIndex];
+
+		for (uint32 block = firstBlock; block < group.NumBlocks(); block++) {
+			cached.SetTo(group, block);
+
+			for (uint32 i = firstBit; i < cached.NumBlockBits(); i++) {
+				if (cached.IsUsed(i)) {
+					// Block is in use
+					if (freeLength > 0) {
+						status_t status = _TrimNext(*trimData, kTrimRanges,
+							firstFree << blockShift, freeLength << blockShift,
+							false, trimmedSize);
+						if (status != B_OK)
+							return status;
+
+						freeLength = 0;
+					}
+				} else if (freeLength++ == 0) {
+					// Block is free, start new free range
+					firstFree = currentBlock;
+				}
+
+				currentBlock++;
+			}
+		}
+
+		firstBlock = 0;
+		firstBit = 0;
+	}
+
+	return _TrimNext(*trimData, kTrimRanges, firstFree << blockShift,
+		freeLength << blockShift, true, trimmedSize);
+}
+
+
 //	#pragma mark - Bitmap validity checking
 
 // TODO: implement new FS checking API
@@ -2121,6 +2183,54 @@ BlockAllocator::_AddInodeToIndex(Inode* inode)
 	}
 
 	return transaction.Done();
+}
+
+
+status_t
+BlockAllocator::_AddTrim(fs_trim_data& trimData, uint32 maxRanges,
+	uint64 offset, uint64 size)
+{
+	if (trimData.range_count < maxRanges && size > 0) {
+		trimData.ranges[trimData.range_count].offset = offset;
+		trimData.ranges[trimData.range_count].size = size;
+		trimData.range_count++;
+		return true;
+	}
+
+	return false;
+}
+
+
+status_t
+BlockAllocator::_TrimNext(fs_trim_data& trimData, uint32 maxRanges,
+	uint64 offset, uint64 size, bool force, uint64& trimmedSize)
+{
+	PRINT(("_TrimNext(index %" B_PRIu32 ", offset %" B_PRIu64 ", size %"
+		B_PRIu64 ")\n", trimData.range_count, offset, size));
+
+	bool pushed = _AddTrim(trimData, maxRanges, offset, size);
+
+	if (!pushed || force) {
+		// Trim now
+		trimData.trimmed_size = 0;
+dprintf("TRIM FS:\n");
+for (uint32 i = 0; i < trimData.range_count; i++) {
+	dprintf("[%3" B_PRIu32 "] %" B_PRIu64 " : %" B_PRIu64 "\n", i,
+		trimData.ranges[i].offset, trimData.ranges[i].size);
+}
+		if (ioctl(fVolume->Device(), B_TRIM_DEVICE, &trimData,
+				sizeof(fs_trim_data)) != 0) {
+			return errno;
+		}
+
+		trimmedSize += trimData.trimmed_size;
+		trimData.range_count = 0;
+	}
+
+	if (!pushed)
+		_AddTrim(trimData, maxRanges, offset, size);
+
+	return B_OK;
 }
 
 

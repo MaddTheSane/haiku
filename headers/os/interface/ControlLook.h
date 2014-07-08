@@ -12,6 +12,7 @@
 #include <Slider.h>
 
 
+class BBitmap;
 class BControl;
 class BGradientLinear;
 class BView;
@@ -35,16 +36,21 @@ public:
 
 	enum frame_type {
 		B_BUTTON_FRAME,
-		B_MENU_FRAME,
-		B_LISTVIEW_FRAME,
-		B_INPUT_FRAME
+		B_GROUP_FRAME,
+		B_MENU_FIELD_FRAME,
+		B_SCROLL_VIEW_FRAME,
+		B_TEXT_CONTROL_FRAME,
 	};
 
 	enum background_type {
 		B_BUTTON_BACKGROUND,
+		B_BUTTON_WITH_POP_UP_BACKGROUND,
 		B_MENU_BACKGROUND,
-		B_LISTVIEW_BACKGROUND,
-		B_INPUT_BACKGROUND
+		B_MENU_BAR_BACKGROUND,
+		B_MENU_FIELD_BACKGROUND,
+		B_MENU_ITEM_BACKGROUND,
+		B_HORIZONTAL_SCROLL_BAR_BACKGROUND,
+		B_VERTICAL_SCROLL_BAR_BACKGROUND,
 	};
 
 	enum {
@@ -69,13 +75,15 @@ public:
 	};
 
 	enum {
-		B_FOCUSED			= 1 << 0,
-		B_CLICKED			= 1 << 1, // some controls activate on mouse up
-		B_ACTIVATED			= 1 << 2,
-		B_HOVER				= 1 << 3,
-		B_DISABLED			= 1 << 4,
-		B_DEFAULT_BUTTON	= 1 << 5,
-		B_IGNORE_OUTLINE	= 1 << 6,
+		B_FOCUSED				= 1 << 0,
+		B_CLICKED				= 1 << 1, // some controls activate on mouse up
+		B_ACTIVATED				= 1 << 2,
+		B_HOVER					= 1 << 3,
+		B_DISABLED				= 1 << 4,
+		B_DEFAULT_BUTTON		= 1 << 5,
+		B_IGNORE_OUTLINE		= 1 << 6,
+		B_PARTIALLY_ACTIVATED	= 1 << 7, // like B_ACTIVATED, but for tri-state
+		B_FLAT					= 1 << 8, // flat look (e.g. button background)
 
 		B_BLEND_FRAME		= 1 << 16
 	};
@@ -331,6 +339,52 @@ public:
 									const rgb_color& base, uint32 flags,
 									const BPoint& where);
 
+			void				DrawLabel(BView* view, const char* label,
+									const BBitmap* icon, BRect rect,
+									const BRect& updateRect,
+									const rgb_color& base, uint32 flags);
+	virtual	void				DrawLabel(BView* view, const char* label,
+									const BBitmap* icon, BRect rect,
+									const BRect& updateRect,
+									const rgb_color& base, uint32 flags,
+									const BAlignment& alignment);
+
+	virtual	void				GetFrameInsets(frame_type frameType,
+									uint32 flags, float& _left, float& _top,
+									float& _right, float& _bottom);
+	virtual	void				GetBackgroundInsets(
+									background_type backgroundType,
+									uint32 flags, float& _left, float& _top,
+									float& _right, float& _bottom);
+			void				GetInsets(frame_type frameType,
+									background_type backgroundType,
+									uint32 flags, float& _left, float& _top,
+									float& _right, float& _bottom);
+
+	virtual	void				DrawButtonWithPopUpBackground(BView* view,
+									BRect& rect, const BRect& updateRect,
+									const rgb_color& base,
+									uint32 flags = 0,
+									uint32 borders = B_ALL_BORDERS,
+									orientation orientation = B_HORIZONTAL);
+	virtual	void				DrawButtonWithPopUpBackground(BView* view,
+									BRect& rect, const BRect& updateRect,
+									float radius,
+									const rgb_color& base,
+									uint32 flags = 0,
+									uint32 borders = B_ALL_BORDERS,
+									orientation orientation = B_HORIZONTAL);
+	virtual	void				DrawButtonWithPopUpBackground(BView* view,
+									BRect& rect, const BRect& updateRect,
+									float leftTopRadius,
+									float rightTopRadius,
+									float leftBottomRadius,
+									float rightBottomRadius,
+									const rgb_color& base,
+									uint32 flags = 0,
+									uint32 borders = B_ALL_BORDERS,
+									orientation orientation = B_HORIZONTAL);
+
 			void				SetBackgroundInfo(
 									const BMessage& backgroundInfo);
 
@@ -376,9 +430,32 @@ protected:
 									float leftBottomRadius,
 									float rightBottomRadius,
 									const rgb_color& base,
+									bool popupIndicator = false,
 									uint32 flags = 0,
 									uint32 borders = B_ALL_BORDERS,
 									orientation orientation = B_HORIZONTAL);
+			void				_DrawFlatButtonBackground(BView* view,
+									BRect& rect, const BRect& updateRect,
+									const rgb_color& base,
+									bool popupIndicator = false,
+									uint32 flags = 0,
+									uint32 borders = B_ALL_BORDERS,
+									orientation orientation = B_HORIZONTAL);
+			void				_DrawNonFlatButtonBackground(BView* view,
+									BRect& rect, const BRect& updateRect,
+									BRegion& clipping,
+									float leftTopRadius,
+									float rightTopRadius,
+									float leftBottomRadius,
+									float rightBottomRadius,
+									const rgb_color& base,
+									bool popupIndicator = false,
+									uint32 flags = 0,
+									uint32 borders = B_ALL_BORDERS,
+									orientation orientation = B_HORIZONTAL);
+
+			void				_DrawPopUpMarker(BView* view, const BRect& rect,
+									const rgb_color& base, uint32 flags);
 
 			void				_DrawMenuFieldBackgroundOutside(BView* view,
 									BRect& rect, const BRect& updateRect,

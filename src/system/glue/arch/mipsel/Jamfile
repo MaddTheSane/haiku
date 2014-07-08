@@ -1,7 +1,0 @@
-SubDir HAIKU_TOP src system glue arch mipsel ;
-
-KernelObjects
-	crti.S
-	crtn.S
-	;
-

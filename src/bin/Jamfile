@@ -35,6 +35,7 @@ StdBinCommands
 	error.c
 	fortune.c
 	finddir.c
+	fstrim.cpp
 	hd.c
 	idestatus.c
 	listarea.c
@@ -48,7 +49,6 @@ StdBinCommands
 	release.c
 	renice.c
 	rescan.c
-	sysinfo.cpp
 	unchop.c
 	uptime.cpp
 	vmstat.cpp
@@ -89,12 +89,10 @@ StdBinCommands
 	listattr.cpp
 	listfont.cpp
 	listres.cpp
-	mimeset.cpp
 	mkindex.cpp
 	message.cpp
 	modifiers.cpp
 	mvattr.cpp
-	open.cpp
 	play.cpp
 	query.cpp
 	quit.cpp
@@ -115,25 +113,38 @@ if $(TARGET_PLATFORM) = libbe_test {
 StdBinCommands
 	alert.cpp
 	eject.cpp
+	getarch.cpp
 	hey.cpp
 	reindex.cpp
 	resattr.cpp
+	setarch.cpp
 	setdecor.cpp
 	settype.cpp
 	spybmessage.cpp
 	urlwrapper.cpp
 	: be $(TARGET_LIBSUPC++) : $(haiku-utils_rsrc) ;
 
+# standard commands that need libbe.so, libsupc++.so, and libshared.a
+StdBinCommands
+	ramdisk.cpp
+	: libshared.a be $(TARGET_LIBSUPC++) : $(haiku-utils_rsrc) ;
+
+# standard commands that need libbe.so, libbnetapi.solibsupc++.so
+StdBinCommands
+	open.cpp
+	urlwrapper.cpp
+	: be bnetapi $(TARGET_LIBSUPC++) : $(haiku-utils_rsrc) ;
+
 # commands that need libbe.so and the stub catalog
 StdBinCommands
 	clockconfig.cpp
 	query.cpp
-	: be $(HAIKU_LOCALE_LIBS) : $(haiku-utils_rsrc) ;
+	: be localestub : $(haiku-utils_rsrc) ;
 
 # commands that need libbe.so, libsupc++.so and the stub catalog
 StdBinCommands
 	dstcheck.cpp
-	: be $(TARGET_LIBSUPC++) $(HAIKU_LOCALE_LIBS) : $(haiku-utils_rsrc) ;
+	: be $(TARGET_LIBSUPC++) localestub : $(haiku-utils_rsrc) ;
 
 # Haiku-specific apps which need libbe.so
 if $(TARGET_PLATFORM) = haiku {
@@ -160,6 +171,7 @@ StdBinCommands
 # commands that need libstdc++ only
 StdBinCommands
 	diff_zip.cpp
+	sysinfo.cpp
 	: $(TARGET_LIBSTDC++) : $(haiku-utils_rsrc) ;
 
 # standard commands that need libbe.so, libtranslation.so, libsupc++.so
@@ -187,6 +199,11 @@ StdBinCommands
 	mail.cpp
 	: be libmail.so : $(haiku-utils_rsrc) ;
 
+# standard commands that need libbe.so, libpackage.so, libsupc++.so
+StdBinCommands
+	findpaths.cpp
+	: be package $(TARGET_LIBSUPC++) : $(haiku-utils_rsrc) ;
+
 # standard commands that need libbe.so, libdevice.so
 StdBinCommands
 	listusb.cpp
@@ -195,7 +212,8 @@ StdBinCommands
 
 ObjectHdrs [ FGristFiles listusb$(SUFOBJ) ]
 	: [ FDirName $(SUBDIR) $(DOTDOT) add-ons kernel bus_managers usb ]
-		[ FDirName $(TARGET_COMMON_DEBUG_OBJECT_DIR) apps devices ] ;
+		[ FDirName $(TARGET_COMMON_DEBUG_OBJECT_DIR_$(TARGET_PACKAGING_ARCH))
+			apps devices ] ;
 Includes [ FGristFiles listusb.cpp ] : <src!apps!devices>usbhdr.h ;
 
 # standard commands that need libbluetooth.so, due the Bluetooth Kit
@@ -208,20 +226,25 @@ StdBinCommands
 	: be libbluetooth.so $(TARGET_LIBSUPC++) : $(haiku-utils_rsrc) ;
 
 
-# standard commands that need libbe.so, libtracker.so
+# standard commands that need libbe.so, libbnetapi.so, libtracker.so
 StdBinCommands
 	checkitout.cpp
-	: be tracker $(TARGET_LIBSUPC++) : $(haiku-utils_rsrc) ;
+	: be bnetapi tracker $(TARGET_LIBSUPC++) : $(haiku-utils_rsrc) ;
 
 #standard commands that need libbe.so, libtracker.so and the stub catalog
 StdBinCommands
 	filepanel.cpp
-	: be tracker $(TARGET_LIBSUPC++) $(HAIKU_LOCALE_LIBS) : $(haiku-utils_rsrc) ;
+	: be tracker $(TARGET_LIBSUPC++) localestub : $(haiku-utils_rsrc) ;
 
 # standard commands that need libncurses.a
 StdBinCommands
 	watch.c
 	: libncurses.a : $(haiku-utils_rsrc) ;
+
+# mimeset needs libstorage_kit_mime.a
+StdBinCommands
+	mimeset.cpp
+	: be libstorage_kit_mime.a $(TARGET_LIBSTDC++) : $(haiku-utils_rsrc) ;
 
 # Localization of some applications
 DoCatalogs dstcheck
@@ -243,16 +266,13 @@ SubInclude HAIKU_TOP src bin consoled ;
 SubInclude HAIKU_TOP src bin coreutils ;
 SubInclude HAIKU_TOP src bin desklink ;
 SubInclude HAIKU_TOP src bin diffutils ;
-SubInclude HAIKU_TOP src bin findutils ;
 SubInclude HAIKU_TOP src bin fwcontrol ;
 SubInclude HAIKU_TOP src bin gawk ;
 SubInclude HAIKU_TOP src bin gdb ;
 SubInclude HAIKU_TOP src bin hid_decode ;
-SubInclude HAIKU_TOP src bin iasl ;
 SubInclude HAIKU_TOP src bin ideinfo ;
 SubInclude HAIKU_TOP src bin keymap ;
 SubInclude HAIKU_TOP src bin keystore ;
-SubInclude HAIKU_TOP src bin less ;
 SubInclude HAIKU_TOP src bin listdev ;
 SubInclude HAIKU_TOP src bin locale ;
 SubInclude HAIKU_TOP src bin makebootable ;
@@ -272,7 +292,6 @@ SubInclude HAIKU_TOP src bin rc ;
 SubInclude HAIKU_TOP src bin rmd160 ;
 SubInclude HAIKU_TOP src bin screen_blanker ;
 SubInclude HAIKU_TOP src bin screenmode ;
-SubInclude HAIKU_TOP src bin sharutils ;
 SubInclude HAIKU_TOP src bin writembr ;
 SubInclude HAIKU_TOP src bin zic ;
 
@@ -290,3 +309,5 @@ SubInclude HAIKU_TOP src bin unzip ;
 SubInclude HAIKU_TOP src bin zip ;
 SubInclude HAIKU_TOP src bin gzip ;
 
+# Other stuff
+SubInclude HAIKU_TOP src bin filteredquery ;

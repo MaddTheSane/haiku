@@ -8,12 +8,61 @@
 
 #include <new>
 
+#include <package/hpkg/PackageReader.h>
+
 #include <package/hpkg/PackageWriterImpl.h>
 
 
 namespace BPackageKit {
 
 namespace BHPKG {
+
+
+// #pragma mark - BPackageWriterParameters
+
+
+BPackageWriterParameters::BPackageWriterParameters()
+	:
+	fFlags(0),
+	fCompressionLevel(B_HPKG_COMPRESSION_LEVEL_BEST)
+{
+}
+
+
+BPackageWriterParameters::~BPackageWriterParameters()
+{
+}
+
+
+uint32
+BPackageWriterParameters::Flags() const
+{
+	return fFlags;
+}
+
+
+void
+BPackageWriterParameters::SetFlags(uint32 flags)
+{
+	fFlags = flags;
+}
+
+
+int32
+BPackageWriterParameters::CompressionLevel() const
+{
+	return fCompressionLevel;
+}
+
+
+void
+BPackageWriterParameters::SetCompressionLevel(int32 compressionLevel)
+{
+	fCompressionLevel = compressionLevel;
+}
+
+
+// #pragma mark - BPackageWriter
 
 
 BPackageWriter::BPackageWriter(BPackageWriterListener* listener)
@@ -30,12 +79,16 @@ BPackageWriter::~BPackageWriter()
 
 
 status_t
-BPackageWriter::Init(const char* fileName, uint32 flags)
+BPackageWriter::Init(const char* fileName,
+	const BPackageWriterParameters* parameters)
 {
 	if (fImpl == NULL)
 		return B_NO_MEMORY;
 
-	return fImpl->Init(fileName, flags);
+	BPackageWriterParameters defaultParameters;
+
+	return fImpl->Init(fileName,
+		parameters != NULL ? *parameters : defaultParameters);
 }
 
 
@@ -74,6 +127,16 @@ BPackageWriter::Finish()
 		return B_NO_INIT;
 
 	return fImpl->Finish();
+}
+
+
+status_t
+BPackageWriter::Recompress(BPackageReader* reader)
+{
+	if (fImpl == NULL)
+		return B_NO_INIT;
+
+	return fImpl->Recompress(reader->fImpl);
 }
 
 

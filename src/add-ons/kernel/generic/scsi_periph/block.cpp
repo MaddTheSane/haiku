@@ -1,16 +1,19 @@
 /*
- * Copyright 2004-2011, Haiku, Inc. All RightsReserved.
+ * Copyright 2004-2013, Haiku, Inc. All RightsReserved.
  * Copyright 2002-2003, Thomas Kurschel. All rights reserved.
  *
  * Distributed under the terms of the MIT License.
  */
 
 
-//!	Handling of block device (currently, only a capacity check is provided)
+//!	Handling of block device
 
+
+#include <string.h>
+
+#include <AutoDeleter.h>
 
 #include "scsi_periph_int.h"
-#include <string.h>
 
 
 status_t
@@ -59,10 +62,10 @@ periph_check_capacity(scsi_periph_device_info *device, scsi_ccb *request)
 
 		if (capacity == UINT_MAX) {
 			mutex_unlock(&device->mutex);
-			
+
 			scsi_cmd_read_capacity_long *cmd
 				= (scsi_cmd_read_capacity_long *)request->cdb;
-			
+
 			scsi_res_read_capacity_long capacityLongResult;
 			request->data = (uint8*)&capacityLongResult;
 			request->data_length = sizeof(capacityLongResult);
@@ -112,5 +115,64 @@ periph_check_capacity(scsi_periph_device_info *device, scsi_ccb *request)
 	SHOW_FLOW(3, "done (%s)", strerror(res));
 
 	return res;
+}
+
+
+status_t
+periph_trim_device(scsi_periph_device_info *device, scsi_ccb *request,
+	scsi_block_range* ranges, uint32 rangeCount)
+{
+	size_t unmapBlockSize = (rangeCount - 1)
+			* sizeof(scsi_unmap_block_descriptor)
+		+ sizeof(scsi_unmap_parameter_list);
+
+	// TODO: check block limits VPD page
+	// TODO: instead of failing, we should try to complete the request in
+	// several passes.
+	if (unmapBlockSize > 65536 || rangeCount == 0)
+		return B_BAD_VALUE;
+
+	scsi_unmap_parameter_list* unmapBlocks
+		= (scsi_unmap_parameter_list*)malloc(unmapBlockSize);
+	if (unmapBlocks == NULL)
+		return B_NO_MEMORY;
+
+	MemoryDeleter deleter(unmapBlocks);
+
+	// Prepare request data
+	memset(unmapBlocks, 0, unmapBlockSize);
+	unmapBlocks->data_length = B_HOST_TO_BENDIAN_INT16(unmapBlockSize - 1);
+	unmapBlocks->block_data_length
+		= B_HOST_TO_BENDIAN_INT16(unmapBlockSize - 7);
+
+	for (uint32 i = 0; i < rangeCount; i++) {
+		unmapBlocks->blocks[i].lba = B_HOST_TO_BENDIAN_INT64(
+			ranges[i].offset / device->block_size);
+		unmapBlocks->blocks[i].block_count = B_HOST_TO_BENDIAN_INT32(
+			ranges[i].size / device->block_size);
+	}
+
+	request->flags = SCSI_DIR_OUT;
+	request->sort = ranges[0].offset / device->block_size;
+	request->timeout = device->std_timeout;
+
+	scsi_cmd_unmap* cmd = (scsi_cmd_unmap*)request->cdb;
+
+	memset(cmd, 0, sizeof(*cmd));
+	cmd->opcode = SCSI_OP_UNMAP;
+	cmd->length = B_HOST_TO_BENDIAN_INT16(unmapBlockSize);
+
+	request->data = (uint8*)unmapBlocks;
+	request->data_length = unmapBlockSize;
+
+	request->cdb_length = sizeof(*cmd);
+
+	status_t status = periph_safe_exec(device, request);
+
+	// peripheral layer only creates "read" error
+	if (status == B_DEV_READ_ERROR)
+		return B_DEV_WRITE_ERROR;
+
+	return status;
 }
 

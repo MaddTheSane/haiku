@@ -1,5 +1,4 @@
-1	german	x-vnd.Haiku-libtracker	1762695842
-common	B_COMMON_DIRECTORY		Allgemein
+1	german	x-vnd.Haiku-libtracker	1995236298
 OK	WidgetAttributeText		OK
 Icon view	VolumeWindow		Icon-Ansicht
 Add-ons	FilePanelPriv		Add-ons
@@ -59,12 +58,9 @@ Select all	FilePanelPriv		Alles auswählen
 Link to:	InfoWindow		Verknüpfung zu:
 Location	ContainerWindow		Ort
 Location	QueryPoseView		Ort
-config	B_USER_CONFIG_DIRECTORY		Konfiguration
-apps	B_APPS_DIRECTORY		Anwendungen
 Icon view	ContainerWindow		Icon-Ansicht
 Size	QueryPoseView		Größe
 Emptying Trash… 	StatusWindow		Papierkorb wird geleert...
-Tracker New Templates	B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates		Tracker Neu-Vorlagen
 Close all in workspace	ContainerWindow		Alle auf dieser Arbeitsfläche schließen
 Empty Trash	ContainerWindow		Papierkorb leeren
 Name = %name	FindPanel	FindResultTitle	Name = %name
@@ -77,7 +73,6 @@ Preparing to empty Trash…	StatusWindow		Leeren des Papierkorbs wird vorbereite
 You cannot put the selected item(s) into the trash.	FSUtils		Die ausgewählten Objekte können nicht in den Papierkorb verschoben werden.
 Disks	Model		Datenträger
 Create link	ContainerWindow		Verknüpfung erstellen
-develop	B_COMMON_DEVELOP_DIRECTORY		Programmierung
 Decrease size	DeskWindow		Verkleinern
 Size	ContainerWindow		Größe
 All disks	AutoMounterSettings		Alle Datenträger
@@ -102,6 +97,7 @@ New folder	FilePanelPriv		Neuer Ordner
 %name info	InfoWindow	InfoWindow Title	%name Info
 Favorites	FavoritesMenu		Favoriten
 Add-ons	VolumeWindow		Add-ons
+\"%name\" is an unsupported executable.	FSUtils		\"%name\" hat ein nicht-unterstütztes Programmformat.
 Sorry, you can't copy items to the Trash.	PoseView		Objekte können leider nicht in den Papierkorb kopiert werden.
 List view	VolumeWindow		Listenansicht
 matches wildcard expression	SelectionWindow		entspricht Platzhalter-Ausdruck
@@ -117,7 +113,6 @@ Open	VolumeWindow		Öffnen
 New folder	ContainerWindow		Neuer Ordner
 Kind	ContainerWindow		Art
 rename	TextWidget	As in 'to rename this folder...' (en) 'Um diesen Ordner umzubenennen...' (de)	umzubenennen
-home	B_USER_DIRECTORY		Benutzer
 Select…	ContainerWindow		Auswählen…
 Copy to	ContainerWindow		Kopieren nach
 Move to Trash	ContainerWindow		In Papierkorb verschieben
@@ -126,7 +121,6 @@ Create %s clipping	PoseView		Erzeuge %s Ausschnitt
 Set new link target	InfoWindow		Neues Verknüpfungsziel setzen
 If you %ifYouDoAction the system folder or its contents, you won't be able to boot %osName!\n\nAre you sure you want to do this?\n\nTo %toDoAction the system folder or its contents anyway, hold down the Shift key and click \"%toConfirmAction\".	FSUtils		Wird der System-Ordner oder seine Inhalte %ifYouDoAction, kann %osName nicht mehr gestartet werden!\n\nUm ihn oder seine Inhalte dennoch %toDoAction, Shift-Taste gedrückt halten und \"%toConfirmAction\" klicken.
 Save as Query template:	FindPanel		Query als Vorlage speichern:
-preferences	B_PREFERENCES_DIRECTORY		Einstellungen
 Cancel	FSUtils		Abbrechen
 move	FSUtils	As in 'to move this folder...' (en) Um diesen Ordner zu verschieben...' (de)	zu verschieben
 Edit name	ContainerWindow		Umbenennen
@@ -149,7 +143,6 @@ Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		\"%do
 Sorry, saving more than one item is not allowed.	FilePanelPriv		Es kann leider immer nur ein einzelnes Objekt gespeichert werden.
 Searching for disks to mount…	StatusWindow		Es werden Datenträger zum Einhängen gesucht…
 New folder	FSUtils		Neuer Ordner
-If you %ifYouDoAction the common folder, %osName may not behave properly!\n\nAre you sure you want to do this?\n\nTo %toDoAction the common folder anyway, hold down the Shift key and click \"%toConfirmAction\".	FSUtils		Wird der Allgemein-Ordner %ifYouDoAction, kann %osName vielleicht nicht mehr fehlerfrei arbeiten!\n\nUm ihn dennoch %toDoAction, Shift-Taste gedrückt halten und \"%toConfirmAction\" klicken.
 Free space color	SettingsView		Farbe für freien Speicher
 Cut	ContainerWindow		Ausschneiden
 Remove	FindPanel		Entfernen
@@ -250,7 +243,6 @@ Mount settings…	SettingsView		Einhänge-Einstellungen…
 Edit name	InfoWindow		Umbenennen
 Could not open \"%name\" (%error). 	FSUtils		\"%name\" konnte nicht geöffnet werden (%error).
 Paste	ContainerWindow		Einfügen
-optional	/boot/optional		Optional
 Modified:	InfoWindow		Geändert:
 Error moving \"%name\".	FSUtils		Fehler beim Verschieben von \"%name\".
 TiB	WidgetAttributeText		TiB
@@ -398,7 +390,6 @@ Owner	FilePermissionsView		Besitzer
 There was a problem trying to save in the folder you specified. Please try another one.	FilePanelPriv		Es ist ein Problem beim Speichern in den angegebenen Ordner aufgetreten. Bitte einen anderen wählen.
 Restore	ContainerWindow		Wiederherstellen
 Restoring: 	StatusWindow		Wiederherstellen von:
-system	B_SYSTEM_DIRECTORY		System
 Skip	FSUtils		Überspringen
 Settings…	MountMenu		Einstellungen…
 Recent folders	FavoritesMenu		Letzte Ordner
@@ -412,6 +403,7 @@ Paste layout	ContainerWindow		Anordnung einfügen
 Select	InfoWindow		Auswählen
 Could not update permissions of file \"%name\". %error	FSUtils		Konnte die Berechtigungen der Datei \"%name\" nicht aktualisieren. %error
 Select…	FilePanelPriv		Auswählen…
+\"%name\" is a legacy executable. Please obtain an updated version or recompile the application.	FSUtils		\"%name\" hat ein veraltetest Programmformat. Die Anwendung muss neu kompiliert, bzw. eine aktualisierte Version installiert werden.
 There was an error resolving the link.	Tracker		Fehler beim Auflösen der Verknüpfung.
 %BytesPerSecond/s	StatusWindow		%BytesPerSecond/s
 You can't move or copy the trash.	FSUtils		Der Papierkorb kann nicht verschoben oder kopiert werden.

@@ -22,6 +22,7 @@
 #include <util/AutoLock.h>
 #include <util/DoublyLinkedList.h>
 #include <util/OpenHashTable.h>
+#include <AutoDeleter.h>
 
 
 //#define TRACE_XSI_SEM
@@ -101,15 +102,13 @@ public:
 	{
 		// For some reason the semaphore is getting destroyed.
 		// Wake up any remaing awaiting threads
-		InterruptsSpinLocker schedulerLocker(gSchedulerLock);
-
 		while (queued_thread *entry = fWaitingToIncreaseQueue.RemoveHead()) {
 			entry->queued = false;
-			thread_unblock_locked(entry->thread, EIDRM);
+			thread_unblock(entry->thread, EIDRM);
 		}
 		while (queued_thread *entry = fWaitingToBeZeroQueue.RemoveHead()) {
 			entry->queued = false;
-			thread_unblock_locked(entry->thread, EIDRM);
+			thread_unblock(entry->thread, EIDRM);
 		}
 		// No need to remove any sem_undo request still
 		// hanging. When the process exit and doesn't found
@@ -144,12 +143,11 @@ public:
 		// Unlock the set before blocking
 		setLocker->Unlock();
 
-		InterruptsSpinLocker schedulerLocker(gSchedulerLock);
 // TODO: We've got a serious race condition: If BlockAndUnlock() returned due to
 // interruption, we will still be queued. A WakeUpThread() at this point will
 // call thread_unblock() and might thus screw with our trying to re-lock the
 // mutex.
-		return thread_block_locked(thread);
+		return thread_block();
 	}
 
 	void Deque(queued_thread *queueEntry, bool waitForZero)
@@ -218,20 +216,19 @@ public:
 
 	void WakeUpThread(bool waitingForZero)
 	{
-		InterruptsSpinLocker schedulerLocker(gSchedulerLock);
 		if (waitingForZero) {
 			// Wake up all threads waiting on zero
 			while (queued_thread *entry = fWaitingToBeZeroQueue.RemoveHead()) {
 				entry->queued = false;
 				fThreadsWaitingToBeZero--;
-				thread_unblock_locked(entry->thread, 0);
+				thread_unblock(entry->thread, 0);
 			}
 		} else {
 			// Wake up all threads even though they might go back to sleep
 			while (queued_thread *entry = fWaitingToIncreaseQueue.RemoveHead()) {
 				entry->queued = false;
 				fThreadsWaitingToIncrease--;
-				thread_unblock_locked(entry->thread, 0);
+				thread_unblock(entry->thread, 0);
 			}
 		}
 	}
@@ -634,8 +631,8 @@ static mutex sIpcLock;
 static mutex sXsiSemaphoreSetLock;
 
 static uint32 sGlobalSequenceNumber = 1;
-static vint32 sXsiSemaphoreCount = 0;
-static vint32 sXsiSemaphoreSetCount = 0;
+static int32 sXsiSemaphoreCount = 0;
+static int32 sXsiSemaphoreSetCount = 0;
 
 
 //	#pragma mark -
@@ -1092,11 +1089,11 @@ _user_xsi_semop(int semaphoreID, struct sembuf *ops, size_t numOps)
 		TRACE_ERROR(("xsi_semop: failed to allocate sembuf struct\n"));
 		return B_NO_MEMORY;
 	}
+       MemoryDeleter operationsDeleter(operations);
 
 	if (user_memcpy(operations, ops,
 		(sizeof(struct sembuf) * numOps)) < B_OK) {
 		TRACE_ERROR(("xsi_semop: user_memcpy failed\n"));
-		free(operations);
 		return B_BAD_ADDRESS;
 	}
 
@@ -1162,7 +1159,7 @@ _user_xsi_semop(int semaphoreID, struct sembuf *ops, size_t numOps)
 				if (operation != 0)
 					semaphore->Revert(operation);
 			}
-			if (result != 0)
+                       if (result != 0)
 				return result;
 
 			// We have to wait: first enqueue the thread

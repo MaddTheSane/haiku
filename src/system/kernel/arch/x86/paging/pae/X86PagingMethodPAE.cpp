@@ -15,6 +15,7 @@
 
 #include <AutoDeleter.h>
 
+#include <arch/smp.h>
 #include <boot/kernel_args.h>
 #include <util/AutoLock.h>
 #include <vm/vm.h>
@@ -38,6 +39,12 @@
 
 
 #if B_HAIKU_PHYSICAL_BITS == 64
+
+
+#define MAX_INITIAL_POOLS	\
+	(ROUNDUP(SMP_MAX_CPUS * TOTAL_SLOTS_PER_CPU + EXTRA_SLOTS,	\
+			kPAEPageTableEntryCount)	\
+		/ kPAEPageTableEntryCount)
 
 
 using X86LargePhysicalPageMapper::PhysicalPageSlot;
@@ -149,10 +156,8 @@ struct X86PagingMethodPAE::ToPAESwitcher {
 		call_all_cpus_sync(&_EnablePAE, (void*)(addr_t)physicalPDPT);
 
 		// if availalbe enable NX-bit (No eXecute)
-		if (x86_check_feature(IA32_FEATURE_AMD_EXT_NX, FEATURE_EXT_AMD)) {
-			x86_write_msr(IA32_MSR_EFER, x86_read_msr(IA32_MSR_EFER)
-				| IA32_MSR_EFER_NX);
-		}
+		if (x86_check_feature(IA32_FEATURE_AMD_EXT_NX, FEATURE_EXT_AMD))
+			call_all_cpus_sync(&_EnableExecutionDisable, NULL);
 
 		// set return values
 		_virtualPDPT = pdpt;
@@ -173,6 +178,12 @@ private:
 		x86_write_cr4(x86_read_cr4() | IA32_CR4_PAE | IA32_CR4_GLOBAL_PAGES);
 	}
 
+	static void _EnableExecutionDisable(void* dummy, int cpu)
+	{
+		x86_write_msr(IA32_MSR_EFER, x86_read_msr(IA32_MSR_EFER)
+			| IA32_MSR_EFER_NX);
+	}
+
 	void _TranslatePageTable(addr_t virtualBase)
 	{
 		page_table_entry* entry = &fPageHole[virtualBase / B_PAGE_SIZE];
@@ -191,7 +202,8 @@ private:
 		pae_page_table_entry* paeEntry = paeTable;
 		for (uint32 i = 0; i < kPAEPageTableEntryCount;
 				i++, entry++, paeEntry++) {
-			if ((*entry & X86_PTE_PRESENT) != 0) {
+			if ((*entry & X86_PTE_PRESENT) != 0
+				&& _IsVirtualAddressAllocated(virtualBase + i * B_PAGE_SIZE)) {
 				// Note, we use the fact that the PAE flags are defined to the
 				// same values.
 				*paeEntry = *entry & (X86_PTE_PRESENT
@@ -307,6 +319,20 @@ private:
 		return page;
 	}
 
+	bool _IsVirtualAddressAllocated(addr_t address) const
+	{
+		for (uint32 i = 0; i < fKernelArgs->num_virtual_allocated_ranges; i++) {
+			addr_t start = fKernelArgs->virtual_allocated_range[i].start;
+			addr_t end = start + fKernelArgs->virtual_allocated_range[i].size;
+			if (address < start)
+				return false;
+			if (address <= end - 1)
+				return true;
+		}
+
+		return false;
+	}
+
 private:
 	kernel_args*				fKernelArgs;
 	page_table_entry*			fPageHole;
@@ -345,7 +371,7 @@ public:
 									addr_t virtualAddress);
 
 public:
-	static	PhysicalPageSlotPool sInitialPhysicalPagePool;
+	static	PhysicalPageSlotPool sInitialPhysicalPagePool[MAX_INITIAL_POOLS];
 
 private:
 			area_id				fDataArea;
@@ -356,7 +382,8 @@ private:
 
 
 X86PagingMethodPAE::PhysicalPageSlotPool
-	X86PagingMethodPAE::PhysicalPageSlotPool::sInitialPhysicalPagePool;
+	X86PagingMethodPAE::PhysicalPageSlotPool::sInitialPhysicalPagePool[
+		MAX_INITIAL_POOLS];
 
 
 X86PagingMethodPAE::PhysicalPageSlotPool::~PhysicalPageSlotPool()
@@ -382,6 +409,11 @@ X86PagingMethodPAE::PhysicalPageSlotPool::InitInitial(
 		+ sizeof(PhysicalPageSlot[kPAEPageTableEntryCount]);
 	pae_page_table_entry* pageTable = (pae_page_table_entry*)vm_allocate_early(
 		args, areaSize, ~0L, B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA, 0);
+	if (pageTable == 0) {
+		panic("X86PagingMethodPAE::PhysicalPageSlotPool::InitInitial(): Failed "
+			"to allocate memory for page table!");
+		return B_ERROR;
+	}
 
 	// clear the page table and put it in the page dir
 	memset(pageTable, 0, B_PAGE_SIZE);
@@ -566,20 +598,23 @@ X86PagingMethodPAE::Init(kernel_args* args,
 		fEarlyPageStructuresSize, fKernelVirtualPageDirs,
 		fKernelPhysicalPageDirs, fFreeVirtualSlot, fFreeVirtualSlotPTE);
 
-	// create the initial pool for the physical page mapper
-	PhysicalPageSlotPool* pool
-		= new(&PhysicalPageSlotPool::sInitialPhysicalPagePool)
-			PhysicalPageSlotPool;
-	status_t error = pool->InitInitial(this, args);
-	if (error != B_OK) {
-		panic("X86PagingMethodPAE::Init(): Failed to create initial pool "
-			"for physical page mapper!");
-		return error;
+	// create the initial pools for the physical page mapper
+	int32 poolCount = _GetInitialPoolCount();
+	PhysicalPageSlotPool* pool = PhysicalPageSlotPool::sInitialPhysicalPagePool;
+
+	for (int32 i = 0; i < poolCount; i++) {
+		new(&pool[i]) PhysicalPageSlotPool;
+		status_t error = pool[i].InitInitial(this, args);
+		if (error != B_OK) {
+			panic("X86PagingMethodPAE::Init(): Failed to create initial pool "
+				"for physical page mapper!");
+			return error;
+		}
 	}
 
 	// create physical page mapper
-	large_memory_physical_page_ops_init(args, pool, fPhysicalPageMapper,
-		fKernelPhysicalPageMapper);
+	large_memory_physical_page_ops_init(args, pool, poolCount, sizeof(*pool),
+		fPhysicalPageMapper, fKernelPhysicalPageMapper);
 
 	*_physicalPageMapper = fPhysicalPageMapper;
 	return B_OK;
@@ -596,11 +631,14 @@ X86PagingMethodPAE::InitPostArea(kernel_args* args)
 	if (area < B_OK)
 		return area;
 
-	// let the initial page pool create areas for its structures
-	status_t error = PhysicalPageSlotPool::sInitialPhysicalPagePool
-		.InitInitialPostArea(args);
-	if (error != B_OK)
-		return error;
+	// let the initial page pools create areas for its structures
+	int32 poolCount = _GetInitialPoolCount();
+	for (int32 i = 0; i < poolCount; i++) {
+		status_t error = PhysicalPageSlotPool::sInitialPhysicalPagePool[i]
+			.InitInitialPostArea(args);
+		if (error != B_OK)
+			return error;
+	}
 
 	// The early physical page mapping mechanism is no longer needed. Unmap the
 	// slot.
@@ -862,6 +900,16 @@ X86PagingMethodPAE::Free32BitPage(void* address, phys_addr_t physicalAddress,
 		DEBUG_PAGE_ACCESS_START(page);
 		vm_page_free(NULL, page);
 	}
+}
+
+
+inline int32
+X86PagingMethodPAE::_GetInitialPoolCount()
+{
+	int32 requiredSlots = smp_get_num_cpus() * TOTAL_SLOTS_PER_CPU
+			+ EXTRA_SLOTS;
+	return (requiredSlots + kPAEPageTableEntryCount - 1)
+		/ kPAEPageTableEntryCount;
 }
 
 

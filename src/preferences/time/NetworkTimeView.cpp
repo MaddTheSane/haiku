@@ -1,12 +1,14 @@
 /*
- * Copyright 2011, Haiku, Inc. All Rights Reserved.
+ * Copyright 2011-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Hamish Morrison <hamish@lavabit.com>
- *		Axel Dörfler <axeld@pinc-software.de>
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		Hamish Morrison, hamish@lavabit.com
+ *		John Scipione, jscipione@gmail.com
  */
- 
+
+
 #include "NetworkTimeView.h"
 
 #include <ctype.h>
@@ -17,12 +19,14 @@
 #include <Button.h>
 #include <Catalog.h>
 #include <CheckBox.h>
-#include <ControlLook.h>
 #include <File.h>
 #include <FindDirectory.h>
+#include <Invoker.h>
+#include <ListItem.h>
 #include <ListView.h>
 #include <Path.h>
 #include <ScrollView.h>
+#include <Size.h>
 #include <TextControl.h>
 
 #include "ntp.h"
@@ -31,6 +35,9 @@
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Time"
+
+
+//	#pragma mark - Settings
 
 
 Settings::Settings()
@@ -71,7 +78,7 @@ Settings::RemoveServer(const char* server)
 	int32 index = _GetStringByValue("server", server);
 	if (index != B_ERROR) {
 		fMessage.RemoveData("server", index);
-		
+
 		int32 count;
 		fMessage.GetInfo("server", NULL, &count);
 		if (GetDefaultServer() >= count)
@@ -166,13 +173,14 @@ Settings::SettingsChanged()
 {
 	ssize_t oldSize = fOldMessage.FlattenedSize();
 	ssize_t newSize = fMessage.FlattenedSize();
-	
+
 	if (oldSize != newSize || oldSize < 0 || newSize < 0)
 		return true;
 
 	char* oldBytes = new (std::nothrow) char[oldSize];
 	if (oldBytes == NULL)
 		return true;
+
 	fOldMessage.Flatten(oldBytes, oldSize);
 	char* newBytes = new (std::nothrow) char[newSize];
 	if (newBytes == NULL) {
@@ -180,7 +188,7 @@ Settings::SettingsChanged()
 		return true;
 	}
 	fMessage.Flatten(newBytes, newSize);
-	
+
 	int result = memcmp(oldBytes, newBytes, oldSize);
 
 	delete[] oldBytes;
@@ -239,10 +247,12 @@ int32
 Settings::_GetStringByValue(const char* name, const char* value)
 {
 	const char* string;
-	for (int32 index = 0; fMessage.FindString(
-		name, index, &string) == B_OK; index++)
+	for (int32 index = 0; fMessage.FindString(name, index, &string) == B_OK;
+			index++) {
 		if (strcmp(string, value) == 0)
 			return index;
+	}
+
 	return B_ERROR;
 }
 
@@ -253,19 +263,47 @@ Settings::_GetPath(BPath& path)
 	status_t status = find_directory(B_USER_SETTINGS_DIRECTORY, &path);
 	if (status != B_OK)
 		return status;
+
 	path.Append("networktime settings");
+
 	return B_OK;
 }
+
+
+//	#pragma mark - NetworkTimeView
 
 
 NetworkTimeView::NetworkTimeView(const char* name)
 	:
 	BGroupView(name, B_VERTICAL, B_USE_DEFAULT_SPACING),
 	fSettings(),
+	fServerTextControl(NULL),
+	fAddButton(NULL),
+	fRemoveButton(NULL),
+	fResetButton(NULL),
+	fServerListView(NULL),
+	fTryAllServersCheckBox(NULL),
+	fSynchronizeAtBootCheckBox(NULL),
+	fSynchronizeButton(NULL),
+	fTextColor(ui_color(B_CONTROL_TEXT_COLOR)),
+	fInvalidColor(ui_color(B_FAILURE_COLOR)),
 	fUpdateThread(-1)
 {
 	fSettings.Load();
 	_InitView();
+}
+
+
+NetworkTimeView::~NetworkTimeView()
+{
+	delete fServerTextControl;
+	delete fAddButton;
+	delete fRemoveButton;
+	delete fResetButton;
+	delete fServerListView;
+	delete fTryAllServersCheckBox;
+	delete fSynchronizeAtBootCheckBox;
+	delete fSynchronizeButton;
 }
 
 
@@ -275,32 +313,30 @@ NetworkTimeView::MessageReceived(BMessage* message)
 	switch (message->what) {
 		case kMsgSetDefaultServer:
 		{
-			int32 sel = fServerListView->CurrentSelection();
-			if (sel < 0)
+			int32 currentSelection = fServerListView->CurrentSelection();
+			if (currentSelection < 0)
 				fServerListView->Select(fSettings.GetDefaultServer());
 			else {
-				fSettings.SetDefaultServer(sel);
+				fSettings.SetDefaultServer(currentSelection);
 				Looper()->PostMessage(new BMessage(kMsgChange));
 			}
 			break;
 		}
+
 		case kMsgServerEdited:
 		{
-			rgb_color defaultColor = ui_color(B_CONTROL_TEXT_COLOR);
-			rgb_color red = {255, 0, 0};
-			int32 length = fServerTextControl->TextView()->TextLength();
-
-			if (_IsValidServerName(fServerTextControl->TextView()->Text()))
-				fServerTextControl->TextView()->SetFontAndColor(0, length, NULL, 0, &defaultColor);
-			else
-				fServerTextControl->TextView()->SetFontAndColor(0, length, NULL, 0, &red);
-
+			bool isValid = _IsValidServerName(fServerTextControl->Text());
+			fServerTextControl->TextView()->SetFontAndColor(0,
+				fServerTextControl->TextView()->TextLength(), NULL, 0,
+				isValid ? &fTextColor : &fInvalidColor);
+			fAddButton->SetEnabled(isValid);
 			break;
 		}
+
 		case kMsgAddServer:
-			if (!_IsValidServerName(fServerTextControl->TextView()->Text()))
+			if (!_IsValidServerName(fServerTextControl->Text()))
 				break;
-				
+
 			fSettings.AddServer(fServerTextControl->Text());
 			_UpdateServerList();
 			fServerTextControl->SetText("");
@@ -308,13 +344,17 @@ NetworkTimeView::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgRemoveServer:
+		{
+			int32 currentSelection = fServerListView->CurrentSelection();
+			if (currentSelection < 0)
+				break;
+
 			fSettings.RemoveServer(((BStringItem*)
-				fServerListView->ItemAt(
-					fServerListView->
-					CurrentSelection()))->Text());
+				fServerListView->ItemAt(currentSelection))->Text());
 			_UpdateServerList();
 			Looper()->PostMessage(new BMessage(kMsgChange));
 			break;
+		}
 
 		case kMsgResetServerList:
 			fSettings.ResetServersToDefaults();
@@ -329,14 +369,14 @@ NetworkTimeView::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgSynchronizeAtBoot:
-			fSettings.SetSynchronizeAtBoot(
-				fSynchronizeAtBootCheckBox->Value());
+			fSettings.SetSynchronizeAtBoot(fSynchronizeAtBootCheckBox->Value());
 			Looper()->PostMessage(new BMessage(kMsgChange));
 			break;
 
 		case kMsgStopSynchronization:
 			if (fUpdateThread >= B_OK)
 				kill_thread(fUpdateThread);
+
 			_DoneSynchronizing();
 			break;
 
@@ -355,40 +395,40 @@ NetworkTimeView::MessageReceived(BMessage* message)
 		case kMsgSynchronizationResult:
 		{
 			_DoneSynchronizing();
-			
+
 			status_t status;
 			if (message->FindInt32("status", (int32 *)&status) == B_OK) {
-				if (status == B_OK) return;
+				if (status == B_OK)
+					return;
 
 				const char* errorString;
-				message->FindString("error string", &errorString);	
+				message->FindString("error string", &errorString);
 				char buffer[256];
 
 				int32 errorCode;
-				if (message->FindInt32("error code", &errorCode)
-					== B_OK)
+				if (message->FindInt32("error code", &errorCode) == B_OK) {
 					snprintf(buffer, sizeof(buffer),
 						B_TRANSLATE("The following error occured "
-						"while synchronizing:\r\n%s: %s"),
+							"while synchronizing:\r\n%s: %s"),
 						errorString, strerror(errorCode));
-				else
+				} else {
 					snprintf(buffer, sizeof(buffer),
 						B_TRANSLATE("The following error occured "
-						"while synchronizing:\r\n%s"),
+							"while synchronizing:\r\n%s"),
 						errorString);
+				}
 
-				BAlert* alert = new BAlert(B_TRANSLATE("Time"), buffer, 
+				BAlert* alert = new BAlert(B_TRANSLATE("Time"), buffer,
 					B_TRANSLATE("OK"));
 				alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 				alert->Go();
 			}
 			break;
 		}
-		
+
 		case kMsgRevert:
 			fSettings.Revert();
-		    fTryAllServersCheckBox->SetValue(
-		    	fSettings.GetTryAllServers());
+			fTryAllServersCheckBox->SetValue(fSettings.GetTryAllServers());
 			fSynchronizeAtBootCheckBox->SetValue(
 				fSettings.GetSynchronizeAtBoot());
 			_UpdateServerList();
@@ -403,6 +443,7 @@ NetworkTimeView::AttachedToWindow()
 	fServerTextControl->SetTarget(this);
 	fServerListView->SetTarget(this);
 	fAddButton->SetTarget(this);
+	fAddButton->SetEnabled(false);
 	fRemoveButton->SetTarget(this);
 	fResetButton->SetTarget(this);
 	fTryAllServersCheckBox->SetTarget(this);
@@ -421,19 +462,23 @@ NetworkTimeView::CheckCanRevert()
 void
 NetworkTimeView::_InitView()
 {
-	fServerTextControl = new BTextControl(NULL, NULL, new BMessage(kMsgAddServer));
+	fServerTextControl = new BTextControl(NULL, NULL,
+		new BMessage(kMsgAddServer));
 	fServerTextControl->SetModificationMessage(new BMessage(kMsgServerEdited));
 
-	fAddButton = new BButton("add", B_TRANSLATE("Add"),
-		new BMessage(kMsgAddServer));
-	fRemoveButton = new BButton("remove", B_TRANSLATE("Remove"),
-		new BMessage(kMsgRemoveServer));
-	fResetButton = new BButton("reset", B_TRANSLATE("Reset"),
-		new BMessage(kMsgResetServerList));
+	const float kButtonWidth = fServerTextControl->Frame().Height();
+
+	fAddButton = new BButton("add", "+", new BMessage(kMsgAddServer));
+	fAddButton->SetToolTip(B_TRANSLATE("Add"));
+	fAddButton->SetExplicitSize(BSize(kButtonWidth, kButtonWidth));
+
+	fRemoveButton = new BButton("remove", "−", new BMessage(kMsgRemoveServer));
+	fRemoveButton->SetToolTip(B_TRANSLATE("Remove"));
+	fRemoveButton->SetExplicitSize(BSize(kButtonWidth, kButtonWidth));
 
 	fServerListView = new BListView("serverList");
-	fServerListView->SetSelectionMessage(new
-		BMessage(kMsgSetDefaultServer));
+	fServerListView->SetExplicitMinSize(BSize(B_SIZE_UNSET, kButtonWidth * 4));
+	fServerListView->SetSelectionMessage(new BMessage(kMsgSetDefaultServer));
 	BScrollView* scrollView = new BScrollView("serverScrollView",
 		fServerListView, B_FRAME_EVENTS | B_WILL_DRAW, false, true);
 	_UpdateServerList();
@@ -446,23 +491,26 @@ NetworkTimeView::_InitView()
 		B_TRANSLATE("Synchronize at boot"),
 		new BMessage(kMsgSynchronizeAtBoot));
 	fSynchronizeAtBootCheckBox->SetValue(fSettings.GetSynchronizeAtBoot());
+
+	fResetButton = new BButton("reset",
+		B_TRANSLATE("Reset to default server list"),
+		new BMessage(kMsgResetServerList));
+
 	fSynchronizeButton = new BButton("update", B_TRANSLATE("Synchronize"),
 		new BMessage(kMsgSynchronize));
-	fSynchronizeButton->SetExplicitAlignment(
-		BAlignment(B_ALIGN_RIGHT, B_ALIGN_BOTTOM));
 
-	const float kInset = be_control_look->DefaultItemSpacing();
-	BLayoutBuilder::Group<>(this)
-		.AddGroup(B_HORIZONTAL)
-			.AddGroup(B_VERTICAL, 0)
+	BLayoutBuilder::Group<>(this, B_VERTICAL)
+		.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
+			.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
 				.Add(fServerTextControl)
-				.Add(scrollView)
-			.End()
-			.AddGroup(B_VERTICAL, kInset / 2)
 				.Add(fAddButton)
-				.Add(fRemoveButton)
-				.Add(fResetButton)
-				.AddGlue()
+			.End()
+			.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
+				.Add(scrollView)
+				.AddGroup(B_VERTICAL, B_USE_SMALL_SPACING)
+					.Add(fRemoveButton)
+					.AddGlue()
+				.End()
 			.End()
 		.End()
 		.AddGroup(B_HORIZONTAL)
@@ -470,25 +518,32 @@ NetworkTimeView::_InitView()
 				.Add(fTryAllServersCheckBox)
 				.Add(fSynchronizeAtBootCheckBox)
 			.End()
+		.End()
+		.AddGroup(B_HORIZONTAL)
+			.AddGlue()
+			.Add(fResetButton)
 			.Add(fSynchronizeButton)
 		.End()
-		.SetInsets(kInset, kInset, kInset, kInset);
+		.SetInsets(B_USE_DEFAULT_SPACING);
 }
 
 
 void
 NetworkTimeView::_UpdateServerList()
 {
-	while (fServerListView->RemoveItem((int32)0) != NULL);
+	BListItem* item;
+	while ((item = fServerListView->RemoveItem((int32)0)) != NULL)
+		delete item;
 
 	const char* server;
 	int32 index = 0;
-
 	while ((server = fSettings.GetServer(index++)) != NULL)
 		fServerListView->AddItem(new BStringItem(server));
 
 	fServerListView->Select(fSettings.GetDefaultServer());
 	fServerListView->ScrollToSelection();
+
+	fRemoveButton->SetEnabled(fServerListView->CountItems() > 0);
 }
 
 
@@ -502,9 +557,9 @@ NetworkTimeView::_DoneSynchronizing()
 
 
 bool
-NetworkTimeView::_IsValidServerName(const char * serverName)
+NetworkTimeView::_IsValidServerName(const char* serverName)
 {
-	if (serverName[0] == '\0')
+	if (serverName == NULL || *serverName == '\0')
 		return false;
 
 	for (int32 i = 0; serverName[i] != '\0'; i++) {
@@ -515,6 +570,46 @@ NetworkTimeView::_IsValidServerName(const char * serverName)
 	}
 
 	return true;
+}
+
+
+//	#pragma mark - update functions
+
+
+int32
+update_thread(void* params)
+{
+	BList* list = (BList*)params;
+	BMessenger* messenger = (BMessenger*)list->ItemAt(1);
+
+	const char* errorString = NULL;
+	int32 errorCode = 0;
+	status_t status = update_time(*(Settings*)list->ItemAt(0),
+		&errorString, &errorCode);
+
+	BMessage result(kMsgSynchronizationResult);
+	result.AddInt32("status", status);
+	result.AddString("error string", errorString);
+	if (errorCode != 0)
+		result.AddInt32("error code", errorCode);
+
+	messenger->SendMessage(&result);
+	delete messenger;
+
+	return B_OK;
+}
+
+
+status_t
+update_time(const Settings& settings, BMessenger* messenger,
+	thread_id* thread)
+{
+	BList* params = new BList(2);
+	params->AddItem((void*)&settings);
+	params->AddItem((void*)messenger);
+	*thread = spawn_thread(update_thread, "ntpUpdate", 64, params);
+
+	return resume_thread(*thread);
 }
 
 
@@ -534,6 +629,7 @@ update_time(const Settings& settings, const char** errorString,
 		for (int32 index = 0; ; index++) {
 			if (index == defaultServer)
 				index++;
+
 			server = settings.GetServer(index);
 			if (server == NULL)
 				break;
@@ -546,39 +642,3 @@ update_time(const Settings& settings, const char** errorString,
 
 	return status;
 }
-
-
-int32
-update_thread(void* params)
-{
-	BList* list = (BList*)params;
-	BMessenger* messenger = (BMessenger*)list->ItemAt(1);
-
-	const char* errorString = NULL;
-	int32 errorCode = 0;
-	status_t status = update_time(*(Settings*)list->ItemAt(0),
-		&errorString, &errorCode);
-
-	BMessage result(kMsgSynchronizationResult);
-	result.AddInt32("status", status);
-	result.AddString("error string", errorString);
-	if (errorCode != 0)
-		result.AddInt32("error code", errorCode);
-	messenger->SendMessage(&result);
-
-	delete messenger;
-	return B_OK;
-}
-
-
-status_t
-update_time(const Settings& settings, BMessenger* messenger,
-	thread_id* thread)
-{
-	BList* params = new BList(2);
-	params->AddItem((void*)&settings);
-	params->AddItem((void*)messenger);
-	*thread = spawn_thread(update_thread, "ntpUpdate", 64, params);
-	return resume_thread(*thread);
-}
-

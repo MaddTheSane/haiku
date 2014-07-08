@@ -1,4 +1,4 @@
-1	polish	x-vnd.haiku-screenshot	1721618877
+1	polish	x-vnd.haiku-screenshot	1483476245
 seconds	ScreenshotWindow		sekund
 Desktop	ScreenshotWindow		Pulpit
 Include window border	ScreenshotWindow		Dołącz obramowanie okna
@@ -7,6 +7,7 @@ Select	ScreenshotWindow		Wybierz
 Capture active window	ScreenshotWindow		Przechwyć aktywne okno
 Cancel	ScreenshotWindow		Anuluj
 Name:	ScreenshotWindow		Nazwa:
+This file already exists.\n Are you sure you would like to overwrite it?	ScreenshotWindow		Ten plik już istnieje.\n Na pewno chcesz go nadpisać?
 Choose folder	ScreenshotWindow		Wybierz folder
 Save	ScreenshotWindow		Zapisz
 Overwrite	ScreenshotWindow		Nadpisz
@@ -19,7 +20,6 @@ screenshot	Screenshot	Base filename of screenshot files	screenshot
 New screenshot	ScreenshotWindow		Nowy zrzut ekranu
 Artwork folder	ScreenshotWindow		Folder na obrazki
 Home folder	ScreenshotWindow		Folder domowy
-This file already exists.\n Are you sure would you like to overwrite it?	ScreenshotWindow		Plik już istnieje.\n Jesteś pewien, że chcesz go nadpisać?
 Settings…	ScreenshotWindow		Ustawienia…
 overwrite	ScreenshotWindow		nadpisz
 Delay:	ScreenshotWindow		Opóźnienie:

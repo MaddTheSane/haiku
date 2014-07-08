@@ -353,10 +353,10 @@ Directory::Close(void *cookie)
 }
 
 
-Node *
-Directory::Lookup(const char *name, bool traverseLinks)
+Node*
+Directory::LookupDontTraverse(const char* name)
 {
-	TRACE(("FASFS::Directory::%s('%s', %d)\n", __FUNCTION__, name, traverseLinks));
+	TRACE(("FASFS::Directory::%s('%s')\n", __FUNCTION__, name));
 	if (!strcmp(name, ".")) {
 		Acquire();
 		return this;
@@ -482,7 +482,8 @@ Directory::CreateFile(const char* name, mode_t permissions, Node** _node)
 	// prepare a directory entry for the new file
 	dir_entry entry;
 
-	memset(entry.fName, ' ', 11);
+	memset(entry.fName, ' ', sizeof(entry.fName));
+	memset(entry.fExt, ' ', sizeof(entry.fExt));
 		// clear both base name and extension
 	memcpy(entry.fName, baseName, baseNameLength);
 	if (extensionLength > 0)

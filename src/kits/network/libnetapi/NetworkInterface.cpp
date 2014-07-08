@@ -13,7 +13,7 @@
 #include <AutoDeleter.h>
 #include <Messenger.h>
 #include <NetServer.h>
-
+#include <RouteSupport.h>
 
 static int
 family_from_interface_address(const BNetworkInterfaceAddress& address)
@@ -401,8 +401,9 @@ BNetworkInterface::FindAddress(const BNetworkAddress& address)
 	memcpy(&request.ifra_addr, &address.SockAddr(), address.Length());
 
 	if (ioctl(socket, B_SOCKET_GET_ALIAS, &request, sizeof(struct ifaliasreq))
-			< 0)
+			< 0) {
 		return -1;
+	}
 
 	return request.ifra_index;
 }
@@ -425,8 +426,9 @@ BNetworkInterface::FindFirstAddress(int family)
 	request.ifra_addr.ss_family = AF_UNSPEC;
 
 	if (ioctl(socket, B_SOCKET_GET_ALIAS, &request, sizeof(struct ifaliasreq))
-			< 0)
+			< 0) {
 		return -1;
+	}
 
 	return request.ifra_index;
 }
@@ -563,6 +565,33 @@ BNetworkInterface::RemoveDefaultRoute(int family)
 	route.flags = RTF_STATIC | RTF_DEFAULT;
 
 	return RemoveRoute(family, route);
+}
+
+
+status_t
+BNetworkInterface::GetRoutes(int family, BObjectList<route_entry>& routes) const
+{
+	return BPrivate::get_routes(Name(), family, routes);
+}
+
+
+status_t
+BNetworkInterface::GetDefaultRoute(int family, BNetworkAddress& gateway) const
+{
+	BObjectList<route_entry> routes(1, true);
+	status_t status = GetRoutes(family, routes);
+	if (status != B_OK)
+		return status;
+
+	for (int32 i = routes.CountItems() - 1; i >= 0; i--) {
+		route_entry* entry = routes.ItemAt(i);
+		if (entry->flags & RTF_DEFAULT) {
+			gateway.SetTo(*entry->gateway);
+			break;
+		}
+	}
+
+	return B_OK;
 }
 
 

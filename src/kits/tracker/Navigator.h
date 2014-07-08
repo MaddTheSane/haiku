@@ -31,8 +31,8 @@ of Be Incorporated in the United States and other countries. Other brand product
 names are registered trademarks or trademarks of their respective holders.
 All rights reserved.
 */
-#ifndef _NAVIGATOR_H_
-#define _NAVIGATOR_H_
+#ifndef _NAVIGATOR_H
+#define _NAVIGATOR_H
 
 
 #include "Model.h"
@@ -58,7 +58,8 @@ enum NavigationAction
 	kNavigatorCommandBackward = 'NVBW',
 	kNavigatorCommandForward = 'NVFW',
 	kNavigatorCommandUp = 'NVUP',
-	kNavigatorCommandLocation = 'NVLC'
+	kNavigatorCommandLocation = 'NVLC',
+	kNavigatorCommandSetFocus = 'NVSF'
 };
 
 
@@ -133,4 +134,5 @@ BNavigator::Window() const
 
 using namespace BPrivate;
 
-#endif	// _NAVIGATOR_H_
+
+#endif	// _NAVIGATOR_H

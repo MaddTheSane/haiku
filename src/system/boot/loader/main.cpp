@@ -12,7 +12,10 @@
 #include <boot/vfs.h>
 #include <boot/platform.h>
 #include <boot/heap.h>
+#include <boot/PathBlacklist.h>
 #include <boot/stdio.h>
+
+#include "file_systems/packagefs/packagefs.h"
 
 
 //#define TRACE_MAIN
@@ -21,6 +24,9 @@
 #else
 #	define TRACE(x) ;
 #endif
+
+
+void *__dso_handle;
 
 
 extern "C" int
@@ -36,6 +42,8 @@ main(stage2_args *args)
 	// set debug syslog default
 #if KDEBUG_ENABLE_DEBUG_SYSLOG
 	gKernelArgs.keep_debug_output_buffer = true;
+	gKernelArgs.previous_debug_size = true;
+		// used as a boolean indicator until initialized for the kernel
 #endif
 
 	add_stage2_driver_settings(args);
@@ -52,10 +60,12 @@ main(stage2_args *args)
 
 	bool mountedAllVolumes = false;
 
-	Directory *volume = get_boot_file_system(args);
+	BootVolume bootVolume;
+	PathBlacklist pathBlacklist;
 
-	if (volume == NULL || (platform_boot_options() & BOOT_OPTION_MENU) != 0) {
-		if (volume == NULL)
+	if (get_boot_file_system(args, bootVolume) != B_OK
+		|| (platform_boot_options() & BOOT_OPTION_MENU) != 0) {
+		if (!bootVolume.IsValid())
 			puts("\tno boot path found, scan for all partitions...\n");
 
 		if (mount_file_systems(args) < B_OK) {
@@ -68,19 +78,19 @@ main(stage2_args *args)
 
 		mountedAllVolumes = true;
 
-		if (user_menu(&volume) < B_OK) {
+		if (user_menu(bootVolume, pathBlacklist) < B_OK) {
 			// user requested to quit the loader
 			goto out;
 		}
 	}
 
-	if (volume != NULL) {
+	if (bootVolume.IsValid()) {
 		// we got a volume to boot from!
 		status_t status;
-		while ((status = load_kernel(args, volume)) < B_OK) {
+		while ((status = load_kernel(args, bootVolume)) < B_OK) {
 			// loading the kernel failed, so let the user choose another
 			// volume to boot from until it works
-			volume = NULL;
+			bootVolume.Unset();
 
 			if (!mountedAllVolumes) {
 				// mount all other file systems, if not already happened
@@ -90,7 +100,8 @@ main(stage2_args *args)
 				mountedAllVolumes = true;
 			}
 
-			if (user_menu(&volume) < B_OK || volume == NULL) {
+			if (user_menu(bootVolume, pathBlacklist) != B_OK
+				|| !bootVolume.IsValid()) {
 				// user requested to quit the loader
 				goto out;
 			}
@@ -100,13 +111,18 @@ main(stage2_args *args)
 		// is already loaded at this point and we definitely
 		// know our boot volume, too
 		if (status == B_OK) {
-			register_boot_file_system(volume);
+			if (bootVolume.IsPackaged()) {
+				packagefs_apply_path_blacklist(bootVolume.SystemDirectory(),
+					pathBlacklist);
+			}
+
+			register_boot_file_system(bootVolume);
 
 			if ((platform_boot_options() & BOOT_OPTION_DEBUG_OUTPUT) == 0)
 				platform_switch_to_logo();
 
-			load_modules(args, volume);
-			load_driver_settings(args, volume);
+			load_modules(args, bootVolume);
+			load_driver_settings(args, bootVolume.RootDirectory());
 
 			// apply boot settings
 			apply_boot_settings();
@@ -130,6 +146,7 @@ main(stage2_args *args)
 			gKernelArgs.boot_volume_size = gBootVolume.ContentSize();
 
 			// ToDo: cleanup, heap_release() etc.
+			heap_print_statistics();
 			platform_start_kernel();
 		}
 	}

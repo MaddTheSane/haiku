@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2011, Ingo Weinhold, ingo_weinhold@gmx.de.
+ * Copyright 2005-2013, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Copyright 2002-2011, Axel Dörfler, axeld@pinc-software.de.
  * Distributed under the terms of the MIT License.
  *
@@ -698,12 +698,13 @@ get_mount(dev_t id, struct fs_mount** _mount)
 		return B_BAD_VALUE;
 
 	struct vnode* rootNode = mount->root_vnode;
-	if (rootNode == NULL || rootNode->IsBusy() || rootNode->ref_count == 0) {
+	if (mount->unmounting || rootNode == NULL || rootNode->IsBusy()
+		|| rootNode->ref_count == 0) {
 		// might have been called during a mount/unmount operation
 		return B_BUSY;
 	}
 
-	inc_vnode_ref_count(mount->root_vnode);
+	inc_vnode_ref_count(rootNode);
 	*_mount = mount;
 	return B_OK;
 }
@@ -2578,56 +2579,46 @@ dir_vnode_to_path(struct vnode* vnode, char* buffer, size_t bufferSize,
 	int32 insert = bufferSize;
 	int32 maxLevel = 256;
 	int32 length;
-	status_t status;
+	status_t status = B_OK;
 	struct io_context* ioContext = get_current_io_context(kernel);
 
 	// we don't use get_vnode() here because this call is more
 	// efficient and does all we need from get_vnode()
 	inc_vnode_ref_count(vnode);
 
-	if (vnode != ioContext->root) {
-		// we don't hit the IO context root
-		// resolve a vnode to its covered vnode
-		if (Vnode* coveredVnode = get_covered_vnode(vnode)) {
-			put_vnode(vnode);
-			vnode = coveredVnode;
-		}
-	}
-
 	path[--insert] = '\0';
 		// the path is filled right to left
 
 	while (true) {
-		// the name buffer is also used for fs_read_dir()
-		char nameBuffer[sizeof(struct dirent) + B_FILE_NAME_LENGTH];
-		char* name = &((struct dirent*)nameBuffer)->d_name[0];
-		struct vnode* parentVnode;
+		// If the node is the context's root, bail out. Otherwise resolve mount
+		// points.
+		if (vnode == ioContext->root)
+			break;
+
+		if (Vnode* coveredVnode = get_covered_vnode(vnode)) {
+			put_vnode(vnode);
+			vnode = coveredVnode;
+		}
 
 		// lookup the parent vnode
-		if (vnode == ioContext->root) {
-			// we hit the IO context root
-			parentVnode = vnode;
-			inc_vnode_ref_count(vnode);
-		} else {
-			status = lookup_dir_entry(vnode, "..", &parentVnode);
-			if (status != B_OK)
-				goto out;
+		struct vnode* parentVnode;
+		status = lookup_dir_entry(vnode, "..", &parentVnode);
+		if (status != B_OK)
+			goto out;
+
+		if (parentVnode == vnode) {
+			// The caller apparently got their hands on a node outside of their
+			// context's root. Now we've hit the global root.
+			put_vnode(parentVnode);
+			break;
 		}
 
 		// get the node's name
+		char nameBuffer[sizeof(struct dirent) + B_FILE_NAME_LENGTH];
+			// also used for fs_read_dir()
+		char* name = &((struct dirent*)nameBuffer)->d_name[0];
 		status = get_vnode_name(vnode, parentVnode, (struct dirent*)nameBuffer,
 			sizeof(nameBuffer), ioContext);
-
-		if (vnode != ioContext->root) {
-			// we don't hit the IO context root
-			// resolve a vnode to its covered vnode
-			if (Vnode* coveredVnode = get_covered_vnode(parentVnode)) {
-				put_vnode(parentVnode);
-				parentVnode = coveredVnode;
-			}
-		}
-
-		bool hitRoot = (parentVnode == vnode);
 
 		// release the current vnode, we only need its parent from now on
 		put_vnode(vnode);
@@ -2635,12 +2626,6 @@ dir_vnode_to_path(struct vnode* vnode, char* buffer, size_t bufferSize,
 
 		if (status != B_OK)
 			goto out;
-
-		if (hitRoot) {
-			// we have reached "/", which means we have constructed the full
-			// path
-			break;
-		}
 
 		// TODO: add an explicit check for loops in about 10 levels to do
 		// real loop detection
@@ -3417,29 +3402,17 @@ dump_vnode_usage(int argc, char** argv)
 
 #endif	// ADD_DEBUGGER_COMMANDS
 
-/*!	Clears an iovec array of physical pages.
-	Returns in \a _bytes the number of bytes successfully cleared.
+
+/*!	Clears memory specified by an iovec array.
 */
-static status_t
-zero_pages(const iovec* vecs, size_t vecCount, size_t* _bytes)
+static void
+zero_iovecs(const iovec* vecs, size_t vecCount, size_t bytes)
 {
-	size_t bytes = *_bytes;
-	size_t index = 0;
-
-	while (bytes > 0) {
-		size_t length = min_c(vecs[index].iov_len, bytes);
-
-		status_t status = vm_memset_physical((addr_t)vecs[index].iov_base, 0,
-			length);
-		if (status != B_OK) {
-			*_bytes -= bytes;
-			return status;
-		}
-
+	for (size_t i = 0; i < vecCount && bytes > 0; i++) {
+		size_t length = std::min(vecs[i].iov_len, bytes);
+		memset(vecs[i].iov_base, 0, length);
 		bytes -= length;
 	}
-
-	return B_OK;
 }
 
 
@@ -3479,7 +3452,8 @@ common_file_io_vec_pages(struct vnode* vnode, void* cookie,
 				&vecs[vecIndex], vecCount - vecIndex, &size);
 		} else {
 			// sparse read
-			status = zero_pages(&vecs[vecIndex], vecCount - vecIndex, &size);
+			zero_iovecs(&vecs[vecIndex], vecCount - vecIndex, size);
+			status = B_OK;
 		}
 		if (status != B_OK)
 			return status;
@@ -3582,7 +3556,8 @@ common_file_io_vec_pages(struct vnode* vnode, void* cookie,
 					status = B_IO_ERROR;
 				} else {
 					// sparse read
-					status = zero_pages(tempVecs, tempCount, &bytes);
+					zero_iovecs(tempVecs, tempCount, bytes);
+					status = B_OK;
 				}
 			} else if (doWrite) {
 				status = FS_CALL(vnode, write_pages, cookie, fileOffset,
@@ -4684,7 +4659,7 @@ vfs_get_vnode_name(struct vnode* vnode, char* name, size_t nameSize)
 
 status_t
 vfs_entry_ref_to_path(dev_t device, ino_t inode, const char* leaf,
-	char* path, size_t pathLength)
+	bool kernel, char* path, size_t pathLength)
 {
 	struct vnode* vnode;
 	status_t status;
@@ -4697,7 +4672,7 @@ vfs_entry_ref_to_path(dev_t device, ino_t inode, const char* leaf,
 	if (leaf && (strcmp(leaf, ".") == 0 || strcmp(leaf, "..") == 0)) {
 		// special cases "." and "..": we can directly get the vnode of the
 		// referenced directory
-		status = entry_ref_to_vnode(device, inode, leaf, false, true, &vnode);
+		status = entry_ref_to_vnode(device, inode, leaf, false, kernel, &vnode);
 		leaf = NULL;
 	} else
 		status = get_vnode(device, inode, &vnode, true, false);
@@ -4705,7 +4680,7 @@ vfs_entry_ref_to_path(dev_t device, ino_t inode, const char* leaf,
 		return status;
 
 	// get the directory path
-	status = dir_vnode_to_path(vnode, path, pathLength, true);
+	status = dir_vnode_to_path(vnode, path, pathLength, kernel);
 	put_vnode(vnode);
 		// we don't need the vnode anymore
 	if (status != B_OK)
@@ -5178,6 +5153,7 @@ vfs_init(kernel_args* args)
 			| B_KERNEL_RESOURCE_ADDRESS_SPACE,
 		0);
 
+	fifo_init();
 	file_map_init();
 
 	return file_cache_init();
@@ -5260,10 +5236,8 @@ create_vnode(struct vnode* directory, const char* name, int openMode,
 				putter.SetTo(vnode);
 			}
 
-			if ((openMode & O_NOFOLLOW) != 0 && S_ISLNK(vnode->Type())) {
-				put_vnode(vnode);
+			if ((openMode & O_NOFOLLOW) != 0 && S_ISLNK(vnode->Type()))
 				return B_LINK_LIMIT;
-			}
 
 			int fd = open_vnode(vnode, openMode & ~O_CREAT, kernel);
 			// on success keep the vnode reference for the FD
@@ -8128,6 +8102,9 @@ _kern_open_dir_entry_ref(dev_t device, ino_t inode, const char* name)
 int
 _kern_open_dir(int fd, const char* path)
 {
+	if (path == NULL)
+		return dir_open(fd, NULL, true);;
+
 	KPath pathBuffer(path, false, B_PATH_NAME_LENGTH + 1);
 	if (pathBuffer.InitCheck() != B_OK)
 		return B_NO_MEMORY;
@@ -8764,7 +8741,7 @@ _user_entry_ref_to_path(dev_t device, ino_t inode, const char* leaf,
 	}
 
 	status_t status = vfs_entry_ref_to_path(device, inode, leaf,
-		path.LockBuffer(), path.BufferSize());
+		false, path.LockBuffer(), path.BufferSize());
 	if (status != B_OK)
 		return status;
 

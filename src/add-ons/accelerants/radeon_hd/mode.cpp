@@ -44,13 +44,13 @@ status_t
 create_mode_list(void)
 {
 	// TODO: multi-monitor?  for now we use VESA and not gDisplay edid
+	uint8 crtcID = 0;
 
 	const color_space kRadeonHDSpaces[] = {B_RGB32_LITTLE, B_RGB24_LITTLE,
 		B_RGB16_LITTLE, B_RGB15_LITTLE, B_CMAP8};
 
 	gInfo->mode_list_area = create_display_modes("radeon HD modes",
-		gInfo->shared_info->has_edid ? &gInfo->shared_info->edid_info : NULL,
-		NULL, 0, kRadeonHDSpaces,
+		&gDisplay[crtcID]->edidData, NULL, 0, kRadeonHDSpaces,
 		sizeof(kRadeonHDSpaces) / sizeof(kRadeonHDSpaces[0]),
 		is_mode_supported, &gInfo->mode_list, &gInfo->shared_info->mode_count);
 	if (gInfo->mode_list_area < B_OK)
@@ -110,7 +110,8 @@ radeon_get_preferred_mode(display_mode* preferredMode)
 status_t
 radeon_get_edid_info(void* info, size_t size, uint32* edid_version)
 {
-	// TODO: multi-monitor?  for now we use VESA edid
+	// TODO: multi-monitor?  for now we use display 0
+	uint8 crtcID = 0;
 
 	TRACE("%s\n", __func__);
 	if (!gInfo->shared_info->has_edid)
@@ -118,9 +119,9 @@ radeon_get_edid_info(void* info, size_t size, uint32* edid_version)
 	if (size < sizeof(struct edid1_info))
 		return B_BUFFER_OVERFLOW;
 
-	memcpy(info, &gInfo->shared_info->edid_info, sizeof(struct edid1_info));
+	//memcpy(info, &gInfo->shared_info->edid_info, sizeof(struct edid1_info));
 		// VESA
-	//memcpy(info, &gDisplay[0]->edidData, sizeof(struct edid1_info));
+	memcpy(info, &gDisplay[crtcID]->edidData, sizeof(struct edid1_info));
 		// Display 0
 
 	*edid_version = EDID_VERSION_1;
@@ -163,12 +164,12 @@ radeon_dpms_set(uint8 id, int mode)
 void
 radeon_dpms_set_hook(int mode)
 {
-	// TODO: multi-monitor?  for now we use VESA edid
+	// TODO: multi-monitor? 
 
-	// As the accelerant hook doesn't pass crtc id
-	for (uint8 id = 0; id < MAX_DISPLAY; id++) {
-		radeon_dpms_set(id, mode);
-	}
+	uint8 crtcID = 0;
+
+	if (gDisplay[crtcID]->attached)
+		radeon_dpms_set(crtcID, mode);
 }
 
 
@@ -176,56 +177,54 @@ status_t
 radeon_set_display_mode(display_mode* mode)
 {
 	// TODO: multi-monitor? For now we set the mode on
-	// all displays (this is very incorrect). This also
-	// causes a lot of problems on DisplayPort devices
+	// the first display found.
 
-	// Set mode on each display
-	for (uint8 id = 0; id < MAX_DISPLAY; id++) {
-		if (gDisplay[id]->attached == false)
-			continue;
+	uint8 crtcID = 0;
 
-		// Copy this display mode into the "current mode" for the display
-		memcpy(&gDisplay[id]->currentMode, mode, sizeof(display_mode));
+	if (gDisplay[crtcID]->attached == false)
+		return B_ERROR;
 
-		uint32 connectorIndex = gDisplay[id]->connectorIndex;
+	// Copy this display mode into the "current mode" for the display
+	memcpy(&gDisplay[crtcID]->currentMode, mode, sizeof(display_mode));
 
-		// Determine DP lanes if DP
-		if (connector_is_dp(connectorIndex)) {
-			dp_info *dpInfo = &gConnector[connectorIndex]->dpInfo;
-			dpInfo->laneCount = dp_get_lane_count(connectorIndex, mode);
-			dpInfo->linkRate = dp_get_link_rate(connectorIndex, mode);
-		}
+	uint32 connectorIndex = gDisplay[crtcID]->connectorIndex;
 
-		// *** crtc and encoder prep
-		encoder_output_lock(true);
-		display_crtc_lock(id, ATOM_ENABLE);
-		radeon_dpms_set(id, B_DPMS_OFF);
-
-		// *** Set up encoder -> crtc routing
-		encoder_assign_crtc(id);
-
-		// *** CRT controler mode set
-		// Set up PLL for connector
-		pll_pick(connectorIndex);
-		pll_info* pll = &gConnector[connectorIndex]->encoder.pll;
-		TRACE("%s: pll %d selected for connector %" B_PRIu32 "\n", __func__,
-			pll->id, connectorIndex);
-		pll_set(mode, id);
-
-		display_crtc_set_dtd(id, mode);
-
-		display_crtc_fb_set(id, mode);
-		// atombios_overscan_setup
-		display_crtc_scale(id, mode);
-
-		// *** encoder mode set
-		encoder_mode_set(id);
-
-		// *** encoder and CRT controller commit
-		radeon_dpms_set(id, B_DPMS_ON);
-		display_crtc_lock(id, ATOM_DISABLE);
-		encoder_output_lock(false);
+	// Determine DP lanes if DP
+	if (connector_is_dp(connectorIndex)) {
+		dp_info *dpInfo = &gConnector[connectorIndex]->dpInfo;
+		dpInfo->laneCount = dp_get_lane_count(connectorIndex, mode);
+		dpInfo->linkRate = dp_get_link_rate(connectorIndex, mode);
 	}
+
+	// *** crtc and encoder prep
+	encoder_output_lock(true);
+	display_crtc_lock(crtcID, ATOM_ENABLE);
+	radeon_dpms_set(crtcID, B_DPMS_OFF);
+
+	// *** Set up encoder -> crtc routing
+	encoder_assign_crtc(crtcID);
+
+	// *** CRT controler mode set
+	// Set up PLL for connector
+	pll_pick(connectorIndex);
+	pll_info* pll = &gConnector[connectorIndex]->encoder.pll;
+	TRACE("%s: pll %d selected for connector %" B_PRIu32 "\n", __func__,
+		pll->id, connectorIndex);
+	pll_set(mode, crtcID);
+
+	display_crtc_set_dtd(crtcID, mode);
+
+	display_crtc_fb_set(crtcID, mode);
+	// atombios_overscan_setup
+	display_crtc_scale(crtcID, mode);
+
+	// *** encoder mode set
+	encoder_mode_set(crtcID);
+
+	// *** encoder and CRT controller commit
+	radeon_dpms_set(crtcID, B_DPMS_ON);
+	display_crtc_lock(crtcID, ATOM_DISABLE);
+	encoder_output_lock(false);
 
 	#ifdef TRACE_MODE
 	// for debugging
@@ -344,6 +343,8 @@ is_mode_supported(display_mode* mode)
 		}
 	}
 
+	#if 0
+	// Lots of spam, but good for understanding what modelines are in use
 	TRACE("MODE: %d ; %d %d %d %d ; %d %d %d %d is %s\n",
 		mode->timing.pixel_clock, mode->timing.h_display,
 		mode->timing.h_sync_start, mode->timing.h_sync_end,
@@ -351,6 +352,7 @@ is_mode_supported(display_mode* mode)
 		mode->timing.v_sync_start, mode->timing.v_sync_end,
 		mode->timing.v_total,
 		sane ? "OK." : "BAD, out of range!");
+	#endif
 
 	return sane;
 }

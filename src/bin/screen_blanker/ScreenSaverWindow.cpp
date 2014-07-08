@@ -20,6 +20,9 @@
 #include <syslog.h>
 
 
+//	#pragma mark - ScreenSaverFilter
+
+
 /* This message filter is what will close the screensaver upon user activity. */
 filter_result
 ScreenSaverFilter::Filter(BMessage* message, BHandler** target)
@@ -55,21 +58,22 @@ ScreenSaverFilter::Filter(BMessage* message, BHandler** target)
 				break;
 		}
 	} else if (message->what == B_KEY_DOWN) {
-		// Handle the escape key when the password window is showing
-		const char *string = NULL;
-		if (message->FindString("bytes", &string) == B_OK && string[0] == B_ESCAPE)
-			be_app->PostMessage(kMsgResumeSaver);
+		ScreenBlanker* app = dynamic_cast<ScreenBlanker*>(be_app);
+		if (app != NULL && app->IsPasswordWindowShown()) {
+			// Handle the escape key when the password window is showing
+			const char* string = NULL;
+			if (message->FindString("bytes", &string) == B_OK
+					&& string[0] == B_ESCAPE) {
+				be_app->PostMessage(kMsgResumeSaver);
+			}
+		}
 	}
 
 	return B_DISPATCH_MESSAGE;
 }
 
 
-void
-ScreenSaverFilter::SetEnabled(bool enabled)
-{
-	fEnabled = enabled;
-}
+//	#pragma mark - ScreenSaverWindow
 
 
 /*!
@@ -77,14 +81,18 @@ ScreenSaverFilter::SetEnabled(bool enabled)
 	A view is added to it so that BView based screensavers will work.
 */
 ScreenSaverWindow::ScreenSaverWindow(BRect frame)
-	: BDirectWindow(frame, "ScreenSaver Window",
+	:
+	BDirectWindow(frame, "ScreenSaver Window",
 		B_NO_BORDER_WINDOW_LOOK, kWindowScreenFeel,
 		B_NOT_RESIZABLE | B_NOT_MOVABLE | B_NOT_MINIMIZABLE
 		| B_NOT_ZOOMABLE | B_NOT_CLOSABLE, B_ALL_WORKSPACES),
-	fSaver(NULL)
+	fTopView(NULL),
+	fSaverRunner(NULL),
+	fFilter(NULL)
 {
 	frame.OffsetTo(0, 0);
-	fTopView = new BView(frame, "ScreenSaver View", B_FOLLOW_ALL, B_WILL_DRAW);
+	fTopView = new BView(frame, "ScreenSaver View", B_FOLLOW_ALL,
+		B_WILL_DRAW);
 	fTopView->SetViewColor(B_TRANSPARENT_COLOR);
 
 	fFilter = new ScreenSaverFilter();
@@ -92,9 +100,10 @@ ScreenSaverWindow::ScreenSaverWindow(BRect frame)
 
 	AddChild(fTopView);
 
-	// Ensure that this view receives keyboard input
+	// Ensure that this view receives keyboard and mouse input
 	fTopView->MakeFocus(true);
-	fTopView->SetEventMask(B_KEYBOARD_EVENTS, 0);
+	fTopView->SetEventMask(B_KEYBOARD_EVENTS | B_POINTER_EVENTS,
+		B_NO_POINTER_HISTORY);
 }
 
 
@@ -105,14 +114,7 @@ ScreenSaverWindow::~ScreenSaverWindow()
 
 
 void
-ScreenSaverWindow::SetSaver(BScreenSaver *saver)
-{
-	fSaver = saver;
-}
-
-
-void
-ScreenSaverWindow::MessageReceived(BMessage *message)
+ScreenSaverWindow::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case kMsgEnableFilter:
@@ -121,7 +123,6 @@ ScreenSaverWindow::MessageReceived(BMessage *message)
 
 		default:
 			BWindow::MessageReceived(message);
- 			break;
 	}
 }
 
@@ -135,9 +136,26 @@ ScreenSaverWindow::QuitRequested()
 
 
 void
-ScreenSaverWindow::DirectConnected(direct_buffer_info *info)
+ScreenSaverWindow::DirectConnected(direct_buffer_info* info)
 {
-	if (fSaver)
-		fSaver->DirectConnected(info);
+	BScreenSaver* saver = _ScreenSaver();
+	if (saver != NULL)
+		saver->DirectConnected(info);
 }
 
+
+void
+ScreenSaverWindow::SetSaverRunner(ScreenSaverRunner* runner)
+{
+	fSaverRunner = runner;
+}
+
+
+BScreenSaver*
+ScreenSaverWindow::_ScreenSaver()
+{
+	if (fSaverRunner != NULL)
+		return fSaverRunner->ScreenSaver();
+
+	return NULL;
+}

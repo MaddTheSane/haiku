@@ -9,16 +9,22 @@ SubDirHdrs [ FDirName $(SUBDIR) $(DOTDOT) shared ] ;
 
 AddResources EXRTranslator : EXRTranslator.rdef ;
 
-Translator EXRTranslator :
-	main.cpp
-	ConfigView.cpp
-	EXRGamma.cpp
-	EXRTranslator.cpp
-	IStreamWrapper.cpp
-	: be translation libilmimf.so $(TARGET_LIBSTDC++) libtranslatorsutils.a 
-	$(HAIKU_LOCALE_LIBS)
-	: true
-;
+local architectureObject ;
+for architectureObject in [ MultiArchSubDirSetup ] {
+	on $(architectureObject) {
+		Translator [ MultiArchDefaultGristFiles EXRTranslator ] :
+			main.cpp
+			ConfigView.cpp
+			EXRGamma.cpp
+			EXRTranslator.cpp
+			IStreamWrapper.cpp
+			: be translation textencoding $(TARGET_LIBSTDC++) 
+			[ MultiArchDefaultGristFiles libtranslatorsutils.a  libilmimf.so ]
+			localestub
+			: true
+		;
+	}
+}
 
 DoCatalogs EXRTranslator :
 	x-vnd.Haiku-EXRTranslator
@@ -27,10 +33,6 @@ DoCatalogs EXRTranslator :
 	EXRTranslator.cpp
 	main.cpp
 ;
-
-Package haiku-translationkit-cvs :
-	EXRTranslator :
-	boot home config add-ons Translators ;
 
 SubInclude HAIKU_TOP src add-ons translators exr openexr ;
 

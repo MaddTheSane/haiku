@@ -31,10 +31,12 @@
 #include <Messenger.h>
 #include <OS.h>
 #include <Path.h>
+#include <PathFinder.h>
 #include <Resources.h>
 #include <Screen.h>
 #include <ScrollView.h>
 #include <String.h>
+#include <StringList.h>
 #include <StringView.h>
 #include <TranslationUtils.h>
 #include <TranslatorFormats.h>
@@ -80,6 +82,22 @@ static const rgb_color kHaikuYellow = { 255, 176, 0, 255 };
 static const rgb_color kLinkBlue = { 80, 80, 200, 255 };
 static const rgb_color kBeOSBlue = { 0, 0, 200, 255 };
 static const rgb_color kBeOSRed = { 200, 0, 0, 255 };
+
+static const char* kBSDTwoClause = B_TRANSLATE_MARK("BSD (2-clause)");
+static const char* kBSDThreeClause = B_TRANSLATE_MARK("BSD (3-clause)");
+static const char* kBSDFourClause = B_TRANSLATE_MARK("BSD (4-clause)");
+static const char* kGPLv2 = B_TRANSLATE_MARK("GNU GPL v2");
+static const char* kGPLv3 = B_TRANSLATE_MARK("GNU GPL v3");
+static const char* kLGPLv2 = B_TRANSLATE_MARK("GNU LGPL v2");
+static const char* kLGPLv21 = B_TRANSLATE_MARK("GNU LGPL v2.1");
+static const char* kMITNoPromotion = B_TRANSLATE_MARK("MIT (no promotion)");
+static const char* kPublicDomain = B_TRANSLATE_MARK("Public Domain");
+#ifdef __INTEL__
+static const char* kIntel2xxxFirmware = B_TRANSLATE_MARK("Intel (2xxx firmware)");
+static const char* kIntelFirmware = B_TRANSLATE_MARK("Intel (firmware)");
+static const char* kMarvellFirmware = B_TRANSLATE_MARK("Marvell (firmware)");
+static const char* kRalinkFirmware = B_TRANSLATE_MARK("Ralink (firmware)");
+#endif
 
 typedef struct
 {
@@ -602,27 +620,9 @@ AboutView::AboutView()
 	versionView->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
 		B_ALIGN_VERTICAL_UNSET));
 
-	// GCC version
-	BEntry gccFourHybrid("/boot/system/lib/gcc2/libstdc++.r4.so");
-	BEntry gccTwoHybrid("/boot/system/lib/gcc4/libsupc++.so");
-	bool isHybrid = gccFourHybrid.Exists() || gccTwoHybrid.Exists();
-
-	if (isHybrid) {
-		snprintf(string, sizeof(string), B_TRANSLATE("GCC %d Hybrid"),
-			__GNUC__);
-	} else
-		snprintf(string, sizeof(string), "GCC %d", __GNUC__);
-
-	BStringView* gccView = new BStringView("gcctext", string);
-	gccView->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
+	BStringView* abiView = new BStringView("abitext", B_HAIKU_ABI_NAME);
+	abiView->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
 		B_ALIGN_VERTICAL_UNSET));
-
-#if __GNUC__ == 2
-	if (isHybrid) {
-		// do now show the GCC version if it's the default
-		gccView->Hide();
-	}
-#endif
 
 	// CPU count, type and clock speed
 	char processorLabel[256];
@@ -633,9 +633,40 @@ AboutView::AboutView()
 		strlcpy(processorLabel, B_TRANSLATE("Processor:"),
 			sizeof(processorLabel));
 
+	uint32 topologyNodeCount = 0;
+	cpu_topology_node_info* topology = NULL;
+	get_cpu_topology_info(NULL, &topologyNodeCount);
+	if (topologyNodeCount != 0)
+		topology = new cpu_topology_node_info[topologyNodeCount];
+	get_cpu_topology_info(topology, &topologyNodeCount);
+
+	enum cpu_platform platform = B_CPU_UNKNOWN;
+	enum cpu_vendor cpuVendor = B_CPU_VENDOR_UNKNOWN;
+	uint32 cpuModel = 0;
+	for (uint32 i = 0; i < topologyNodeCount; i++) {
+		switch (topology[i].type) {
+			case B_TOPOLOGY_ROOT:
+				platform = topology[i].data.root.platform;
+				break;
+
+			case B_TOPOLOGY_PACKAGE:
+				cpuVendor = topology[i].data.package.vendor;
+				break;
+
+			case B_TOPOLOGY_CORE:
+				cpuModel = topology[i].data.core.model;
+				break;
+
+			default:
+				break;
+		}
+	}
+
+	delete[] topology;
+
 	BString cpuType;
-	cpuType << get_cpu_vendor_string(systemInfo.cpu_type)
-		<< " " << get_cpu_model_string(&systemInfo);
+	cpuType << get_cpu_vendor_string(cpuVendor)
+		<< " " << get_cpu_model_string(platform, cpuVendor, cpuModel);
 
 	BStringView* cpuView = new BStringView("cputext", cpuType.String());
 	cpuView->SetExplicitAlignment(BAlignment(B_ALIGN_LEFT,
@@ -701,7 +732,7 @@ AboutView::AboutView()
 			.AddGroup(B_VERTICAL, 0)
 				.Add(_CreateLabel("oslabel", B_TRANSLATE("Version:")))
 				.Add(versionView)
-				.Add(gccView)
+				.Add(abiView)
 				.AddStrut(offset)
 				.Add(_CreateLabel("cpulabel", processorLabel))
 				.Add(cpuView)
@@ -850,7 +881,7 @@ AboutView::AddCopyrightEntry(const char* name, const char* text,
 
 			BPath licensePath;
 			if (_GetLicensePath(licenseURL, licensePath) == B_OK) {
-				fCreditsView->InsertHyperText(licenseName,
+				fCreditsView->InsertHyperText(B_TRANSLATE_NOCOLLECT(licenseName),
 					new OpenFileAction(licensePath.Path()));
 			} else
 				fCreditsView->Insert(licenseName);
@@ -1030,6 +1061,7 @@ AboutView::_CreateCreditsView()
 		"René Gollent\n"
 		"Bryce Groff\n"
 		"Colin Günther\n"
+		"Jessica Hamilton\n"
 		"Fredrik Holmqvist\n"
 		"Philippe Houdoin\n"
 		"Ryan Leavengood\n"
@@ -1043,9 +1075,9 @@ AboutView::_CreateCreditsView()
 		"Joseph R. Prostko\n"
 		"François Revol\n"
 		"Philippe Saint-Pierre\n"
+		"Jonathan Schleifer\n"
 		"John Scipione\n"
 		"Alex Smith\n"
-		"Jonas Sundström\n"
 		"Oliver Tappe\n"
 		"Gerasim Troeglazov\n"
 		"Alexander von Gluck IV\n"
@@ -1083,6 +1115,7 @@ AboutView::_CreateCreditsView()
 		"Hugo Santos\n"
 		"Alexander G. M. Smith\n"
 		"Andrej Spielmann\n"
+		"Jonas Sundström\n"
 		"Bryan Varner\n"
 		"Nathan Whitehorn\n"
 		"Michael Wilber\n"
@@ -1137,7 +1170,6 @@ AboutView::_CreateCreditsView()
 		"Deyan Genovski\n"
 		"Pete Goodeve\n"
 		"Lucian Adrian Grijincu\n"
-		"Jessica Hamilton\n"
 		"Sean Healy\n"
 		"Andreas Henriksson\n"
 		"Matthijs Hollemans\n"
@@ -1355,7 +1387,7 @@ AboutView::_CreateCreditsView()
 		"gdb, wget, ncurses, termcap, "
 		"Bourne Again Shell.\n"
 		COPYRIGHT_STRING "The Free Software Foundation."),
-		StringVector("GNU LGPL v2.1", "GNU GPL v2", "GNU GPL v3", NULL),
+		StringVector(kLGPLv21, kGPLv2, kGPLv3, NULL),
 		StringVector(),
 		"http://www.gnu.org");
 
@@ -1367,7 +1399,7 @@ AboutView::_CreateCreditsView()
 		"telnetd, traceroute\n"
 		COPYRIGHT_STRING "1994-2008 The FreeBSD Project. "
 		"All rights reserved."),
-		StringVector("BSD (2-clause)", "BSD (3-clause)", "BSD (4-clause)",
+		StringVector(kBSDTwoClause, kBSDThreeClause, kBSDFourClause,
 			NULL),
 		StringVector(),
 		"http://www.freebsd.org");
@@ -1386,15 +1418,14 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("FFMpeg libavcodec")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2000-2007 Fabrice "
 			"Bellard, et al."))
-		.SetLicenses("GNU LGPL v2.1", "GNU LGPL v2", NULL)
+		.SetLicenses(kLGPLv21, kLGPLv2, NULL)
 		.SetURL("http://www.ffmpeg.org"));
 
 	// AGG copyrights
 	_AddPackageCredit(PackageCredit("AntiGrain Geometry")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2002-2006 Maxim "
 			"Shemanarev (McSeem)."))
-		.SetLicenses("Anti-Grain Geometry", B_TRANSLATE("BSD (3-clause)"),
-			"GPC", NULL)
+		.SetLicenses("Anti-Grain Geometry", kBSDThreeClause, "GPC", NULL)
 		.SetURL("http://www.antigrain.com"));
 
 	// PDFLib copyrights
@@ -1458,7 +1489,7 @@ AboutView::_CreateCreditsView()
 			COPYRIGHT_STRING "2006-2012 Project Vine.",
 			B_TRANSLATE("MIT license. All rights reserved."),
 			NULL)
-		.SetLicense("BSD (3-clause)")
+		.SetLicense(kBSDThreeClause)
 		.SetURL("http://vlgothic.dicey.org/"));
 
 	// expat copyrights
@@ -1488,21 +1519,21 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("bzip2")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "1996-2005 Julian R "
 			"Seward. All rights reserved."))
-		.SetLicense(B_TRANSLATE("BSD (4-clause)"))
+		.SetLicense(kBSDFourClause)
 		.SetURL("http://bzip.org"));
 
 	// lp_solve copyrights
 	_AddPackageCredit(PackageCredit("lp_solve")
 		.SetCopyright(COPYRIGHT_STRING
 			"Michel Berkelaar, Kjell Eikland, Peter Notebaert")
-		.SetLicense("GNU LGPL v2.1")
+		.SetLicense(kLGPLv21)
 		.SetURL("http://lpsolve.sourceforge.net/"));
 
 	// OpenEXR copyrights
 	_AddPackageCredit(PackageCredit("OpenEXR")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2002-2005 Industrial "
 			"Light & Magic, a division of Lucas Digital Ltd. LLC."))
-		.SetLicense(B_TRANSLATE("BSD (3-clause)"))
+		.SetLicense(kBSDThreeClause)
 		.SetURL("http://www.openexr.com"));
 
 	// Bullet copyrights
@@ -1515,13 +1546,13 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("atftp")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2000 Jean-Pierre "
 			"ervbefeL and Remi Lefebvre."))
-		.SetLicense("GNU GPL v2")
+		.SetLicense(kGPLv2)
 		.SetURL("http://freecode.com/projects/atftp"));
 
 	// Netcat copyrights
 	_AddPackageCredit(PackageCredit("Netcat")
 		.SetCopyright(COPYRIGHT_STRING "1996 Hobbit.")
-		.SetLicense("Public Domain")
+		.SetLicense(kPublicDomain)
 		.SetURL("http://nc110.sourceforge.net/"));
 
 	// acpica copyrights
@@ -1561,14 +1592,14 @@ AboutView::_CreateCreditsView()
 	// cortex copyrights
 	_AddPackageCredit(PackageCredit("Cortex")
 		.SetCopyright(COPYRIGHT_STRING "1999-2000 Eric Moon.")
-		.SetLicense(B_TRANSLATE("BSD (3-clause)"))
+		.SetLicense(kBSDThreeClause)
 		.SetURL("http://cortex.sourceforge.net/documentation"));
 
 	// FluidSynth copyrights
 	_AddPackageCredit(PackageCredit("FluidSynth")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2003 Peter Hanappe "
 			"and others."))
-		.SetLicense("GNU LGPL v2")
+		.SetLicense(kLGPLv2)
 		.SetURL("http://www.fluidsynth.org"));
 
 	// CannaIM copyrights
@@ -1580,13 +1611,13 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("libxml2, libxslt")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "1998-2003 Daniel Veillard. "
 			"All rights reserved."))
-		.SetLicense(B_TRANSLATE("MIT (no promotion)"))
+		.SetLicense(kMITNoPromotion)
 		.SetURL("http://xmlsoft.org"));
 
 	_AddPackageCredit(PackageCredit("libexslt")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2001-2002 Thomas Broyer, "
 			"Charlie Bozeman and Daniel Veillard. All rights reserved."))
-		.SetLicense(B_TRANSLATE("MIT (no promotion)"))
+		.SetLicense(kMITNoPromotion)
 		.SetURL("http://xmlsoft.org"));
 
 	// Xiph.org Foundation copyrights
@@ -1594,20 +1625,20 @@ AboutView::_CreateCreditsView()
 		.SetCopyrights("libvorbis, libogg, libtheora, libspeex",
 			B_TRANSLATE(COPYRIGHT_STRING "1994-2008 Xiph.Org. "
 			"All rights reserved."), NULL)
-		.SetLicense(B_TRANSLATE("BSD (3-clause)"))
+		.SetLicense(kBSDThreeClause)
 		.SetURL("http://www.xiph.org"));
 
 	// The Tcpdump Group
 	_AddPackageCredit(PackageCredit("The Tcpdump Group")
 		.SetCopyright("tcpdump, libpcap")
-		.SetLicense(B_TRANSLATE("BSD (3-clause)"))
+		.SetLicense(kBSDThreeClause)
 		.SetURL("http://www.tcpdump.org"));
 
 	// Matroska
 	_AddPackageCredit(PackageCredit("libmatroska")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2002-2003 Steve Lhomme. "
 			"All rights reserved."))
-		.SetLicense("GNU LGPL v2.1")
+		.SetLicense(kLGPLv21)
 		.SetURL("http://www.matroska.org"));
 
 	// BColorQuantizer (originally CQuantizer code)
@@ -1643,7 +1674,7 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("Udis86")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2002-2004 "
 			"Vivek Mohan. All rights reserved."))
-		.SetLicense(B_TRANSLATE("BSD (2-clause)"))
+		.SetLicense(kBSDTwoClause)
 		.SetURL("http://udis86.sourceforge.net"));
 #endif
 
@@ -1652,7 +1683,7 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("Intel PRO/Wireless 2100 Firmware")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2003-2006 "
 			"Intel Corporation. All rights reserved."))
-		.SetLicense("Intel (2xxx firmware)")
+		.SetLicense(kIntel2xxxFirmware)
 		.SetURL("http://ipw2100.sourceforge.net/"));
 #endif
 
@@ -1661,7 +1692,7 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("Intel PRO/Wireless 2200BG Firmware")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2004-2005 "
 			"Intel Corporation. All rights reserved."))
-		.SetLicense("Intel (2xxx firmware)")
+		.SetLicense(kIntel2xxxFirmware)
 		.SetURL("http://ipw2200.sourceforge.net/"));
 #endif
 
@@ -1672,7 +1703,7 @@ AboutView::_CreateCreditsView()
 			"Intel PRO/Wireless 3945ABG/BG Network Connection Adapter Firmware")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2006-2007 "
 			"Intel Corporation. All rights reserved."))
-		.SetLicense("Intel (firmware)")
+		.SetLicense(kIntelFirmware)
 		.SetURL("http://www.intellinuxwireless.org/"));
 #endif
 #ifdef __INTEL__
@@ -1681,7 +1712,7 @@ AboutView::_CreateCreditsView()
 		PackageCredit("Intel Wireless WiFi Link 4965AGN Adapter Firmware")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2006-2007 "
 			"Intel Corporation. All rights reserved."))
-		.SetLicense("Intel (firmware)")
+		.SetLicense(kIntelFirmware)
 		.SetURL("http://www.intellinuxwireless.org/"));
 #endif
 
@@ -1690,7 +1721,7 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("Marvell 88w8363")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2007-2009 "
 			"Marvell Semiconductor, Inc. All rights reserved."))
-		.SetLicense("Marvell (firmware)")
+		.SetLicense(kMarvellFirmware)
 		.SetURL("http://www.marvell.com/"));
 #endif
 
@@ -1699,7 +1730,7 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("Ralink Firmware RT2501/RT2561/RT2661")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2007 "
 			"Ralink Technology Corporation. All rights reserved."))
-		.SetLicense("Ralink (firmware)")
+		.SetLicense(kRalinkFirmware)
 		.SetURL("http://www.ralinktech.com/"));
 #endif
 
@@ -1707,27 +1738,27 @@ AboutView::_CreateCreditsView()
 	_AddPackageCredit(PackageCredit("Gutenprint")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING
 			"1999-2010 by the authors of Gutenprint. All rights reserved."))
-		.SetLicense("GNU GPL v2")
+		.SetLicense(kGPLv2)
 		.SetURL("http://gutenprint.sourceforge.net/"));
 
 	// libwebp
 	_AddPackageCredit(PackageCredit("libwebp")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING
 			"2010-2011 Google Inc. All rights reserved."))
-		.SetLicense(B_TRANSLATE("BSD (3-clause)"))
+		.SetLicense(kBSDThreeClause)
 		.SetURL("http://www.webmproject.org/code/#libwebp_webp_image_library"));
 
 	// GTF
 	_AddPackageCredit(PackageCredit("GTF")
 		.SetCopyright(B_TRANSLATE("2001 by Andy Ritger based on the "
 			"Generalized Timing Formula"))
-		.SetLicense(B_TRANSLATE("BSD (3-clause)"))
+		.SetLicense(kBSDThreeClause)
 		.SetURL("http://gtf.sourceforge.net/"));
 
 	// libqrencode
 	_AddPackageCredit(PackageCredit("libqrencode")
 		.SetCopyright(B_TRANSLATE(COPYRIGHT_STRING "2006-2012 Kentaro Fukuchi"))
-		.SetLicense(B_TRANSLATE("GNU LGPL v2.1"))
+		.SetLicense(kLGPLv21)
 		.SetURL("http://fukuchi.org/works/qrencode/"));
 
 	_AddCopyrightsFromAttribute();
@@ -1740,17 +1771,15 @@ AboutView::_CreateCreditsView()
 status_t
 AboutView::_GetLicensePath(const char* license, BPath& path)
 {
-	static const directory_which directoryConstants[] = {
-		B_USER_DATA_DIRECTORY,
-		B_COMMON_DATA_DIRECTORY,
-		B_SYSTEM_DATA_DIRECTORY
-	};
-	static const int dirCount = 3;
+	BPathFinder pathFinder;
+	BStringList paths;
+	struct stat st;
 
-	for (int i = 0; i < dirCount; i++) {
-		struct stat st;
-		status_t error = find_directory(directoryConstants[i], &path);
-		if (error == B_OK && path.Append("licenses") == B_OK
+	status_t error = pathFinder.FindPaths(B_FIND_PATH_DATA_DIRECTORY,
+		"licenses", paths);
+
+	for (int i = 0; i < paths.CountStrings(); ++i) {
+		if (error == B_OK && path.SetTo(paths.StringAt(i)) == B_OK
 			&& path.Append(license) == B_OK
 			&& lstat(path.Path(), &st) == 0) {
 			return B_OK;

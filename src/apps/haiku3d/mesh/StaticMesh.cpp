@@ -49,13 +49,13 @@ StaticMesh::_ReadText(const char* fileName)
 		return;
 	}
 
-	fscanf(f, "%lu", &fFaceCount);
+	fscanf(f, "%" B_PRIu32, &fFaceCount);
 	fFaces = new Face[fFaceCount];
 
 	for (uint32 i = 0; i < fFaceCount; i++) {
 
 		uint32 vertexCount = 0;
-		fscanf(f, "%lu", &vertexCount);
+		fscanf(f, "%" B_PRIu32, &vertexCount);
 		fFaces[i].vertexCount = vertexCount;
 
 		for (uint32 vi = 0; vi < vertexCount; vi++) {
@@ -68,7 +68,8 @@ StaticMesh::_ReadText(const char* fileName)
 	}
 
 	fclose(f);
-	printf("Mesh::_ReadText, loaded %s (%lu faces)\n", fileName, fFaceCount);
+	printf("Mesh::_ReadText, loaded %s (%" B_PRIu32 " faces)\n",
+		fileName, fFaceCount);
 }
 
 
@@ -89,7 +90,8 @@ StaticMesh::_WriteBinary(const char* fileName)
 			file.Write(&fFaces[i].v[vi], sizeof(Vertex));
 		}
 	}
-	printf("Mesh::_WriteBinary, wrote %s (%lu faces)\n", fileName, fFaceCount);
+	printf("Mesh::_WriteBinary, wrote %s (%" B_PRIu32 " faces)\n",
+		fileName, fFaceCount);
 }
 
 
@@ -111,7 +113,8 @@ StaticMesh::_ReadBinary(const char* fileName)
 			file.Read(&fFaces[i].v[vi], sizeof(Vertex));
 		}
 	}
-	printf("Mesh::_ReadBinary, loaded %s (%lu faces)\n", fileName, fFaceCount);
+	printf("Mesh::_ReadBinary, loaded %s (%" B_PRIu32 " faces)\n",
+		fileName, fFaceCount);
 }
 
 
@@ -146,8 +149,8 @@ StaticMesh::_ReadResource(const char* resourceName)
 			memoryIO.Read(&fFaces[i].v[vi], sizeof(Vertex));
 		}
 	}
-	printf("Mesh::_ReadResource, loaded %s (%lu faces)\n", resourceName,
-		fFaceCount);
+	printf("Mesh::_ReadResource, loaded %s (%" B_PRIu32 " faces)\n",
+		resourceName, fFaceCount);
 }
 
 

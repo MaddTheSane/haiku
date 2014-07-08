@@ -55,60 +55,18 @@ FUNCTION(x86_get_stack_frame):
 FUNCTION_END(x86_get_stack_frame)
 
 
-/* uint64 x86_read_msr(uint32 register); */
-FUNCTION(x86_read_msr):
-	mov		%edi, %ecx
-	rdmsr
-	shl		$32, %rdx
-	mov		%eax, %eax
-	or		%rdx, %rax
-	ret
-FUNCTION_END(x86_read_msr)
-
-
-/* void x86_write_msr(uint32 register, uint64 value); */
-FUNCTION(x86_write_msr):
-	mov		%rsi, %rdx
-	mov		%esi, %eax
-	mov		%edi, %ecx
-	shr		$32, %rdx
-	wrmsr
-	ret
-FUNCTION_END(x86_write_msr)
-
-
 /* void x86_64_thread_entry(); */
 FUNCTION(x86_64_thread_entry):
-	movq	%r15, %rdi
-	jmp		*%r14
+	xorq	%rbp, %rbp
+
+	movq	%rsp, %rax
+	addq	$16, %rsp
+	andq	$0xfffffffffffffff0, %rsp
+	subq	$8, %rsp
+
+	movq	8(%rax), %rdi
+	jmp		*(%rax)
 FUNCTION_END(x86_64_thread_entry)
-
-
-/* void x86_context_switch(struct arch_thread* oldState,
-		struct arch_thread* newState); */
-FUNCTION(x86_context_switch):
-	// Just need to save callee-save registers: RBP, RBX, R12-15.
-	push	%r15
-	push	%r14
-	push	%r13
-	push	%r12
-	push	%rbp
-	push	%rbx
-
-	// Swap the stack pointers.
-	movq	%rsp, ARCH_THREAD_current_stack(%rdi)
-	movq	ARCH_THREAD_current_stack(%rsi), %rsp
-
-	// Restore callee-save registers.
-	pop		%rbx
-	pop		%rbp
-	pop		%r12
-	pop		%r13
-	pop		%r14
-	pop		%r15
-
-	ret
-FUNCTION_END(x86_context_switch)
 
 
 /* void x86_swap_pgdir(uint64 newPageDir); */

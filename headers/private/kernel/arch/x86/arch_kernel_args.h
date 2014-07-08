@@ -17,9 +17,6 @@
 
 #define _PACKED __attribute__((packed))
 
-#define IDT_LIMIT 0x800
-#define GDT_LIMIT 0x800
-
 // kernel args
 typedef struct {
 	// architecture specific
@@ -30,18 +27,14 @@ typedef struct {
 	uint32	num_pgtables;
 	uint32	pgtables[MAX_BOOT_PTABLES];
 	uint64	virtual_end;
-	uint32	phys_idt;
-	uint64	vir_idt;
-	uint32	phys_gdt;
-	uint64	vir_gdt;
 	uint64	page_hole;
 	// smp stuff
 	uint32	apic_time_cv_factor; // apic ticks per second
 	uint32	apic_phys;
 	FixedWidthPointer<void> apic;
 	uint32	ioapic_phys;
-	uint32	cpu_apic_id[MAX_BOOT_CPUS];
-	uint32	cpu_apic_version[MAX_BOOT_CPUS];
+	uint32	cpu_apic_id[SMP_MAX_CPUS];
+	uint32	cpu_apic_version[SMP_MAX_CPUS];
 	// hpet stuff
 	uint32	hpet_phys;
 	FixedWidthPointer<void> hpet;

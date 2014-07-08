@@ -1,5 +1,4 @@
-1	hindi	x-vnd.Haiku-libtracker	3225080926
-common	B_COMMON_DIRECTORY		सामान्य
+1	hindi	x-vnd.Haiku-libtracker	3225742905
 OK	WidgetAttributeText		ठीक है
 Icon view	VolumeWindow		चिह्न दृश्य
 Add-ons	FilePanelPriv		अतिरिक्त जोड़ सकते हैं
@@ -70,7 +69,6 @@ Search	FindPanel		खोजें
 Preparing to empty Trash…	StatusWindow		रद्दी खाली करने की तैयारी ...
 Disks	Model		डिस्कस
 Create link	ContainerWindow		लिंक बनाएँ
-develop	B_COMMON_DEVELOP_DIRECTORY		बनायें
 Decrease size	DeskWindow		आकार घटाएँ
 Size	ContainerWindow		आकार
 All disks	AutoMounterSettings		सभी डिस्कस
@@ -233,7 +231,6 @@ Mount settings…	SettingsView		माउंट सेटिंग ...
 Edit name	InfoWindow		नाम संपादित करें
 Could not open \"%name\" (%error). 	FSUtils		खुल नहीं सका \"%name\". (%error). 
 Paste	ContainerWindow		चिपकाना
-optional	/boot/optional		वैकल्पिक
 Modified:	InfoWindow		संशोधित:
 Error moving \"%name\".	FSUtils		जाने में त्रुटि \"%name\".
 TiB	WidgetAttributeText		ती बी

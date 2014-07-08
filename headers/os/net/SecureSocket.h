@@ -9,6 +9,9 @@
 #include <Socket.h>
 
 
+class BCertificate;
+
+
 class BSecureSocket : public BSocket {
 public:
 								BSecureSocket();
@@ -16,6 +19,11 @@ public:
 									bigtime_t timeout = B_INFINITE_TIMEOUT);
 								BSecureSocket(const BSecureSocket& other);
 	virtual						~BSecureSocket();
+
+	virtual bool				CertificateVerificationFailed(BCertificate&
+									certificate);
+
+	// BSocket implementation
 
 	virtual	status_t			Connect(const BNetworkAddress& peer,
 									bigtime_t timeout = B_INFINITE_TIMEOUT);
@@ -30,6 +38,7 @@ public:
 	virtual ssize_t				Write(const void* buffer, size_t size);
 
 private:
+	friend class BCertificate;
 			class Private;
 			Private*			fPrivate;
 };

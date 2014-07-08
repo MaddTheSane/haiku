@@ -4,7 +4,7 @@
 <head>
 <!-- 
  *
- * Copyright 2008-2011, Haiku. All rights reserved.
+ * Copyright 2008-2013, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -47,6 +47,7 @@
 <li><a href="../sk/applications.html"><img src="../images/flags/sk.png" alt="" />Slovenčina</a></li>
 <li><a href="../hu/applications.html"><img src="../images/flags/hu.png" alt="" />Magyar</a></li>
 <li><a href="../ca/applications.html"><img src="../images/flags/ca.png" alt="" />Català</a></li>
+<li><a href="../pl/applications.html"><img src="../images/flags/pl.png" alt="" />Polski</a></li>
 <li><a href="../en/applications.html"><img src="../images/flags/gb.png" alt="" />English</a></li>
 </ul>
 <span>
@@ -58,41 +59,34 @@
 
 <div id="content">
 <div>
+<div class="box-info">A tradução desta página ainda não está completa. Até lá, partes incompletas mostrarão o original em inglês.</div>
 
 <h1>Aplicativos
 </h1>
 
-<p>Antes de mergulharmos dentro de todos os aplicativos que vem com o Haiku, vamos dar uma olhada detalhada em como instalar e desinstalar programas que foram baixados de algum lugar, por exemplo de um sítio mencionado na página <a href="../../welcome/welcome_pt_BR.html#software">Boas Vindas</a>.</p>
-<div class="box-info">Deve-se descompactar/instalar arquivos somente dentro do Haiku. Se extrair um pacote no Linux ou Windows, por exemplo, e apenas copiar a pasta no Haiku depois, todos os atributos vitais são perdidos, porque aqueles sistemas operacionais normalmente não lidam com metadados.</div>
+<p>Antes de aprofundar em todas os aplicativos que vêm com o Haiku, vamos dar uma olhada mais detalhada em como instalar e desinstalar programas. O modo mais conveniente para encontrar, instalar, atualizar e desinstalar aplicativos é via sistema de gerenciamento de pacotes do Haiku. Contudo, uma vez que o Haiku é amplamente compatível, tanto nos binários como em código-fonte, com seu antecessor BeOS, encontrar-se-á arquivos antigos (.zip e .pkg) que ainda podem ser instalados normalmente.</p>
+<div class="box-info">A seguir, sempre será mencionada a hierarquia <tt>~/config/</tt> da pasta Home. Se pretende compartilhar pacotes para todos os usuários (desde que o Haiku torne-se multi-usuário), deve utilizar a hierarquia de sistema de arquivos espelhada em <tt>/system/</tt>. Veja o tópico <a href="filesystem-layout.html">Disposição do sistema de arquivos</a> para maiores informações.</div>
 
 <h2>
 <a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
-<a id="install" name="install">Instalando aplicativos</a></h2>
-<p>Software do Haiku sempre vem como um conjunto de arquivos. Na maior parte do tempo é um ZIP, alguns antigos pacotes BeOS vem em formato de software personalizado PKG. O software personalizado era capaz de automaticamente executar scripts de instalação, então após um duplo clique apenas se escolhia a pasta de destino e tudo era feito.<br />
-Se for um arquivo ZIP, duplo clique abre o <span class="app">Expansor</span> onde também se define o destino e o descompacta. Como explicado no tópico <a href="filesystem-layout.html">Disposição do sistema de arquivos</a>, aquele destino ou é</p>
-<table summary="layout" border="0" cellspacing="0" cellpadding="2">
-<tr><td><span class="path">/boot/common/apps/</span></td><td>   </td><td>para aplicativos disponíveis para todos os usuários</td></tr>
-<tr><td><span class="path">/boot/home/apps/</span></td><td>   </td><td>para aplicativos disponíveis apenas para si mesmo</td></tr>
-</table>
-<p>Naturalmente, esta distinção se tornará relevante apenas quando o Haiku tiver suporte a multiusuário.</p>
-<p>Uma vez que o arquivo é descompactado, deverá dar uma olhada dentrp da pasta recém-criada. Geralmente encontramos arquivos LeiaMe ou outra documentação de interesse.</p>
-<p>Alguns programas necessitam de configurações adicionais. Por exemplo, <a href="tracker-add-ons.html">Adicionais do Rastreador</a>, <a href="preferences/datatranslations.html">Tradutores</a> ou outros componentes de aprimoramento do sistema tem que ser postos nas pastas certas. Ou encontrar um pequeno arquivo de script (frequentemente com o suxifo <span class="cli">.sh</span>) como <span class="cli">instalar</span> o qual basta um duplo clique para fazer tudo.<br />
-Algumas vezes encontramos pastas que vinculam para o destino correto denominado "<span class="cli">arraste [nome do arquivo] aqui...</span>". Então, simplesmente siga aquela instrução e estará feito.</p>
-<p>Na maioria das  vezes, entretanto, nada disso é necessário e tudo estará pronto após a descompactação.<br />
-Os tópicos <a href="deskbar.html">Deskbar</a> ou <a href="desktop-applets/launchbox.html">LaunchBox</a> descreve como adicionar atalhos para a nova aplicação instalada.</p>
+<a id="hpkg" name="hpkg">Pacotes Haiku (.hpkg)</a></h2>
+<p>A maneira mais simples é utilizar o <a href="applications/haikudepot.html">Depósito Haiku</a> para encontrar, baixar, instalar e desinstalar automaticamente um pacote. Se esta não for uma opção — talvez tenha baixado um pacote de algum lugar, porque (ainda) não está em um repositório público — é muito fácil instalá-lo manualmente: apenas mova o arquivo .hpkg para dentro de <tt>~/config/packages/</tt>. </p>
+<p>Encontrar-se-á o aplicativo recém-instalado em <tt>~/config/apps/</tt> ou, no caso de um aplicativo de linha de comando, em <tt>~/config/bin/</tt>. Todos os outros arquivos dos quais o programa depende (bibliotecas, dados, adicionais, etc.) aparecem automaticamente nos locais corretos no sistema de arquivos.</p>
+<p>Os tópicos <a href="deskbar.html">Deskbar</a> ou <a href="desktop-applets/launchbox.html">LaunchBox</a> descrevem como adicionar atalhos para a nova aplicação instalada.</p>
+<p>Desinstalar é igualmente fácil: remova o pacote de <tt>~/config/packages/</tt>.</p>
+<div class="box-info">A propósito, embora possa desempacotar um arquivo .hpkg como qualquer outro arquivo compactado, não é isto que o gerenciamento de pacotes faz ao instalar um pacote. O sistema de arquivos implícito apenas aparenta espalhar os arquivos em suas respectivas pastas, mas não há movimentação física sendo feita. Eis o porquê do instalar/desinstalar ser tão rápido e limpo.</div>
+<p>Se o pacote depende de alguma outra biblioteca ou pacote, uma janela se abrirá perguntando se os arquivos necessários devem ser baixados e instalados.</p>
 
 <h2>
 <a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
-<a id="uninstall" name="uninstall">Desinstalando aplicativos</a></h2>
-<p>Se a instalação foi feita com um script de instalação, é muito provável que exista um script de desinstalação. Neste caso, clique duas vezes nele e estará pronto.<br />
-Do contrário, desinstalar é simplesmente apagar a pasta do aplicativo.</p>
-<p>Isto, naturalmente, deixa para trás prováveis arquivos de configuração na sua pasta <span class="path">~/config/settings</span>. Isto pode ser proposital, se desejar manter aquelas configurações no caso de instalar o programa novamente no futuro. Também, quando a instalação envolveu pastas "<span class="cli">arraste [nomedoarquivo] aqui...</span>", tais arquivos serão também deixados para trás.</p>
-<p>Um método para rapidamente obter todos os arquivos do aplicativo é fazer uma consulta rápida para uma parte significante do nome do aplicativo. Isto irá revelar o binário do aplicativo, sua pasta de instalação e suas configurações, assim como vínculos possíveis no Deskbar, etc. Simplesmente selecione todos os arquivos relevantes e apague-os.</p>
+<a id="beos_apps" name="beos_apps">Antigos arquivos BeOS (.zip e .pkg)</a></h2>
+<p>BeOS archives that include all they need in their app's folder can simply be unpacked (double clicking opens <span class="app">Expander</span> or the old <span class="app">PackageInstaller</span>) anywhere in <tt>/boot/home/</tt> and run from there. Uninstalling such self-contained applications is easy: just delete the app's folder.</p>
+<p>Isto é verdadeiro para a maioria dos aplicativos antigos do BeOS. Se acontecer de algum não funcionar facilmente, porque ele quer espalhar seus arquivos para locais definidos via código os quais não há garantia de existirem, pode-se tentar corrigir manualmente. A pasta <tt>~/config/non-packaged/</tt> permite recriar a hierarquia de pastas necessária. A medida que mais e mais pacotes .hpkg reais tornam-se disponíveis e antigos aplicativos  BeOS são reempacotados, isso se tornará menos necessário. Favor consultar o <a href="http://www.haiku-os.org/guides/daily-tasks/install-applications">artigo online</a> sobre como utilizar a hierarquia <tt>non-packaged</tt>.</p>
 
 <h2>
 <a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
 <a id="list-of-apps" name="list-of-apps">Aplicativos do Haiku</a></h2>
-<p>O Haiku vem com um conjunto de aplicativos pequenos mas principalmente essenciais. Encontre-os em <span class="path">/boot/system/apps/</span> ou <span class="path">/boot/common/apps/</span>. Aplicativos que não são normalmente carregados com um clique duplo no arquivo de dados (por exemplo o ShowImage para arquivos de imagem) podem ser encontrados no menu <span class="menu">Aplicativos</span> do Deskbar.</p>
+<p>O Haiku vem com um conjunto de aplicativos pequenos mas principalmente essenciais. Encontre-os em <span class="path">/boot/system/apps/</span>. Aplicativos que não são normalmente carregados com um clique duplo no arquivo de dados (por exemplo o ShowImage para arquivos de imagem) podem ser encontrados no menu <span class="menu">Aplicativos</span> do Deskbar.</p>
 <table summary="layout" border="0" cellpadding="2" cellspacing="0"> 
 	<tr><td style="width:24px;"><img src="../images/apps-images/activitymonitor-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/activitymonitor.html">Monitor de Atividade</a></td><td style="width:10px;"> </td>
 		<td valign="top">Uma ferramenta para rastrear os recursos do sistema, como uso da CPU e da memória.</td></tr>
@@ -114,6 +108,8 @@ Do contrário, desinstalar é simplesmente apagar a pasta do aplicativo.</p>
 		<td valign="top">Uma ferramenta de particionamento de disco rígido.</td></tr>
 	<tr><td style="width:24px;"><img src="../images/apps-images/expander-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/expander.html">Expansor</a></td><td> </td>
 		<td valign="top">Uma ferramenta para descompactar fichários comuns.</td></tr>
+	<tr><td style="width:24px;"><img src="../images/apps-images/haikudepot-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/haikudepot.html">Depósito Haiku</a></td><td> </td>
+		<td valign="top">A tool to find, download, install, update and uninstall (application) packages</td></tr>
 	<tr><td style="width:24px;"><img src="../images/apps-images/icon-o-matic-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/icon-o-matic.html">Icon-O-Mático</a></td><td> </td>
 		<td valign="top">Um aplicativo pra criar ícones vetoriais do Haiku.</td></tr>
 	<tr><td style="width:24px;"><img src="../images/apps-images/installer-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/installer.html">Instalador</a></td><td> </td>
@@ -145,7 +141,7 @@ Do contrário, desinstalar é simplesmente apagar a pasta do aplicativo.</p>
 	<tr><td style="width:24px;"><img src="../images/apps-images/textsearch-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/textsearch.html">Pesquisa de Texto</a></td><td> </td>
 		<td valign="top">Uma ferramenta de busca para arquivos de texto.</td></tr>
 	<tr><td style="width:24px;"><img src="../images/apps-images/tv-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/tv.html">TV</a></td><td> </td>
-		<td valign="top"><span style="color:silver">Visualisador para TV analógica.  [<i>ainda está faltando</i>]</span></td></tr>
+		<td valign="top"><span style="color:silver">Visualisador para TV analógica.  [<i>faltando</i>]</span></td></tr>
 	<tr><td style="width:24px;"><img src="../images/apps-images/webpositive-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/webpositive.html">WebPositive</a></td><td> </td>
 		<td valign="top">Um navegador web nativo.</td></tr>
 </table>

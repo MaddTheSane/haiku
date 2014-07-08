@@ -1,9 +1,10 @@
 /*
- * Copyright 2008-2009, Haiku, Inc.
+ * Copyright 2008-2013 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Clemens Zeidler (haiku@Clemens-Zeidler.de)
+ *		John Scipione, jscipione@gmail.com
+ *		Clemens Zeidler, haiku@Clemens-Zeidler.de
  */
 #ifndef TOUCHPAD_PREF_VIEW_H
 #define TOUCHPAD_PREF_VIEW_H
@@ -83,9 +84,9 @@ class TouchpadPrefView : public BGroupView {
 public:
 							TouchpadPrefView();
 	virtual					~TouchpadPrefView();
-	virtual	void			MessageReceived(BMessage* msg);
-	virtual void			AttachedToWindow();
-	virtual void			DetachedFromWindow();
+	virtual	void			MessageReceived(BMessage* message);
+	virtual	void			AttachedToWindow();
+	virtual	void			DetachedFromWindow();
 			void			SetupView();
 
 			void			SetValues(touchpad_settings *settings);

@@ -375,7 +375,7 @@ reset_fixed_event(uint32 event)
 
 
 status_t
-install_fixed_event_handler(uint32 event, interrupt_handler* handler,
+install_fixed_event_handler(uint32 event, acpi_event_handler handler,
 	void *data)
 {
 	return AcpiInstallFixedEventHandler(event, (ACPI_EVENT_HANDLER)handler, data) == AE_OK
@@ -384,7 +384,7 @@ install_fixed_event_handler(uint32 event, interrupt_handler* handler,
 
 
 status_t
-remove_fixed_event_handler(uint32 event, interrupt_handler* handler)
+remove_fixed_event_handler(uint32 event, acpi_event_handler handler)
 {
 	return AcpiRemoveFixedEventHandler(event, (ACPI_EVENT_HANDLER)handler) == AE_OK
 		? B_OK : B_ERROR;
@@ -450,8 +450,7 @@ status_t
 get_device_hid(const char *path, char *hid, size_t bufferLength)
 {
 	ACPI_HANDLE handle;
-	ACPI_OBJECT info;
-	ACPI_BUFFER infoBuffer;
+	ACPI_DEVICE_INFO *info;
 
 	TRACE("get_device_hid: path %s, hid %s\n", path, hid);
 	if (AcpiGetHandle(NULL, (ACPI_STRING)path, &handle) != AE_OK)
@@ -460,29 +459,14 @@ get_device_hid(const char *path, char *hid, size_t bufferLength)
 	if (bufferLength < ACPI_DEVICE_ID_LENGTH)
 		return B_BUFFER_OVERFLOW;
 
-	infoBuffer.Pointer = &info;
-	infoBuffer.Length = sizeof(ACPI_OBJECT);
-	info.String.Pointer = hid;
-	info.String.Length = 9;
-	info.String.Type = ACPI_TYPE_STRING;
-
-	if (AcpiEvaluateObject(handle, "_HID", NULL, &infoBuffer) != AE_OK)
+	if (AcpiGetObjectInfo(handle, &info) != AE_OK)
 		return B_BAD_TYPE;
 
-	if (info.Type == ACPI_TYPE_INTEGER) {
-		uint32 eisaId = AcpiUtDwordByteSwap(info.Integer.Value);
-
-		hid[0] = (char) ('@' + ((eisaId >> 26) & 0x1f));
-		hid[1] = (char) ('@' + ((eisaId >> 21) & 0x1f));
-		hid[2] = (char) ('@' + ((eisaId >> 16) & 0x1f));
-		hid[3] = AcpiUtHexToAsciiChar((ACPI_INTEGER)eisaId, 12);
-		hid[4] = AcpiUtHexToAsciiChar((ACPI_INTEGER)eisaId, 8);
-		hid[5] = AcpiUtHexToAsciiChar((ACPI_INTEGER)eisaId, 4);
-		hid[6] = AcpiUtHexToAsciiChar((ACPI_INTEGER)eisaId, 0);
-		hid[7] = 0;
-	}
-
-	hid[ACPI_DEVICE_ID_LENGTH] = '\0';
+	if ((info->Valid & ACPI_VALID_HID) != 0)
+		strlcpy(hid, info->HardwareId.String, bufferLength);
+	else
+		hid[0] = '\0';
+	AcpiOsFree(info);
 	return B_OK;
 }
 
@@ -621,6 +605,15 @@ set_current_resources(acpi_handle busDeviceHandle, acpi_data *buffer)
 {
 	return AcpiSetCurrentResources(busDeviceHandle, (ACPI_BUFFER*)buffer)
 		== AE_OK ? B_OK : B_ERROR;
+}
+
+
+status_t
+walk_resources(acpi_handle busDeviceHandle, char* method,
+	acpi_walk_resources_callback callback, void* context)
+{
+	return AcpiWalkResources(busDeviceHandle, method,
+		(ACPI_WALK_RESOURCE_CALLBACK)callback, context);
 }
 
 
@@ -770,6 +763,7 @@ struct acpi_module_info gACPIModule = {
 	get_current_resources,
 	get_possible_resources,
 	set_current_resources,
+	walk_resources,
 	prepare_sleep_state,
 	enter_sleep_state,
 	reboot,

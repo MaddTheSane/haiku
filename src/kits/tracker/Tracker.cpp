@@ -59,6 +59,8 @@ All rights reserved.
 #include <Volume.h>
 #include <VolumeRoster.h>
 
+#include <PathMonitor.h>
+
 #include "Attributes.h"
 #include "AutoLock.h"
 #include "AutoMounterSettings.h"
@@ -78,7 +80,6 @@ All rights reserved.
 #include "PoseView.h"
 #include "QueryContainerWindow.h"
 #include "StatusWindow.h"
-#include "TrackerSettings.h"
 #include "TrashWatcher.h"
 #include "FunctionObject.h"
 #include "TrackerSettings.h"
@@ -86,12 +87,19 @@ All rights reserved.
 #include "TaskLoop.h"
 #include "Thread.h"
 #include "Utilities.h"
+#include "VirtualDirectoryWindow.h"
 #include "VolumeWindow.h"
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Tracker"
+
 
 // prototypes for some private kernel calls that will some day be public
 #ifndef _IMPEXP_ROOT
 #	define _IMPEXP_ROOT
 #endif
+
 
 const int32 DEFAULT_MON_NUM = 4096;
 	// copied from fsil.c
@@ -103,10 +111,13 @@ const int8 kOpenWindowHasState = 2;
 const uint32 PSV_MAKE_PRINTER_ACTIVE_QUIETLY = 'pmaq';
 	// from pr_server.h
 
+const int32 kNodeMonitorBumpValue = 512;
+
 
 namespace BPrivate {
 
 NodePreloader* gPreloader = NULL;
+
 
 class LaunchLooper : public BLooper {
 public:
@@ -141,7 +152,7 @@ public:
 BLooper* gLaunchLooper = NULL;
 
 
-// #pragma mark -
+// #pragma mark - functions
 
 
 void
@@ -209,16 +220,36 @@ GetVolumeFlags(Model* model)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - WatchingInterface
 
 
-#undef B_TRANSLATION_CONTEXT
-#define B_TRANSLATION_CONTEXT "Tracker"
+class TTracker::WatchingInterface : public BPathMonitor::BWatchingInterface {
+public:
+	virtual status_t WatchNode(const node_ref* node, uint32 flags,
+		const BMessenger& target)
+	{
+		return TTracker::WatchNode(node, flags, target);
+	}
+
+	virtual status_t WatchNode(const node_ref* node, uint32 flags,
+		const BHandler* handler, const BLooper* looper = NULL)
+	{
+		return TTracker::WatchNode(node, flags, BMessenger(handler, looper));
+	}
+};
+
+
+//	#pragma mark - TTracker
+
 
 TTracker::TTracker()
-	:	BApplication(kTrackerSignature),
+	:
+	BApplication(kTrackerSignature),
+	fWatchingInterface(new WatchingInterface),
 	fSettingsWindow(NULL)
 {
+	BPathMonitor::SetWatchingInterface(fWatchingInterface);
+
 	// set the cwd to /boot/home, anything that's launched
 	// from Tracker will automatically inherit this
 	BPath homePath;
@@ -261,6 +292,9 @@ TTracker::~TTracker()
 {
 	gLaunchLooper->Lock();
 	gLaunchLooper->Quit();
+
+	BPathMonitor::SetWatchingInterface(NULL);
+	delete fWatchingInterface;
 }
 
 
@@ -268,7 +302,7 @@ bool
 TTracker::QuitRequested()
 {
 	// don't allow user quitting
-	if (CurrentMessage() && CurrentMessage()->FindBool("shortcut")) {
+	if (CurrentMessage() != NULL && CurrentMessage()->FindBool("shortcut")) {
 		// but allow quitting to hide fSettingsWindow
 		int32 index = 0;
 		BWindow* window = NULL;
@@ -276,13 +310,15 @@ TTracker::QuitRequested()
 			if (window == fSettingsWindow) {
 				if (fSettingsWindow->Lock()) {
 					if (!fSettingsWindow->IsHidden()
-						&& fSettingsWindow->IsActive())
+						&& fSettingsWindow->IsActive()) {
 						fSettingsWindow->Hide();
+					}
 					fSettingsWindow->Unlock();
 				}
 				break;
 			}
 		}
+
 		return false;
 	}
 
@@ -294,11 +330,11 @@ TTracker::QuitRequested()
 	// save open windows in a message inside an attribute of the desktop
 	int32 count = fWindowList.CountItems();
 	for (int32 i = 0; i < count; i++) {
-		BContainerWindow* window = dynamic_cast<BContainerWindow*>
-			(fWindowList.ItemAt(i));
+		BContainerWindow* window
+			= dynamic_cast<BContainerWindow*>(fWindowList.ItemAt(i));
 
-		if (window && window->Lock()) {
-			if (window->TargetModel()
+		if (window != NULL && window->Lock()) {
+			if (window->TargetModel() != NULL
 				&& !window->PoseView()->IsDesktopWindow()) {
 				if (window->TargetModel()->IsRoot())
 					message.AddBool("open_disks_window", true);
@@ -340,6 +376,7 @@ TTracker::QuitRequested()
 						}
 						if (!pathAlreadyExists)
 							message.AddString("paths", path.Path());
+
 						message.AddInt8(path.Path(), flags);
 					}
 				}
@@ -359,7 +396,7 @@ TTracker::QuitRequested()
 			message.Flatten(buffer, (ssize_t)size);
 			deskDir.WriteAttr(kAttrOpenWindows, B_MESSAGE_TYPE, 0, buffer,
 				size);
-			delete [] buffer;
+			delete[] buffer;
 		} else
 			deskDir.RemoveAttr(kAttrOpenWindows);
 	}
@@ -453,7 +490,6 @@ TTracker::MessageReceived(BMessage* message)
 			break;
 
 #ifdef MOUNT_MENU_IN_DESKBAR
-
 		case 'gmtv':
 		{
 			// Someone (probably the deskbar) has requested a list of
@@ -464,7 +500,6 @@ TTracker::MessageReceived(BMessage* message)
 			message->SendReply(&reply);
 			break;
 		}
-
 #endif
 
 		case kUnmountVolume:
@@ -630,18 +665,20 @@ public:
 	EntryAndNodeDoSoonWithMessageFunctor(FT func, T* target,
 		const entry_ref* child, const node_ref* parent,
 		const BMessage* message)
-		:	fFunc(func),
-			fTarget(target),
-			fNode(*parent),
-			fEntry(*child)
-		{
-			fSendMessage = (message != NULL);
-			if (message)
-				fMessage = *message;
-		}
+		:
+		fFunc(func),
+		fTarget(target),
+		fNode(*parent),
+		fEntry(*child)
+	{
+		fSendMessage = message != NULL;
+		if (message != NULL)
+			fMessage = *message;
+	}
 
 	virtual ~EntryAndNodeDoSoonWithMessageFunctor() {}
-	virtual void operator()() {
+	virtual void operator()()
+	{
 		result = (fTarget->*fFunc)(&fEntry, &fNode,
 			fSendMessage ? &fMessage : NULL);
 	}
@@ -706,6 +743,7 @@ TTracker::OpenRef(const entry_ref* ref, const node_ref* nodeToClose,
 					B_WARNING_ALERT);
 			alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 			alert->Go();
+
 			return result;
 		}
 	} else
@@ -729,8 +767,9 @@ TTracker::OpenRef(const entry_ref* ref, const node_ref* nodeToClose,
 		BNodeInfo nodeInfo(model->Node());
 		char preferredApp[B_MIME_TYPE_LENGTH];
 		if (nodeInfo.GetPreferredApp(preferredApp) == B_OK
-			&& strcasecmp(preferredApp, kTrackerSignature) != 0)
+			&& strcasecmp(preferredApp, kTrackerSignature) != 0) {
 			openAsContainer = false;
+		}
 		model->CloseNode();
 	}
 
@@ -751,27 +790,29 @@ TTracker::OpenRef(const entry_ref* ref, const node_ref* nodeToClose,
 		delete model;
 		// run Launch in a separate thread
 		// and close parent if successfull
-		if (nodeToClose)
+		if (nodeToClose) {
 			Thread::Launch(new EntryAndNodeDoSoonWithMessageFunctor<TTracker,
 				bool (TTracker::*)(const entry_ref*, const node_ref*,
 				const BMessage*)>(&TTracker::LaunchAndCloseParentIfOK, this,
 				ref, nodeToClose, messageToBundle));
-		else {
+		} else {
 			BMessage refsReceived(B_REFS_RECEIVED);
 			if (messageToBundle) {
 				refsReceived = *messageToBundle;
 				refsReceived.what = B_REFS_RECEIVED;
 			}
 			refsReceived.AddRef("refs", ref);
-			if (brokenLinkWithSpecificHandler)
+			if (brokenLinkWithSpecificHandler) {
 				// This cruft is to support a hacky workaround for
 				// double-clicking broken refs for cifs; should get fixed
 				// in R5
-				LaunchBrokenLink(brokenLinkPreferredApp.String(), &refsReceived);
-			else
+				LaunchBrokenLink(brokenLinkPreferredApp.String(),
+					&refsReceived);
+			} else
 				TrackerLaunch(&refsReceived, true);
 		}
 	}
+
 	if (nodeToSelect)
 		SelectChildInParentSoon(ref, nodeToSelect);
 
@@ -823,8 +864,9 @@ TTracker::RefsReceived(BMessage* message)
 				TrackerLaunch(&handlingApp, message, true);
 				break;
 			}
-		}	// fall thru, opening refs by the Tracker as if they were
-			// double-clicked
+		}
+		// fall thru, opening refs by the Tracker as if they were
+		// double-clicked
 		case kOpen:
 		{
 			// copy over "Poses" messenger so that refs received
@@ -847,8 +889,10 @@ TTracker::RefsReceived(BMessage* message)
 						&type, &count);
 					if (error != B_OK)
 						break;
+
 					if (strncmp(name, "be:", 3) != 0)
 						continue;
+
 					for (int32 k = 0; k < count; k++) {
 						const void* data;
 						ssize_t size;
@@ -900,13 +944,14 @@ TTracker::ArgvReceived(int32 argc, char** argv)
 		for (int32 index = 1; index < argc; index++) {
 			BEntry entry;
 			if (entry.SetTo(&workingDirectory, argv[index]) == B_OK
-				&& entry.GetRef(&ref) == B_OK)
+				&& entry.GetRef(&ref) == B_OK) {
 				OpenRef(&ref);
-			else if (get_ref_for_path(argv[index], &ref) == B_OK)
+			} else if (get_ref_for_path(argv[index], &ref) == B_OK)
 				OpenRef(&ref);
 		}
 	}
 }
+
 
 void
 TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
@@ -915,20 +960,22 @@ TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
 {
 	AutoLock<WindowList> lock(&fWindowList);
 	BContainerWindow* window = NULL;
-	if (checkAlreadyOpen && openSelector != kRunOpenWithWindow)
+	if (checkAlreadyOpen && openSelector != kRunOpenWithWindow) {
 		// find out if window already open
 		window = FindContainerWindow(model->NodeRef());
+	}
 
 	bool someWindowActivated = false;
 
 	uint32 workspace = (uint32)(1 << current_workspace());
 	int32 windowCount = 0;
-
-	while (window) {
-		// At least one window open, just pull to front
-		// make sure we don't jerk workspaces around
-		uint32 windowWorkspaces = window->Workspaces();
-		if (windowWorkspaces & workspace) {
+	while (window != NULL) {
+		if ((window->Workspaces() & workspace) != 0
+			&& (dynamic_cast<BDeskWindow*>(window) == NULL
+				|| !TrackerSettings().SingleWindowBrowse())) {
+			// We found at least one window that is open and is not Desktop
+			// or we're in spatial mode, activate it and make sure we don't
+			// jerk the workspaces around.
 			window->Activate();
 			someWindowActivated = true;
 		}
@@ -938,12 +985,14 @@ TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
 	if (someWindowActivated) {
 		delete model;
 		return;
-	} // If no window was actiated, (none in the current workspace
-	  // we open a new one.
+	}
+
+	// If no window was activated (none in the current workspace),
+	// we open a new one.
 
 	if (openSelector == kRunOpenWithWindow) {
 		BMessage* refList = NULL;
-		if (!originalRefsList) {
+		if (originalRefsList == NULL) {
 			// when passing just a single model, stuff it's entry in a single
 			// element list anyway
 			ASSERT(model);
@@ -951,9 +1000,10 @@ TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
 			refList->AddRef("refs", model->EntryRef());
 			delete model;
 			model = NULL;
-		} else
+		} else {
 			// clone the message, window adopts it for it's own use
 			refList = new BMessage(*originalRefsList);
+		}
 		window = new OpenWithContainerWindow(refList, &fWindowList);
 	} else if (model->IsRoot()) {
 		// window will adopt the model
@@ -961,16 +1011,20 @@ TTracker::OpenContainerWindow(Model* model, BMessage* originalRefsList,
 	} else if (model->IsQuery()) {
 		// window will adopt the model
 		window = new BQueryContainerWindow(&fWindowList, openFlags);
-	} else
+	} else if (model->IsVirtualDirectory()) {
+		// window will adopt the model
+		window = new VirtualDirectoryWindow(&fWindowList, openFlags);
+	} else {
 		// window will adopt the model
 		window = new BContainerWindow(&fWindowList, openFlags);
+	}
 
-	if (model)
+	if (model != NULL)
 		window->CreatePoseView(model);
 
 	BMessage restoreStateMessage(kRestoreState);
 
-	if (stateMessage)
+	if (stateMessage != NULL)
 		restoreStateMessage.AddMessage("state", stateMessage);
 
 	window->PostMessage(&restoreStateMessage);
@@ -1035,13 +1089,13 @@ TTracker::GetDeskWindow() const
 {
 	int32 count = fWindowList.CountItems();
 	for (int32 index = 0; index < count; index++) {
-		BDeskWindow* window = dynamic_cast<BDeskWindow*>
-			(fWindowList.ItemAt(index));
-
-		if (window)
+		BDeskWindow* window = dynamic_cast<BDeskWindow*>(
+			fWindowList.ItemAt(index));
+		if (window != NULL)
 			return window;
 	}
 	TRESPASS();
+
 	return NULL;
 }
 
@@ -1052,16 +1106,17 @@ TTracker::FindContainerWindow(const node_ref* node, int32 number) const
 	ASSERT(fWindowList.IsLocked());
 
 	int32 count = fWindowList.CountItems();
-
 	int32 windowsFound = 0;
-
 	for (int32 index = 0; index < count; index++) {
 		BContainerWindow* window = dynamic_cast<BContainerWindow*>
 			(fWindowList.ItemAt(index));
 
-		if (window && window->IsShowing(node) && number == windowsFound++)
+		if (window != NULL && window->IsShowing(node)
+			&& number == windowsFound++) {
 			return window;
+		}
 	}
+
 	return NULL;
 }
 
@@ -1082,6 +1137,7 @@ TTracker::FindContainerWindow(const entry_ref* entry, int32 number) const
 		if (window && window->IsShowing(entry) && number == windowsFound++)
 			return window;
 	}
+
 	return NULL;
 }
 
@@ -1112,9 +1168,10 @@ TTracker::FindParentContainerWindow(const entry_ref* ref) const
 	for (int32 index = 0; index < count; index++) {
 		BContainerWindow* window = dynamic_cast<BContainerWindow*>
 			(fWindowList.ItemAt(index));
-		if (window && window->IsShowing(&parentRef))
+		if (window != NULL && window->IsShowing(&parentRef))
 			return window;
 	}
+
 	return NULL;
 }
 
@@ -1128,9 +1185,10 @@ TTracker::FindInfoWindow(const node_ref* node) const
 	for (int32 index = 0; index < count; index++) {
 		BInfoWindow* window = dynamic_cast<BInfoWindow*>
 			(fWindowList.ItemAt(index));
-		if (window && window->IsShowing(node))
+		if (window != NULL && window->IsShowing(node))
 			return window;
 	}
+
 	return NULL;
 }
 
@@ -1142,13 +1200,14 @@ TTracker::QueryActiveForDevice(dev_t device)
 	int32 count = fWindowList.CountItems();
 	for (int32 index = 0; index < count; index++) {
 		BQueryContainerWindow* window
-		= dynamic_cast<BQueryContainerWindow*>(fWindowList.ItemAt(index));
-		if (window) {
+			= dynamic_cast<BQueryContainerWindow*>(fWindowList.ItemAt(index));
+		if (window != NULL) {
 			AutoLock<BWindow> lock(window);
 			if (window->ActiveOnDevice(device))
 				return true;
 		}
 	}
+
 	return false;
 }
 
@@ -1163,7 +1222,7 @@ TTracker::CloseActiveQueryWindows(dev_t device)
 	for (int32 index = fWindowList.CountItems(); index >= 0; index--) {
 		BQueryContainerWindow* window
 			= dynamic_cast<BQueryContainerWindow*>(fWindowList.ItemAt(index));
-		if (window) {
+		if (window != NULL) {
 			AutoLock<BWindow> lock(window);
 			if (window->ActiveOnDevice(device)) {
 				window->PostMessage(B_QUIT_REQUESTED);
@@ -1171,14 +1230,18 @@ TTracker::CloseActiveQueryWindows(dev_t device)
 			}
 		}
 	}
+
 	lock.Unlock();
-	if (closed)
+
+	if (closed) {
 		for (int32 timeout = 30; timeout; timeout--) {
 			// wait a bit for windows to fully close
 			if (!QueryActiveForDevice(device))
 				return;
+
 			snooze(100000);
 		}
+	}
 }
 
 
@@ -1187,15 +1250,14 @@ TTracker::SaveAllPoseLocations()
 {
 	int32 numWindows = fWindowList.CountItems();
 	for (int32 windowIndex = 0; windowIndex < numWindows; windowIndex++) {
-		BContainerWindow* window
-			= dynamic_cast<BContainerWindow*>
-				(fWindowList.ItemAt(windowIndex));
+		BContainerWindow* window = dynamic_cast<BContainerWindow*>(
+			fWindowList.ItemAt(windowIndex));
 
-		if (window) {
+		if (window != NULL) {
 			AutoLock<BWindow> lock(window);
 			BDeskWindow* deskWindow = dynamic_cast<BDeskWindow*>(window);
 
-			if (deskWindow)
+			if (deskWindow != NULL)
 				deskWindow->SaveDesktopPoseLocations();
 			else
 				window->PoseView()->SavePoseLocations();
@@ -1252,11 +1314,13 @@ TTracker::CloseAllInWorkspace()
 	// count from end to beginning so we can remove items safely
 	for (int32 index = fWindowList.CountItems() - 1; index >= 0; index--) {
 		BWindow* window = fWindowList.ItemAt(index);
-		if (window->Workspaces() & currentWorkspace)
+		if ((window->Workspaces() & currentWorkspace) != 0) {
 			// avoid the desktop
-			if (!dynamic_cast<BDeskWindow*>(window)
-				&& !dynamic_cast<BStatusWindow*>(window))
+			if (dynamic_cast<BDeskWindow*>(window) == NULL
+				&& dynamic_cast<BStatusWindow*>(window) == NULL) {
 				window->PostMessage(B_QUIT_REQUESTED);
+			}
+		}
 	}
 }
 
@@ -1274,18 +1338,21 @@ TTracker::CloseAllWindows()
 	for (int32 index = 0; index < count; index++) {
 		BWindow* window = WindowAt(index);
 		// avoid the desktop
-		if (!dynamic_cast<BDeskWindow*>(window)
-			&& !dynamic_cast<BStatusWindow*>(window))
+		if (dynamic_cast<BDeskWindow*>(window) == NULL
+			&& dynamic_cast<BStatusWindow*>(window) == NULL) {
 			window->PostMessage(B_QUIT_REQUESTED);
+		}
 	}
+
 	// count from end to beginning so we can remove items safely
 	for (int32 index = fWindowList.CountItems() - 1; index >= 0; index--) {
 		BWindow* window = fWindowList.ItemAt(index);
-		if (!dynamic_cast<BDeskWindow*>(window)
-			&& !dynamic_cast<BStatusWindow*>(window))
-				// ToDo:
-				// get rid of the Remove here, BContainerWindow::Quit does it
+		if (dynamic_cast<BDeskWindow*>(window) == NULL
+			&& dynamic_cast<BStatusWindow*>(window) == NULL) {
+			// ToDo: get rid of the Remove here, BContainerWindow::Quit()
+			// does it
 			fWindowList.RemoveItemAt(index);
+		}
 	}
 }
 
@@ -1300,13 +1367,14 @@ TTracker::_OpenPreviouslyOpenedWindows(const char* pathFilter)
 	BDirectory deskDir;
 	attr_info attrInfo;
 	if (FSGetDeskDir(&deskDir) != B_OK
-		|| deskDir.GetAttrInfo(kAttrOpenWindows, &attrInfo) != B_OK)
+		|| deskDir.GetAttrInfo(kAttrOpenWindows, &attrInfo) != B_OK) {
 		return;
+	}
 
 	char* buffer = (char*)malloc((size_t)attrInfo.size);
 	BMessage message;
 	if (deskDir.ReadAttr(kAttrOpenWindows, B_MESSAGE_TYPE, 0, buffer,
-		(size_t)attrInfo.size) != attrInfo.size
+			(size_t)attrInfo.size) != attrInfo.size
 		|| message.Unflatten(buffer) != B_OK) {
 		free(buffer);
 		return;
@@ -1320,7 +1388,7 @@ TTracker::_OpenPreviouslyOpenedWindows(const char* pathFilter)
 	int32 stateMessageCounter = 0;
 	const char* path;
 	for (int32 i = 0; message.FindString("paths", i, &path) == B_OK; i++) {
-		if (strncmp(path, pathFilter, filterLength))
+		if (strncmp(path, pathFilter, filterLength) != 0)
 			continue;
 
 		BEntry entry(path, true);
@@ -1353,7 +1421,7 @@ TTracker::_OpenPreviouslyOpenedWindows(const char* pathFilter)
 		}
 	}
 
-	// Open disks window if needed
+	// open disks window if needed
 
 	if (pathFilter == NULL && TrackerSettings().ShowDisksIcon()
 		&& message.HasBool("open_disks_window")) {
@@ -1431,11 +1499,13 @@ TTracker::ReadyToRun()
 	}
 }
 
+
 MimeTypeList*
 TTracker::MimeTypes() const
 {
 	return fMimeTypeList;
 }
+
 
 void
 TTracker::SelectChildInParentSoon(const entry_ref* parent,
@@ -1446,6 +1516,7 @@ TTracker::SelectChildInParentSoon(const entry_ref* parent,
 		100000, 200000, 5000000);
 }
 
+
 void
 TTracker::CloseParentWaitingForChildSoon(const entry_ref* child,
 	const node_ref* parent)
@@ -1455,6 +1526,7 @@ TTracker::CloseParentWaitingForChildSoon(const entry_ref* child,
 		200000, 100000, 5000000);
 }
 
+
 void
 TTracker::SelectPoseAtLocationSoon(node_ref parent, BPoint pointInPose)
 {
@@ -1463,16 +1535,18 @@ TTracker::SelectPoseAtLocationSoon(node_ref parent, BPoint pointInPose)
 		100000);
 }
 
+
 void
 TTracker::SelectPoseAtLocationInParent(node_ref parent, BPoint pointInPose)
 {
 	AutoLock<WindowList> lock(&fWindowList);
 	BContainerWindow* parentWindow = FindContainerWindow(&parent);
-	if (parentWindow) {
+	if (parentWindow != NULL) {
 		AutoLock<BWindow> lock(parentWindow);
 		parentWindow->PoseView()->SelectPoseAtLocation(pointInPose);
 	}
 }
+
 
 bool
 TTracker::CloseParentWaitingForChild(const entry_ref* child,
@@ -1481,7 +1555,7 @@ TTracker::CloseParentWaitingForChild(const entry_ref* child,
 	AutoLock<WindowList> lock(&fWindowList);
 
 	BContainerWindow* parentWindow = FindContainerWindow(parent);
-	if (!parentWindow) {
+	if (parentWindow == NULL) {
 		// parent window already closed, give up
 		return true;
 	}
@@ -1494,13 +1568,15 @@ TTracker::CloseParentWaitingForChild(const entry_ref* child,
 		resolvedChild = *child;
 
 	BContainerWindow* window = FindContainerWindow(&resolvedChild);
-	if (window) {
+	if (window != NULL) {
 		AutoLock<BWindow> lock(window);
 		if (!window->IsHidden())
 			return CloseParentWindowCommon(parentWindow);
 	}
+
 	return false;
 }
+
 
 void
 TTracker::CloseParent(node_ref parent)
@@ -1511,6 +1587,7 @@ TTracker::CloseParent(node_ref parent)
 
 	CloseParentWindowCommon(FindContainerWindow(&parent));
 }
+
 
 void
 TTracker::ShowSettingsWindow()
@@ -1524,23 +1601,27 @@ TTracker::ShowSettingsWindow()
 				fSettingsWindow->Show();
 			else
 				fSettingsWindow->Activate();
+
 			fSettingsWindow->Unlock();
 		}
 	}
 }
+
 
 bool
 TTracker::CloseParentWindowCommon(BContainerWindow* window)
 {
 	ASSERT(fWindowList.IsLocked());
 
-	if (dynamic_cast<BDeskWindow*>(window))
-		// don't close the destop
+	if (dynamic_cast<BDeskWindow*>(window) != NULL) {
+		// don't close the desktop
 		return false;
+	}
 
 	window->PostMessage(B_QUIT_REQUESTED);
 	return true;
 }
+
 
 bool
 TTracker::SelectChildInParent(const entry_ref* parent, const node_ref* child)
@@ -1548,25 +1629,25 @@ TTracker::SelectChildInParent(const entry_ref* parent, const node_ref* child)
 	AutoLock<WindowList> lock(&fWindowList);
 
 	BContainerWindow* window = FindContainerWindow(parent);
-	if (!window)
+	if (window == NULL) {
 		// parent window already closed, give up
 		return false;
+	}
 
 	AutoLock<BWindow> windowLock(window);
-
 	if (windowLock.IsLocked()) {
 		BPoseView* view = window->PoseView();
 		int32 index;
 		BPose* pose = view->FindPose(child, &index);
-		if (pose) {
+		if (pose != NULL) {
 			view->SelectPose(pose, index);
 			return true;
 		}
 	}
+
 	return false;
 }
 
-const int32 kNodeMonitorBumpValue = 512;
 
 status_t
 TTracker::NeedMoreNodeMonitors()
@@ -1581,13 +1662,13 @@ TTracker::NeedMoreNodeMonitors()
 		fNodeMonitorCount -= kNodeMonitorBumpValue;
 		return errno;
 	}
-	return B_OK;
 
+	return B_OK;
 }
 
+
 status_t
-TTracker::WatchNode(const node_ref* node, uint32 flags,
-	BMessenger target)
+TTracker::WatchNode(const node_ref* node, uint32 flags, BMessenger target)
 {
 	status_t result = watch_node(node, flags, target);
 	if (result == B_OK || result != B_NO_MEMORY) {
@@ -1600,7 +1681,7 @@ TTracker::WatchNode(const node_ref* node, uint32 flags,
 		"node monitors\n"));
 
 	TTracker* tracker = dynamic_cast<TTracker*>(be_app);
-	if (!tracker) {
+	if (tracker == NULL) {
 		// we are the file panel only, just fail
 		return result;
 	}

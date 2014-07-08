@@ -29,6 +29,12 @@
 
 	TODO: path filter, such that /dev can be bind-mounted with only a subset
 		  of entries
+
+	TODO: Since the source node IDs are used for our nodes, this doesn't work
+		  for source trees with submounts.
+
+	TODO: There's no file cache support (required for mmap()). We implement the
+		  hooks, but they aren't used.
 */
 
 
@@ -141,7 +147,14 @@ bindfs_lookup(fs_volume* fsVolume, fs_vnode* fsDir, const char* entryName,
 	if (error != B_OK)
 		RETURN_ERROR(error);
 
-	return get_vnode(fsVolume, *_vnid, NULL);
+	error = get_vnode(fsVolume, *_vnid, NULL);
+
+	// lookup() on the source gave us a reference we don't need any longer
+	vnode* sourceChildVnode;
+	if (vfs_lookup_vnode(sourceVolume->id, *_vnid, &sourceChildVnode) == B_OK)
+		vfs_put_vnode(sourceChildVnode);
+
+	return error;
 }
 
 
@@ -221,6 +234,10 @@ bindfs_remove_vnode(fs_volume* fsVolume, fs_vnode* fsNode, bool reenter)
 // #pragma mark - VM access
 
 
+// TODO: These hooks are obsolete. Since we don't create a file cache, they
+// aren't needed anyway.
+
+
 static bool
 bindfs_can_page(fs_volume* fsVolume, fs_vnode* fsNode, void* cookie)
 {
@@ -273,6 +290,9 @@ bindfs_write_pages(fs_volume* fsVolume, fs_vnode* fsNode, void* cookie,
 
 
 // #pragma mark - Request I/O
+
+
+// TODO: Since we don't create a file cache, these hooks aren't needed.
 
 
 static status_t
@@ -580,8 +600,26 @@ bindfs_create(fs_volume* fsVolume, fs_vnode* fsNode, const char* name,
 
 	FETCH_SOURCE_VOLUME_AND_NODE(volume, node->ID());
 
-	return sourceNode->ops->create(sourceVolume, sourceNode, name, openMode,
+	error = sourceNode->ops->create(sourceVolume, sourceNode, name, openMode,
 		perms, _cookie, _newVnodeID);
+	if (error != B_OK)
+		return error;
+
+	error = get_vnode(fsVolume, *_newVnodeID, NULL);
+
+	// on error remove the newly created source entry
+	if (error != B_OK)
+		sourceNode->ops->unlink(sourceVolume, sourceNode, name);
+
+	// create() on the source gave us a reference we don't need any longer
+	vnode* newSourceVnode;
+	if (vfs_lookup_vnode(sourceVolume->id, *_newVnodeID, &newSourceVnode)
+			== B_OK) {
+		vfs_put_vnode(newSourceVnode);
+	}
+
+	return error;
+
 }
 
 

@@ -1,6 +1,7 @@
 SubDir HAIKU_TOP src apps stylededit ;
 
 UsePrivateHeaders textencoding ;
+UsePublicHeaders [ FDirName be_apps Tracker ] ;
 
 local styled_edit_rsrc =
 	[ FGristFiles StyledEdit.rsrc ]
@@ -17,7 +18,7 @@ Application StyledEdit :
 	StyledEditApp.cpp
 	StyledEditView.cpp
 	StyledEditWindow.cpp
-	: be translation tracker libtextencoding.so $(HAIKU_LOCALE_LIBS)
+	: be translation tracker libtextencoding.so localestub
 		$(TARGET_LIBSUPC++)
 	: $(styled_edit_rsrc)
 	;

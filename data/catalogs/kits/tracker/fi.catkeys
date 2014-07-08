@@ -1,5 +1,4 @@
-1	finnish	x-vnd.Haiku-libtracker	1762695842
-common	B_COMMON_DIRECTORY		yhteinen
+1	finnish	x-vnd.Haiku-libtracker	2212190051
 OK	WidgetAttributeText		Valmis
 Icon view	VolumeWindow		Kuvakenäkymä
 Add-ons	FilePanelPriv		Lisäosat
@@ -77,7 +76,6 @@ Preparing to empty Trash…	StatusWindow		Valmistaudutaan tyhjentämään roskak
 You cannot put the selected item(s) into the trash.	FSUtils		Et voi laittaa valittuja kohteita roskakoriin.
 Disks	Model		Levyt
 Create link	ContainerWindow		Luo linkki
-develop	B_COMMON_DEVELOP_DIRECTORY		kehitys
 Decrease size	DeskWindow		Pienennä kokoa
 Size	ContainerWindow		Koko
 All disks	AutoMounterSettings		Kaikki levyt
@@ -102,6 +100,7 @@ New folder	FilePanelPriv		Uusi kansio
 %name info	InfoWindow	InfoWindow Title	%name-tiedot
 Favorites	FavoritesMenu		Suosikit
 Add-ons	VolumeWindow		Lisäosat
+\"%name\" is an unsupported executable.	FSUtils		\"%name\" on tukematon suoritettava tiedosto.
 Sorry, you can't copy items to the Trash.	PoseView		Et voi kopioida kohteita roskakoriin.
 List view	VolumeWindow		Luettelonäkymä
 matches wildcard expression	SelectionWindow		täsmää jokerilausekkeeseen
@@ -149,7 +148,6 @@ Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Asiak
 Sorry, saving more than one item is not allowed.	FilePanelPriv		Useamman kuin yhden kohteen tallentaminen ei ole sallittua.
 Searching for disks to mount…	StatusWindow		Etsitään liitettäviä levyjä...
 New folder	FSUtils		Uusi kansio
-If you %ifYouDoAction the common folder, %osName may not behave properly!\n\nAre you sure you want to do this?\n\nTo %toDoAction the common folder anyway, hold down the Shift key and click \"%toConfirmAction\".	FSUtils		Jos kohdistat toiminnon ”%ifYouDoAction” yleiseen kansioon, ”%osName” ei ehkä toimi oikein!\n\nOletko varma, että haluat tehdä tämän?\n\nToiminnon ”%toDoAction” kohdistamiseksi yleiseen kansioon pidä alhaalla Vaihto-painike ja napsauta \"%toConfirmAction\".
 Free space color	SettingsView		Vapaan tilan väri
 Cut	ContainerWindow		Leikkaa
 Remove	FindPanel		Poista
@@ -250,7 +248,6 @@ Mount settings…	SettingsView		Liittämisasetukset...
 Edit name	InfoWindow		Muokkaa nimeä
 Could not open \"%name\" (%error). 	FSUtils		Kohteen ”%name” avaus epäonnistui (%error)
 Paste	ContainerWindow		Liitä
-optional	/boot/optional		valinnainen
 Modified:	InfoWindow		Muokattu:
 Error moving \"%name\".	FSUtils		Virhe siirrettäessä kohdetta ”%name”.
 TiB	WidgetAttributeText		tebitavua
@@ -412,6 +409,7 @@ Paste layout	ContainerWindow		Liitä sijoittelu
 Select	InfoWindow		Valitse
 Could not update permissions of file \"%name\". %error	FSUtils		Ei voitu päivittää tiedoston ”%name” käyttöoikeuksia. %error
 Select…	FilePanelPriv		Valitse...
+\"%name\" is a legacy executable. Please obtain an updated version or recompile the application.	FSUtils		\"%name\" on perinnäisjärjestelmän suoritettava tiedosto. Hanki päivitetty versio tai käännä sovellus uudelleen.
 There was an error resolving the link.	Tracker		Virhe linkin ratkaisemisessa.
 %BytesPerSecond/s	StatusWindow		%BytesPerSecond/s
 You can't move or copy the trash.	FSUtils		Et voi siirtää tai kopioida roskakoriin.
@@ -431,6 +429,7 @@ New	ContainerWindow		Uusi
 Name matches wildcard expression:###	SelectionWindow		Nimi täsmää jokerilausekkeeseen:###
 less than	FindPanel		pienempi kuin
 64 x 64	DeskWindow		64 x 64
+develop	B_SYSTEM_DEVELOP_DIRECTORY		kehitys
 Modified	ContainerWindow		Muokattu
 Edit Query template	FindPanel		Muokkaa kyselymallinnetta
 Prompt	FSUtils		Kehoite

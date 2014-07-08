@@ -49,13 +49,13 @@ BNetBuffer::BNetBuffer(BMessage* archive) :
 {
 	const unsigned char* bufferPtr;
 	ssize_t bufferSize;
-	
+
 	if (archive->FindData("buffer", B_RAW_TYPE, (const void**)&bufferPtr,
 		&bufferSize) == B_OK) {
 		fImpl = new (std::nothrow) DynamicBuffer(bufferSize);
 		if (fImpl != NULL) {
-			status_t result = fImpl->Insert(bufferPtr, bufferSize);
-			if (result == B_OK)
+			ssize_t result = fImpl->Write(bufferPtr, bufferSize);
+			if (result >= 0)
 				fInit = fImpl->InitCheck();
 			else
 				fInit = result;
@@ -67,11 +67,11 @@ BNetBuffer&
 BNetBuffer::operator=(const BNetBuffer& buffer)
 {
 	delete fImpl;
-		
+
 	fImpl = new (std::nothrow) DynamicBuffer(*buffer.GetImpl());
 	if (fImpl != NULL)
 		fInit = fImpl->InitCheck();
-	
+
 	return *this;
 }
 
@@ -81,10 +81,10 @@ BNetBuffer::Archive(BMessage* into, bool deep) const
 {
 	if (fInit != B_OK)
 		return B_NO_INIT;
-	
+
 	status_t result = into->AddData("buffer", B_RAW_TYPE, fImpl->Data(),
 		fImpl->BytesRemaining());
-	
+
 	return result;
 }
 
@@ -92,9 +92,8 @@ BNetBuffer::Archive(BMessage* into, bool deep) const
 BArchivable*
 BNetBuffer::Instantiate(BMessage* archive)
 {
-    if (!validate_instantiation(archive, "BNetBuffer")) {
+    if (!validate_instantiation(archive, "BNetBuffer"))
         return NULL;
-    }
 
     BNetBuffer* buffer = new (std::nothrow) BNetBuffer(archive);
     if (buffer == NULL)
@@ -186,7 +185,10 @@ BNetBuffer::AppendString(const char* data)
 status_t
 BNetBuffer::AppendData(const void* data, size_t size)
 {
-	return fImpl->Insert(data, size);
+	ssize_t bytesWritten = fImpl->Write(data, size);
+	if (bytesWritten < 0)
+		return (status_t)bytesWritten;
+	return (size_t)bytesWritten == size ? B_OK : B_ERROR;
 }
 
 
@@ -207,16 +209,16 @@ BNetBuffer::AppendMessage(const BMessage& data)
 		char* flattenedData = new (std::nothrow) char[dataSize];
 		if (flattenedData == NULL)
 			return B_NO_MEMORY;
-	
-		if (data.Flatten(flattenedData, dataSize) == B_OK)		
+
+		if (data.Flatten(flattenedData, dataSize) == B_OK)
 			result = AppendData((const void*)&flattenedData, dataSize);
-	
+
 		delete[] flattenedData;
 	} else {
 		if (data.Flatten(stackFlattenedData, dataSize) == B_OK)
 			result = AppendData((const void*)&stackFlattenedData, dataSize);
 	}
-	
+
 	return result;
 }
 
@@ -258,9 +260,9 @@ BNetBuffer::RemoveInt16(int16& data)
 	status_t result = RemoveData((void*)&be_data, sizeof(int16));
 	if (result != B_OK)
 		return result;
-	
+
 	data = B_BENDIAN_TO_HOST_INT16(be_data);
-	
+
 	return B_OK;
 }
 
@@ -272,9 +274,9 @@ BNetBuffer::RemoveUint16(uint16& data)
 	status_t result = RemoveData((void*)&be_data, sizeof(uint16));
 	if (result != B_OK)
 		return result;
-	
+
 	data = B_BENDIAN_TO_HOST_INT16(be_data);
-	
+
 	return B_OK;
 }
 
@@ -286,9 +288,9 @@ BNetBuffer::RemoveInt32(int32& data)
 	status_t result = RemoveData((void*)&be_data, sizeof(int32));
 	if (result != B_OK)
 		return result;
-	
+
 	data = B_BENDIAN_TO_HOST_INT32(be_data);
-	
+
 	return B_OK;
 }
 
@@ -300,9 +302,9 @@ BNetBuffer::RemoveUint32(uint32& data)
 	status_t result = RemoveData((void*)&be_data, sizeof(uint32));
 	if (result != B_OK)
 		return result;
-	
+
 	data = B_BENDIAN_TO_HOST_INT32(be_data);
-	
+
 	return B_OK;
 }
 
@@ -333,7 +335,10 @@ BNetBuffer::RemoveString(char* data, size_t size)
 status_t
 BNetBuffer::RemoveData(void* data, size_t size)
 {
-	return fImpl->Remove(data, size);
+	ssize_t bytesRead = fImpl->Read(data, size);
+	if (bytesRead < 0)
+		return (status_t)bytesRead;
+	return (size_t)bytesRead == size ? B_OK : B_BUFFER_OVERFLOW;
 }
 
 
@@ -341,24 +346,23 @@ status_t
 BNetBuffer::RemoveMessage(BMessage& data)
 {
 	unsigned char* bufferPtr = fImpl->Data();
-	
+
 	if (*(int32*)bufferPtr != B_MESSAGE_TYPE)
 		return B_ERROR;
-	
-	
+
 	bufferPtr += sizeof(int32);
 	int32 dataSize = *(int32*)bufferPtr;
-	
+
 	char* flattenedData = new (std::nothrow) char[dataSize];
 	if (flattenedData == NULL)
 		return B_NO_MEMORY;
-	
+
 	status_t result = RemoveData(flattenedData, dataSize);
 	if (result == B_OK)
 		result = data.Unflatten(flattenedData);
-		
+
 	delete[] flattenedData;
-	
+
 	return result;
 }
 
@@ -370,9 +374,9 @@ BNetBuffer::RemoveInt64(int64& data)
 	status_t result = RemoveData((void*)&be_data, sizeof(int64));
 	if (result != B_OK)
 		return result;
-	
+
 	data = B_BENDIAN_TO_HOST_INT64(be_data);
-	
+
 	return B_OK;
 }
 
@@ -384,9 +388,9 @@ BNetBuffer::RemoveUint64(uint64& data)
 	status_t result = RemoveData((void*)&be_data, sizeof(uint64));
 	if (result != B_OK)
 		return result;
-	
+
 	data = B_BENDIAN_TO_HOST_INT64(be_data);
-	
+
 	return B_OK;
 }
 

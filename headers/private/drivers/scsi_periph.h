@@ -1,11 +1,12 @@
 /*
- * Copyright 2004-2008, Haiku, Inc. All RightsReserved.
+ * Copyright 2004-2013, Haiku, Inc. All RightsReserved.
  * Copyright 2002/03, Thomas Kurschel. All rights reserved.
  *
  * Distributed under the terms of the MIT License.
  */
 #ifndef _SCSI_PERIPH_H
 #define _SCSI_PERIPH_H
+
 
 /*!	Use this module to minimize work required to write a SCSI
 	peripheral driver.
@@ -71,6 +72,10 @@ typedef struct scsi_periph_callbacks {
 	void (*media_changed)(periph_device_cookie cookie, scsi_ccb *request);
 } scsi_periph_callbacks;
 
+typedef struct scsi_block_range {
+	uint64	offset;
+	uint64	size;
+} scsi_block_range;
 
 // functions provided by this module
 typedef struct scsi_periph_interface {
@@ -114,6 +119,12 @@ typedef struct scsi_periph_interface {
 	// request - ccb for this device; is used to talk to device
 	status_t (*check_capacity)(scsi_periph_device device, scsi_ccb *request);
 
+	// synchronizes (flush) the device cache
+	err_res (*synchronize_cache)(scsi_periph_device device, scsi_ccb *request);
+
+	status_t (*trim_device)(scsi_periph_device_info *device, scsi_ccb *request,
+		scsi_block_range* ranges, uint32 rangeCount);
+
 	// *** removable media ***
 	// to be called when a medium change is detected to block subsequent commands
 	void (*media_changed)(scsi_periph_device device);
@@ -128,8 +139,6 @@ typedef struct scsi_periph_interface {
 	// returns: B_OK, B_DEV_MEDIA_CHANGE_REQUESTED, B_NO_MEMORY or
 	// pending error reported by handle_get_error
 	status_t (*get_media_status)(scsi_periph_handle handle);
-	// synchronizes (flush) the device cache
-	err_res(*synchronize_cache)(scsi_periph_device device, scsi_ccb *request);
 
 	// compose device name consisting of prefix and path/target/LUN
 	// (result must be freed by caller)

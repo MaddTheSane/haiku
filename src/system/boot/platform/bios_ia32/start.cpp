@@ -29,7 +29,8 @@
 #include "smp.h"
 
 
-#define HEAP_SIZE (128 * 1024)
+#define HEAP_SIZE ((1024 + 256) * 1024)
+
 
 // GCC defined globals
 extern void (*__ctor_list)(void);
@@ -83,8 +84,6 @@ static void
 smp_start_kernel(void)
 {
 	uint32 curr_cpu = smp_get_current_cpu();
-	struct gdt_idt_descr idt_descr;
-	struct gdt_idt_descr gdt_descr;
 
 	//TRACE(("smp_cpu_ready: entry cpu %ld\n", curr_cpu));
 
@@ -96,16 +95,13 @@ smp_start_kernel(void)
 	asm("cld");
 	asm("fninit");
 
-	// Set up the final idt
-	idt_descr.limit = IDT_LIMIT - 1;
-	idt_descr.base = (uint32 *)(addr_t)gKernelArgs.arch_args.vir_idt;
+	// Set up idt
+	set_debug_idt();
 
-	asm("lidt	%0;"
-		: : "m" (idt_descr));
-
-	// Set up the final gdt
-	gdt_descr.limit = GDT_LIMIT - 1;
-	gdt_descr.base = (uint32 *)gKernelArgs.arch_args.vir_gdt;
+	// Set up gdt
+	struct gdt_idt_descr gdt_descr;
+	gdt_descr.limit = sizeof(gBootGDT) - 1;
+	gdt_descr.base = gBootGDT;
 
 	asm("lgdt	%0;"
 		: : "m" (gdt_descr));

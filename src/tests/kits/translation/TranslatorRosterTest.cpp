@@ -31,12 +31,16 @@
 // DEALINGS IN THE SOFTWARE.
 /*****************************************************************************/
 #include "TranslatorRosterTest.h"
+
 #include <stdio.h>
-#include <Message.h>
+#include <string.h>
+
+#include <Application.h>
 #include <Archivable.h>
 #include <File.h>
-#include <Application.h>
+#include <Message.h>
 #include <OS.h>
+#include <TranslatorFormats.h>
 
 /* cppunit framework */
 #include <cppunit/Test.h>
@@ -142,14 +146,6 @@ TranslatorRosterTest::InitializeTest()
 	NextSubTest();
 	BTranslatorRoster *proster = BTranslatorRoster::Default();
 	CPPUNIT_ASSERT(proster);
-	
-	//print version information
-	int32 outCurVersion;
-	int32 outMinVersion;
-	long inAppVersion;
-	const char *info = proster->Version(&outCurVersion, &outMinVersion,
-		inAppVersion);
-	printf("Default TranslatorRoster aquired. Version: %s\n", info);
 }
 
 /**
@@ -372,6 +368,7 @@ TranslatorRosterTest::InstantiateTest()
 void
 TranslatorRosterTest::VersionTest()
 {
+#if 0
 	NextSubTest();
 	int32 outCurVersion = 0;
 	int32 outMinVersion = 0;
@@ -381,6 +378,7 @@ TranslatorRosterTest::VersionTest()
 	CPPUNIT_ASSERT(info != NULL);
 	CPPUNIT_ASSERT(outCurVersion > 0);
 	CPPUNIT_ASSERT(outMinVersion > 0);
+#endif
 }
 
 //

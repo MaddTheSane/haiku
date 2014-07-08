@@ -3,11 +3,13 @@ SubDir HAIKU_TOP src add-ons kernel drivers graphics intel_extreme ;
 SetSubDirSupportedPlatformsBeOSCompatible ;
 
 UsePrivateHeaders [ FDirName graphics intel_extreme ] ;
+UsePrivateHeaders [ FDirName graphics vesa ] ;
 UsePrivateHeaders [ FDirName graphics common ] ;
-UsePrivateHeaders graphics kernel ;
-UsePrivateHeaders shared ;
+UsePrivateHeaders graphics ;
+UsePrivateKernelHeaders ;
 
 KernelAddon intel_extreme :
+	bios.cpp
 	driver.cpp
 	device.cpp
 	intel_extreme.cpp
@@ -20,8 +22,3 @@ KernelAddon intel_extreme :
 SEARCH on [ FGristFiles
 		kernel_cpp.cpp 
 	] = [ FDirName $(HAIKU_TOP) src system kernel util ] ;
-
-Package haiku-intel_extreme-cvs :
-	intel_extreme : 
-	boot home config add-ons kernel drivers bin ;
-PackageDriverSymLink haiku-intel_extreme-cvs : graphics intel_extreme ;

@@ -1,4 +1,4 @@
-1	portuguese (brazil)	x-vnd.Haiku-WebPositive	1786411139
+1	portuguese (brazil)	x-vnd.Haiku-WebPositive	951661576
 Show home button	Settings Window		Exibir botão home
 Username:	Authentication Panel		Nome de Usuário:
 Copy URL to clipboard	Download Window		Copiar URL para a área de transferência
@@ -25,6 +25,7 @@ Window	WebPositive Window		Janela
 Decrease size	WebPositive Window		Diminuir o tamanho
 Serif font:	Settings Window		Fonte serifada:
 Loading %url	WebPositive Window		Carregando %url
+Download aborted	Download Window		Download abortado
 Page source	WebPositive Window		Origem da página
 Next	WebPositive Window		Próximo
 Find next	WebPositive Window		Localizar próximo
@@ -85,14 +86,17 @@ Open blank page	Settings Window		Abrir página em branco
 New tabs:	Settings Window		Novas guias:
 Cancel	WebPositive Window		Cancelar
 Open all	WebPositive Window		Abrir tudo
+Hide bookmark bar	WebPositive Window		Esconder barra de favoritos
 Proxy server requires authentication	Settings Window		Servidor proxy requer autenticação
 Clear	URL Bar		Limpar
 Cut	URL Bar		Cortar
 Clear	WebPositive Window		Limpar
+Script console	Console Window		Console do script
 Remove	Download Window		Remover
 Find	WebPositive Window		Localizar
 Find previous	WebPositive Window		Localizar anterior
 Settings	WebPositive Window		Definições
+Script console	WebPositive Window		Console do script
 Proxy server address:	Settings Window		Endereço do servidor proxy:
 Proxy server port:	Settings Window		Porta do servidor proxy:
 Bookmarks	WebPositive Window		Marcadores
@@ -106,6 +110,7 @@ Open start page	Settings Window		Abrir página inicial
 Continue downloads	WebPositive		Continuar a baixar
 Cancel	Download Window		Cancelar
 Open search page	Settings Window		Abrir página de pesquisa
+Clear	Console Window		Limpar
 Password:	Authentication Panel		Senha:
 Back	WebPositive Window		Voltar
 New browser window	Download Window		Nova janela do navegador
@@ -134,6 +139,8 @@ Clone current page	Settings Window		Clonar página atual
 Do you want to open %addedCount bookmarks all at once?	WebPositive Window	Don't translate variable %addedCount.	Deseja abrir %addedCount marcadores de uma vez?
 OK	Authentication Panel		OK
 Copy	URL Bar		Copiar
+Download finished	Download Window		Download concluído
+Show bookmark bar	WebPositive Window		Mostrar barra de favoritos
 OK	WebPositive Window		OK
 Manage bookmarks	WebPositive Window		Gerenciar marcadores
 A bookmark for this page (%bookmarkName) already exists.	WebPositive Window	Don't translate variable %bookmarkName	Um marcador para esta página (%bookmarkName) já existe.

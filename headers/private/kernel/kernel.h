@@ -47,7 +47,11 @@
 	// At least, you then know that the stack overflows in this case :)
 
 /** Size of the kernel stack */
-#define KERNEL_STACK_SIZE		(B_PAGE_SIZE * 3)	// 12 kB
+#ifdef B_HAIKU_64_BIT
+	#define KERNEL_STACK_SIZE		(B_PAGE_SIZE * 4)	// 16 kB
+#else
+	#define KERNEL_STACK_SIZE		(B_PAGE_SIZE * 3)	// 12 kB
+#endif
 
 #ifdef DEBUG_KERNEL_STACKS
 #	define KERNEL_STACK_GUARD_PAGES	1
@@ -66,6 +70,9 @@
 #define CHECK_BIT(a, b) ((a) & (1 << (b)))
 #define SET_BIT(a, b) ((a) | (1 << (b)))
 #define CLEAR_BIT(a, b) ((a) & (~(1 << (b))))
+#define GET_BIT(a, b) ((a & b) != 0)
+#define TOGGLE_BIT(a, b) (a ^= b)
+
 
 /* during kernel startup, interrupts are disabled (among other things) */
 extern bool gKernelStartup;

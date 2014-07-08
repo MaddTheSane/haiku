@@ -26,6 +26,7 @@
 #include "add_ons.h"
 #include "elf_load_image.h"
 #include "elf_symbol_lookup.h"
+#include "elf_tls.h"
 #include "elf_versioning.h"
 #include "errors.h"
 #include "images.h"
@@ -97,14 +98,14 @@ load_immediate_dependencies(image_t *image)
 	if (image->num_needed == 0)
 		return B_OK;
 
-	KTRACE("rld: load_dependencies(\"%s\", id: %ld)", image->name,
+	KTRACE("rld: load_dependencies(\"%s\", id: %" B_PRId32 ")", image->name,
 		image->id);
 
 	image->needed = (image_t**)malloc(image->num_needed * sizeof(image_t *));
 	if (image->needed == NULL) {
 		FATAL("%s: Failed to allocate needed struct\n", image->path);
-		KTRACE("rld: load_dependencies(\"%s\", id: %ld) failed: no memory",
-			image->name, image->id);
+		KTRACE("rld: load_dependencies(\"%s\", id: %" B_PRId32
+			") failed: no memory", image->name, image->id);
 		return B_NO_MEMORY;
 	}
 
@@ -119,7 +120,7 @@ load_immediate_dependencies(image_t *image)
 				const char *name = STRING(image, neededOffset);
 
 				status_t loadStatus = load_image(name, B_LIBRARY_IMAGE,
-					rpath, &image->needed[j]);
+					rpath, image->path, &image->needed[j]);
 				if (loadStatus < B_OK) {
 					status = loadStatus;
 					// correct error code in case the file could not been found
@@ -132,8 +133,8 @@ load_immediate_dependencies(image_t *image)
 
 					// Collect all missing libraries in case we report back
 					if (!reportErrors) {
-						KTRACE("rld: load_dependencies(\"%s\", id: %ld) "
-							"failed: %s", image->name, image->id,
+						KTRACE("rld: load_dependencies(\"%s\", id: %" B_PRId32
+							") failed: %s", image->name, image->id,
 							strerror(status));
 						return status;
 					}
@@ -150,7 +151,7 @@ load_immediate_dependencies(image_t *image)
 	}
 
 	if (status < B_OK) {
-		KTRACE("rld: load_dependencies(\"%s\", id: %ld) "
+		KTRACE("rld: load_dependencies(\"%s\", id: %" B_PRId32 ") "
 			"failed: %s", image->name, image->id,
 			strerror(status));
 		return status;
@@ -158,13 +159,13 @@ load_immediate_dependencies(image_t *image)
 
 	if (j != image->num_needed) {
 		FATAL("Internal error at load_dependencies()");
-		KTRACE("rld: load_dependencies(\"%s\", id: %ld) "
+		KTRACE("rld: load_dependencies(\"%s\", id: %" B_PRId32 ") "
 			"failed: internal error", image->name, image->id);
 		return B_ERROR;
 	}
 
-	KTRACE("rld: load_dependencies(\"%s\", id: %ld) done", image->name,
-		image->id);
+	KTRACE("rld: load_dependencies(\"%s\", id: %" B_PRId32 ") done",
+		image->name, image->id);
 
 	return B_OK;
 }
@@ -308,7 +309,7 @@ preload_image(char const* path)
 	KTRACE("rld: preload_image(\"%s\")", path);
 
 	image_t *image = NULL;
-	status_t status = load_image(path, B_LIBRARY_IMAGE, NULL, &image);
+	status_t status = load_image(path, B_LIBRARY_IMAGE, NULL, NULL, &image);
 	if (status < B_OK) {
 		KTRACE("rld: preload_image(\"%s\") failed to load container: %s", path,
 			strerror(status));
@@ -345,7 +346,7 @@ preload_image(char const* path)
 		add_add_on(image, addOnStruct);
 	}
 
-	KTRACE("rld: preload_image(\"%s\") done: id: %ld", path, image->id);
+	KTRACE("rld: preload_image(\"%s\") done: id: %" B_PRId32, path, image->id);
 
 	return image->id;
 
@@ -410,7 +411,7 @@ load_program(char const *path, void **_entry)
 
 	TRACE(("rld: load %s\n", path));
 
-	status = load_image(path, B_APP_IMAGE, NULL, &gProgramImage);
+	status = load_image(path, B_APP_IMAGE, NULL, NULL, &gProgramImage);
 	if (status < B_OK)
 		goto err;
 
@@ -451,7 +452,7 @@ load_program(char const *path, void **_entry)
 
 	gProgramLoaded = true;
 
-	KTRACE("rld: load_program(\"%s\") done: entry: %p, id: %ld", path,
+	KTRACE("rld: load_program(\"%s\") done: entry: %p, id: %" B_PRId32 , path,
 		*_entry, gProgramImage->id);
 
 	return gProgramImage->id;
@@ -487,7 +488,7 @@ load_library(char const *path, uint32 flags, bool addOn, void** _handle)
 	if (path == NULL && addOn)
 		return B_BAD_VALUE;
 
-	KTRACE("rld: load_library(\"%s\", 0x%lx, %d)", path, flags, addOn);
+	KTRACE("rld: load_library(\"%s\", %#" B_PRIx32 ", %d)", path, flags, addOn);
 
 	rld_lock();
 		// for now, just do stupid simple global locking
@@ -509,14 +510,14 @@ load_library(char const *path, uint32 flags, bool addOn, void** _handle)
 		if (image) {
 			atomic_add(&image->ref_count, 1);
 			rld_unlock();
-			KTRACE("rld: load_library(\"%s\"): already loaded: %ld", path,
-				image->id);
+			KTRACE("rld: load_library(\"%s\"): already loaded: %" B_PRId32,
+				path, image->id);
 			*_handle = image;
 			return image->id;
 		}
 	}
 
-	status = load_image(path, type, NULL, &image);
+	status = load_image(path, type, NULL, NULL, &image);
 	if (status < B_OK) {
 		rld_unlock();
 		KTRACE("rld: load_library(\"%s\") failed to load container: %s", path,
@@ -556,7 +557,7 @@ load_library(char const *path, uint32 flags, bool addOn, void** _handle)
 
 	rld_unlock();
 
-	KTRACE("rld: load_library(\"%s\") done: id: %ld", path, image->id);
+	KTRACE("rld: load_library(\"%s\") done: id: %" B_PRId32, path, image->id);
 
 	*_handle = image;
 	return image->id;
@@ -634,6 +635,8 @@ unload_library(void* handle, image_id imageID, bool addOn)
 
 			if (image->term_routine)
 				((init_term_function)image->term_routine)(image->id);
+
+			TLSBlockTemplates::Get().Unregister(image->dso_tls_id);
 
 			dequeue_disposable_image(image);
 			unmap_image(image);

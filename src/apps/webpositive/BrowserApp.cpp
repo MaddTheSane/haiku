@@ -38,6 +38,7 @@
 #include <Locale.h>
 #include <Path.h>
 #include <Screen.h>
+#include <UrlContext.h>
 #include <debugger.h>
 
 #include <stdio.h>
@@ -47,11 +48,13 @@
 #include "DownloadWindow.h"
 #include "SettingsMessage.h"
 #include "SettingsWindow.h"
+#include "ConsoleWindow.h"
 #include "NetworkCookieJar.h"
 #include "WebKitInfo.h"
 #include "WebPage.h"
 #include "WebSettings.h"
 #include "WebView.h"
+#include "WebViewConstants.h"
 
 
 #undef B_TRANSLATION_CONTEXT
@@ -61,7 +64,7 @@ const char* kApplicationSignature = "application/x-vnd.Haiku-WebPositive";
 const char* kApplicationName = B_TRANSLATE_SYSTEM_NAME("WebPositive");
 static const uint32 PRELOAD_BROWSING_HISTORY = 'plbh';
 
-#define ENABLE_NATIVE_COOKIES 0
+#define ENABLE_NATIVE_COOKIES 1
 
 
 BrowserApp::BrowserApp()
@@ -73,10 +76,20 @@ BrowserApp::BrowserApp()
 	fInitialized(false),
 	fSettings(NULL),
 	fCookies(NULL),
-	fCookieJar(NULL),
+	fContext(NULL),
 	fDownloadWindow(NULL),
-	fSettingsWindow(NULL)
+	fSettingsWindow(NULL),
+	fConsoleWindow(NULL)
 {
+#if ENABLE_NATIVE_COOKIES
+	BString cookieStorePath = kApplicationName;
+	cookieStorePath << "/Cookies";
+	fCookies = new SettingsMessage(B_USER_SETTINGS_DIRECTORY,
+		cookieStorePath.String());
+	BMessage cookieArchive = fCookies->GetValue("cookies", cookieArchive);
+	fContext = new BUrlContext();
+	fContext->SetCookieJar(BNetworkCookieJar(&cookieArchive));
+#endif
 }
 
 
@@ -85,7 +98,7 @@ BrowserApp::~BrowserApp()
 	delete fLaunchRefsMessage;
 	delete fSettings;
 	delete fCookies;
-	delete fCookieJar;
+	delete fContext;
 }
 
 
@@ -110,9 +123,7 @@ BrowserApp::AboutRequested()
 
 	BString aboutText("");
 	aboutText << "HaikuWebKit " << WebKitInfo::HaikuWebKitVersion();
-	aboutText << " (" << WebKitInfo::HaikuWebKitRevision() << ")";
 	aboutText << "\nWebKit " << WebKitInfo::WebKitVersion();
-	aboutText << " (" << WebKitInfo::WebKitRevision() << ")";
 
 	window->AddCopyright(2007, "Haiku, Inc.");
 	window->AddAuthors(authors);
@@ -166,16 +177,6 @@ BrowserApp::ReadyToRun()
 	mainSettingsPath << "/Application";
 	fSettings = new SettingsMessage(B_USER_SETTINGS_DIRECTORY,
 		mainSettingsPath.String());
-#if ENABLE_NATIVE_COOKIES
-	mainSettingsPath = kApplicationName;
-	mainSettingsPath << "/Cookies";
-	fCookies = new SettingsMessage(B_USER_SETTINGS_DIRECTORY,
-		mainSettingsPath.String());
-	BMessage cookieArchive;
-	cookieArchive = fCookies->GetValue("cookies", cookieArchive);
-	fCookieJar = new BNetworkCookieJar(cookieArchive);
-	BWebPage::SetCookieJar(fCookieJar);
-#endif
 
 	fLastWindowFrame = fSettings->GetValue("window frame", fLastWindowFrame);
 	BRect defaultDownloadWindowFrame(-10, -10, 365, 265);
@@ -183,6 +184,8 @@ BrowserApp::ReadyToRun()
 		defaultDownloadWindowFrame);
 	BRect settingsWindowFrame = fSettings->GetValue("settings window frame",
 		BRect());
+	BRect consoleWindowFrame = fSettings->GetValue("console window frame",
+		BRect(50, 50, 400, 300));
 	bool showDownloads = fSettings->GetValue("show downloads", false);
 
 	fDownloadWindow = new DownloadWindow(downloadWindowFrame, showDownloads,
@@ -203,6 +206,8 @@ BrowserApp::ReadyToRun()
 	fSettingsWindow = new SettingsWindow(settingsWindowFrame, fSettings);
 
 	BWebPage::SetDownloadListener(BMessenger(fDownloadWindow));
+	
+	fConsoleWindow = new ConsoleWindow(consoleWindowFrame);
 
 	fInitialized = true;
 
@@ -266,6 +271,12 @@ BrowserApp::MessageReceived(BMessage* message)
 		break;
 	case SHOW_SETTINGS_WINDOW:
 		_ShowWindow(message, fSettingsWindow);
+		break;
+	case SHOW_CONSOLE_WINDOW:
+		_ShowWindow(message, fConsoleWindow);
+		break;
+	case ADD_CONSOLE_MESSAGE:
+		fConsoleWindow->PostMessage(message);
 		break;
 
 	default:
@@ -342,9 +353,15 @@ BrowserApp::QuitRequested()
 		fSettings->SetValue("settings window frame", fSettingsWindow->Frame());
 		fSettingsWindow->Unlock();
 	}
+	
+	if (fConsoleWindow->Lock()) {
+		fSettings->SetValue("console window frame", fConsoleWindow->Frame());
+		fConsoleWindow->Unlock();
+	}
 
 	BMessage cookieArchive;
-	if (fCookieJar != NULL && fCookieJar->Archive(&cookieArchive) == B_OK)
+	BNetworkCookieJar& cookieJar = fContext->GetCookieJar();
+	if (cookieJar.Archive(&cookieArchive) == B_OK)
 		fCookies->SetValue("cookies", cookieArchive);
 
 	return true;
@@ -356,6 +373,10 @@ BrowserApp::_RefsReceived(BMessage* message, int32* _pagesCreated,
 	bool* _fullscreen)
 {
 	int32 pagesCreated = 0;
+
+	BrowserWindow* window = NULL;
+	if (message->FindPointer("window", (void**)&window) != B_OK)
+		window = NULL;
 
 	bool fullscreen;
 	if (message->FindBool("fullscreen", &fullscreen) != B_OK)
@@ -369,15 +390,15 @@ BrowserApp::_RefsReceived(BMessage* message, int32* _pagesCreated,
 		BPath path;
 		if (entry.GetPath(&path) != B_OK)
 			continue;
-		BString url;
-		url << path.Path();
-		_CreateNewPage(url, fullscreen);
+		BUrl url(path);
+		window = _CreateNewPage(url.UrlString(), window, fullscreen,
+			pagesCreated == 0);
 		pagesCreated++;
 	}
 
 	BString url;
 	for (int32 i = 0; message->FindString("url", i, &url) == B_OK; i++) {
-		_CreateNewPage(url, fullscreen);
+		window = _CreateNewPage(url, window, fullscreen, pagesCreated == 0);
 		pagesCreated++;
 	}
 
@@ -388,19 +409,35 @@ BrowserApp::_RefsReceived(BMessage* message, int32* _pagesCreated,
 }
 
 
-void
-BrowserApp::_CreateNewPage(const BString& url, bool fullscreen)
+BrowserWindow*
+BrowserApp::_CreateNewPage(const BString& url, BrowserWindow* webWindow,
+	bool fullscreen, bool useBlankTab)
 {
+	// Let's first see if we must target a specific window...
+	if (webWindow && webWindow->Lock()) {
+		if (useBlankTab && webWindow->IsBlankTab()) {
+			if (url.Length() != 0)
+				webWindow->CurrentWebView()->LoadURL(url);
+		} else
+			webWindow->CreateNewTab(url, true);
+		webWindow->Activate();
+		webWindow->CurrentWebView()->MakeFocus(true);
+		webWindow->Unlock();
+		return webWindow;
+	}
+
+	// Otherwise, try to find one in the current workspace
 	uint32 workspace = 1 << current_workspace();
 
 	bool loadedInWindowOnCurrentWorkspace = false;
 	for (int i = 0; BWindow* window = WindowAt(i); i++) {
-		BrowserWindow* webWindow = dynamic_cast<BrowserWindow*>(window);
+		webWindow = dynamic_cast<BrowserWindow*>(window);
 		if (!webWindow)
 			continue;
+
 		if (webWindow->Lock()) {
 			if (webWindow->Workspaces() & workspace) {
-				if (webWindow->IsBlankTab()) {
+				if (useBlankTab && webWindow->IsBlankTab()) {
 					if (url.Length() != 0)
 						webWindow->CurrentWebView()->LoadURL(url);
 				} else
@@ -412,13 +449,15 @@ BrowserApp::_CreateNewPage(const BString& url, bool fullscreen)
 			webWindow->Unlock();
 		}
 		if (loadedInWindowOnCurrentWorkspace)
-			return;
+			return webWindow;
 	}
-	_CreateNewWindow(url, fullscreen);
+
+	// Finally, if no window is available, let's create one.
+	return _CreateNewWindow(url, fullscreen);
 }
 
 
-void
+BrowserWindow*
 BrowserApp::_CreateNewWindow(const BString& url, bool fullscreen)
 {
 	// Offset the window frame unless this is the first window created in the
@@ -429,10 +468,11 @@ BrowserApp::_CreateNewWindow(const BString& url, bool fullscreen)
 		fLastWindowFrame.OffsetTo(50, 50);
 
 	BrowserWindow* window = new BrowserWindow(fLastWindowFrame, fSettings,
-		url);
+		url, fContext);
 	if (fullscreen)
 		window->ToggleFullscreen();
 	window->Show();
+	return window;
 }
 
 

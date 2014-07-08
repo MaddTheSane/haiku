@@ -5,10 +5,17 @@
 #ifndef _KERNEL_ARCH_ARM_CPU_H
 #define _KERNEL_ARCH_ARM_CPU_H
 
+
+#define CPU_MAX_CACHE_LEVEL 8
+#define CACHE_LINE_SIZE 64
+	// TODO: Could be 32-bits sometimes?
+
+
 #ifndef _ASSEMBLER
 
 #include <arch/arm/arch_thread_types.h>
 #include <kernel.h>
+
 
 /* raw exception frames */
 struct iframe {
@@ -43,7 +50,8 @@ enum {
 	ARCH_ARM_v5T,
 	ARCH_ARM_v5TE,
 	ARCH_ARM_v5TEJ,
-	ARCH_ARM_v6
+	ARCH_ARM_v6,
+	ARCH_ARM_v7
 };
 
 typedef struct arch_cpu_info {
@@ -63,9 +71,27 @@ extern "C" {
 
 extern addr_t arm_get_far(void);
 extern int32 arm_get_fsr(void);
+extern addr_t arm_get_fp(void);
 
 extern int mmu_read_c1(void);
 extern int mmu_write_c1(int val);
+
+
+static inline void
+arch_cpu_pause(void)
+{
+	// TODO: ARM Priority pause call
+}
+
+
+static inline void
+arch_cpu_idle(void)
+{
+	uint32 Rd = 0;
+	asm volatile("mcr p15, 0, %[c7format], c7, c0, 4"
+		: : [c7format] "r" (Rd) );
+}
+
 
 #ifdef __cplusplus
 };

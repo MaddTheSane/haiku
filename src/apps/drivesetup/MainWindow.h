@@ -11,21 +11,26 @@
 
 
 #include <DiskDeviceRoster.h>
+#include <PopUpMenu.h>
 #include <Window.h>
 
 #include "Support.h"
 
 
+class BColumnListView;
 class BDiskDevice;
-class BPartition;
 class BMenu;
+class BMenuBar;
 class BMenuItem;
+class BPartition;
+class BRow;
 class DiskView;
 class PartitionListView;
 
 
 enum {
-	MSG_SELECTED_PARTITION_ID	= 'spid'
+	MSG_SELECTED_PARTITION_ID	= 'spid',
+	MSG_UPDATE_ZOOM_LIMITS		= 'uzls'
 };
 
 
@@ -73,6 +78,9 @@ private:
 									partition_id selectedPartition);
 			void				_ChangeParameters(BDiskDevice* disk,
 									partition_id selectedPartition);
+			float				_ColumnListViewHeight(BColumnListView* list,
+									BRow* currentRow);
+			void				_UpdateWindowZoomLimits();
 
 private:
 			BDiskDeviceRoster	fDiskDeviceRoster;
@@ -90,6 +98,8 @@ private:
 			BMenu*				fPartitionMenu;
 			BMenu*				fFormatMenu;
 
+			BMenuBar* 			fMenuBar;
+
 			BMenuItem*			fWipeMenuItem;
 			BMenuItem*			fEjectMenuItem;
 			BMenuItem*			fSurfaceTestMenuItem;
@@ -101,6 +111,14 @@ private:
 			BMenuItem*			fMountMenuItem;
 			BMenuItem*			fUnmountMenuItem;
 			BMenuItem*			fMountAllMenuItem;
+
+			BMenu*				fFormatContextMenuItem;
+			BMenuItem*			fCreateContextMenuItem;
+			BMenuItem*			fChangeContextMenuItem;
+			BMenuItem*			fDeleteContextMenuItem;
+			BMenuItem*			fMountContextMenuItem;
+			BMenuItem*			fUnmountContextMenuItem;
+			BPopUpMenu*			fContextMenu;
 };
 
 

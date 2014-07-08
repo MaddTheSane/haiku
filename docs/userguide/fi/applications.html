@@ -4,7 +4,7 @@
 <head>
 <!-- 
  *
- * Copyright 2008-2011, Haiku. All rights reserved.
+ * Copyright 2008-2013, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -44,6 +44,7 @@
 <li><a href="../hu/applications.html"><img src="../images/flags/hu.png" alt="" />Magyar</a></li>
 <li><a href="../pt_BR/applications.html"><img src="../images/flags/pt_BR.png" alt="" />Português (Brazil)</a></li>
 <li><a href="../ca/applications.html"><img src="../images/flags/ca.png" alt="" />Català</a></li>
+<li><a href="../pl/applications.html"><img src="../images/flags/pl.png" alt="" />Polski</a></li>
 <li><a href="../en/applications.html"><img src="../images/flags/gb.png" alt="" />English</a></li>
 </ul>
 <span>
@@ -58,34 +59,29 @@
 
 <h1>Sovellukset</h1>
 
-<p>Ennen kuin sukelletaan Haikun mukana tuleviin sovelluksiin, vilkaistaan yksityiskohtaisemmin kuinka asennetaan ja poistetaan sovelluksia, jotka lataat jostain muualta, esimerkiksi 
-<a href="../../welcome/welcome_fi.html#software">Tervetuloa</a>-sivustolla mainituilta sivuilta.</p>
-<div class="box-info">Arkistot pitäisi purkaa ja asentaa vain Haikun alaisena. Jos purat pakkauksen esimerkiksi Linux- tai Windows-ympäristössä, ja myöhemmin vain kopioit kansion Haikuun, kaikki elintärkeät attribuutit riisutaan pois, koska nuo käyttöjärjestelmät eivät normaalisti käsittele metatietoja.</div>
+<p>Katsokaamme yksityiskohtaisesti sitä kuinka asennetaan ja poistetaan ohjelmia ennen sukeltamista Haikun mukana tuleviin sovelluksiin. Kätevin tapa löytää, asentaa, päivittää ja poistaa sovelluksia on Haikun pakkauksenhallintajärjestelmän kautta. Koska Haiku on kuitenkin suurelta osin binaarinen ja lähdeyhteensopiva BeOS-esi-isän kanssa, saatat löytää vanhempia arkistoja (.zip ja .pkg), jotka voidaan myös asentaa.</p>
+<div class="box-info">Alla mainitaan aina Home-kansiohierarkian <tt>~/config/</tt>-kansio. Jos tarkoituksesi on jakaa pakkauksia kaikille käyttäjille (sitten kun Haikusta tulee monikäyttäjäkäyttöjärjestelmä), sinun pitäisi käyttää peilitiedostojärjestelmää kansion <tt>/system/</tt> alla. Katso lisätietoja aiheesta <a href="filesystem-layout.html">Tiedostojärjestelmäkokoonpano</a>.</div>
 
 <h2>
 <a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
-<a id="install" name="install">Sovellusten asentaminen</a></h2>
-<p>Haiku-ohjelmisto tulee aina arkistona. Useimmiten se on ZIP-tiedosto, mutta jotkut vanhat BeOS-pakkaukset tulevat Valet PKG-muodossa. Valet-ohjelmisto kykenee automaattisesti suorittamaan asennusskriptit, joten kaksoisnapsautuksen jälkeen valitset vain kohdekansion ja kaikesta huolehditaan.<br />Jos kyseessä on ZIP-arkisto, kaksoisnapsautus avaa <span class="app">Laajentaja</span>-sovelluksen, jossa asennat myös kohteen ja purat pakkauksen. Kuten aiheessa <a href="filesystem-layout.html">Tiedostojärjestelmäsijoittelu</a> selitetään, kohde on joko</p>
-<table summary="layout" border="0" cellspacing="0" cellpadding="2">
-<tr><td><span class="path">/boot/common/apps/</span></td><td>   </td><td>kaikkien käyttäjien käyttämät sovellukset</td></tr>
-<tr><td><span class="path">/boot/home/apps/</span></td><td>   </td><td>sovellukset vain sinulle itsellesi</td></tr>
-</table>
-<p>Tämä erottelu tulee olennaiseksi tietysti vasta sitten, kun Haiku saa monikäyttäjätuen.</p>
-<p>Kun arkisto on purettu, näkyviin pitäisi tulla vasta luotu kansio. Kansiosta löytyy usein ReadMe-tiedostot tai muita kiinnostavia dokumentteja.</p>
-<p>Jotkut ohjelmat tarvitsevat lisäasetuksia. Esimerkiksi <a href="tracker-add-ons.html">Seuraajalisäosat</a>, <a href="preferences/datatranslations.html">Muuntimet</a> tai järjestelmää laajentavat komponentit on sijoitettava oikeisiin kansioihin. Löydät joko pienen skriptitiedoston (usein tiedostotarkentimella <span class="cli">.sh</span>) kuten <span class="cli">install</span>, joka huolehtii kaikesta.<br />Joskus löydät kansioita, jotka linkittyvät oikeisiin kohdekansioihin nimeltään "<span class="cli">drag [filename] here...</span>". Joten seuraat vain ohjeita (eli raahaat tiedostonimen osoitettuun paikkaan) ja kaikki on valmista.</p>
-<p>Useimmiten mitään sen kaltaista ei tarvita ja kaikki on valmista pakkauksen purkamisen jälkeen.<br />Aiheet <a href="deskbar.html">Työpöytäpalkki</a> tai <a href="desktop-applets/launchbox.html">Käynnistyslaatikko</a> kuvaavat, kuinka pikakuvake lisätään vasta asennettuun sovellukseen.</p>
+<a id="hpkg" name="hpkg">Haiku-pakkaukset (.hpkg)</a></h2>
+<p>Pakkauksen löytäminen, lataus ja automaattinen asennus sekä asennuksen poisto onnistuu yksinkertaisemmin <a href="applications/haikudepot.html">HaikuDepot</a>:in kautta. Jos se ei ole vaihtoehto — ehkä olet ladannut pakkauksen jostain, koska se ei ole (vielä) julkisessa tietovarastossa — se on yhtä helppo asentaa manuaalisesti: Siirrä vain .hpkg-tiedosto kansioon <tt>~/config/packages/</tt>. </p>
+<p>Löydät äskettäin asennetun sovelluksen kansiosta <tt>~/config/apps/</tt> tai komentorivisovelluksen tapauksessa kansiosta <tt>~/config/bin/</tt>. Kaikki muut tiedostot, joista ohjelma on riippuvainen (kirjastot, data, lisäosat, jne.) ilmaantuvat automaattisesti oikeisiin paikkoihin tiedostojärjestelmässä.</p>
+<p>Aiheet <a href="deskbar.html">Työpöytäpalkki</a> tai <a href="desktop-applets/launchbox.html">Käynnistyslaatikko</a> kuvailevat, kuinka pikakuvake lisätään vasta asennettuun sovellukseen.</p>
+<p>Asennuksen poistaminen on yhtä helppoa: siirrä pakkaus pois kansiosta <tt>~/config/packages/</tt>.</p>
+<div class="box-info">Muuten, vaikka voit purkaa .hpkg-tiedoston, kuten minkä tahansa muun arkiston, pakkauksenhallinta ei tee sitä pakkauksen asennuksen aikana. Vaikka alla oleva tiedostojärjestelmä vain näyttää levittävän tiedostot asianmukaisiin paikkoihin, mitään tiedostojen fyysistä siirtämistä ei tapahdu. Tästä syystä asentaminen/asennuksen poisto on hyvin nopeaa ja siistiä.</div>
+<p>Jos pakkauksessa on riippuvuus joistakin muista kirjastoista tai pakkauksista, ponnahdusikkuna kysyy myös, että ladataanko ja asennetaanko välttämättömät tiedostot.</p>
 
 <h2>
 <a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
-<a id="uninstall" name="uninstall">Sovellusten poistaminen</a></h2>
-<p>Jos ohjelma asennettiin asennusskriptillä, on mahdollista, että kansiosta löytyy myös asennuksen purkamisskripti. Siinä tapauksessa kaksoisnapsauta sitä ja sovellus on poistettu.<br />Muussa tapauksessa sovellus poistetaan yksinkertaisesti poistamalla sovelluksen kansio.</p>
-<p>Tämä tietysti jättää taakseen mahdollisia asetustiedostoja <span class="path">~/config/settings</span>-kansioon. Tämä saattaa olla tarkoitus, jos haluat säilyttää nuo asetukset sitä varten, että asennat ohjelman uudelleen tulevaisuudessa. Myös "<span class="cli">drag [filename] here...</span>"-tyylisissä asennuksissa nuo tiedostot jäävät jäljelle.</p>
-<p>Eräs menetelmä saada nopeasti kaikki sovelluksen tiedostot on tehdä pikahaku sovelluksen nimen merkittävällä osalla. Tämä paljastaa sovelluksen binaaritiedoston, sen asennuskansion ja sen asetukset sekä myös mahdollisest linkit Työpöytäpalkissa jne. Valitse yksinkertaisesti kaikki olennaiset tiedostot ja poista ne.</p>
+<a id="beos_apps" name="beos_apps">Vanhat BeOS-arkistot (.zip ja .pkg)</a></h2>
+<p>BeOS-arkistot, jotka sisältävät sovelluskansiossa kaiken tarvittavan, voidaan yksinkertaisesti purkaa (kaksoisnapsautus avaa <span class="app">Laajentaja</span>n tai vanhan <span class="app">Pakkausasentaja</span>n) avulla missä tahansa kansion <tt>/boot/home/</tt> alla ja sovellus voidaan suorittaa siellä. Sellaisten itsensäsisältävien sovellusten asennuksen purkaminen on helppoa: poista vain sovelluksen kansio.</p>
+<p>Seuraava koskee vanhojen BeOS-sovellusten enemmistöä. Jos ilmenee, että sovellus ei toimi suoraan "laatikosta otettuna", koska se haluaa levittää tiedostojaan kiinteästi koodattuihin kansiosijainteihin, joiden olemassaoloa ei taata, voit yrittää korjata pulman manuaalisesti. Kansio <tt>~/config/non-packaged/</tt> sallii sinun luoda uudelleen tarvittavan kansiohierarkia. Kun yhä enemmän oikeita .hpkg-pakkauksia tulee saataville ja vanhat BeOS-sovellukset pakataan uudelleen, tätä tarvitaan yhä vähemmän. Tarkista tästä <a href="http://www.haiku-os.org/guides/daily-tasks/install-applications">verkkoartikkelista</a> kuinka <tt>non-packaged</tt>-hierarkiaa käytetään.</p>
 
 <h2>
 <a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
 <a id="list-of-apps" name="list-of-apps">Haikun sovellukset</a></h2>
-<p>Haikun mukana tulee pieni, mutta olennainen joukko sovelluksia. Löydät ne kaikki kansiosta <span class="path">/boot/system/apps/</span> tai kansiosta <span class="path">/boot/common/apps/</span>. Sovellukset, joita ei normaalisti käynnistetä kaksoisnapsauttamalla data-tiedostoa (esimerkiksi ShowImage kuvatiedostoille) voidaan löytää Työpöytäpalkin valikosta <span class="menu">Sovellukset</span>.</p>
+<p>Haikun mukana tulee pieni, mutta olennainen joukko sovelluksia. Löydät ne kaikki kansiosta <span class="path">/boot/system/apps/</span>. Sovellukset, joita ei normaalisti käynnistetä kaksoisnapsauttamalla data-tiedostoa (esimerkiksi ShowImage kuvatiedostoille) voidaan löytää Työpöytäpalkin valikosta <span class="menu">Sovellukset</span>.</p>
 <table summary="layout" border="0" cellpadding="2" cellspacing="0"> 
 	<tr><td style="width:24px;"><img src="../images/apps-images/activitymonitor-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/activitymonitor.html">Aktiviteettivalvonta</a></td><td style="width:10px;"> </td>
 		<td valign="top">Työkalu järjestelmäresurssien kuten prosessori- ja muistikäytön jäljittämiseksi.</td></tr>
@@ -107,6 +103,8 @@
 		<td valign="top">Levyaseman osiointityökalu.</td></tr>
 	<tr><td style="width:24px;"><img src="../images/apps-images/expander-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/expander.html">Laajentaja</a></td><td> </td>
 		<td valign="top">Työkalu, joka purkaa tavalliset arkistot.</td></tr>
+	<tr><td style="width:24px;"><img src="../images/apps-images/haikudepot-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/haikudepot.html">HaikuDepot</a></td><td> </td>
+		<td valign="top">Työkalu (sovellus)pakkausten löytämiseksi, lataamiseksi, päivittämiseksi ja asennuksen purkamiseksi</td></tr>
 	<tr><td style="width:24px;"><img src="../images/apps-images/icon-o-matic-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/icon-o-matic.html">Kuvakemaatti</a></td><td> </td>
 		<td valign="top">Sovellus Haikun vektorikuvakkeiden luomiseksi.</td></tr>
 	<tr><td style="width:24px;"><img src="../images/apps-images/installer-icon_16.png" alt="icon" width="16" height="16" /></td><td><a href="applications/installer.html">Asennusohjelma</a></td><td> </td>

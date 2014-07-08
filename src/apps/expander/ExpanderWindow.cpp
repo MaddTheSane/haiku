@@ -8,6 +8,8 @@
 
 #include "ExpanderWindow.h"
 
+#include <algorithm>
+
 #include <Alert.h>
 #include <Box.h>
 #include <Button.h>
@@ -49,8 +51,9 @@ const int32 MAX_STATUS_LENGTH	= 35;
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "ExpanderWindow"
 
+
 ExpanderWindow::ExpanderWindow(BRect frame, const entry_ref* ref,
-		BMessage* settings)
+	BMessage* settings)
 	:
 	BWindow(frame, B_TRANSLATE_SYSTEM_NAME("Expander"), B_TITLED_WINDOW,
 		B_NORMAL_WINDOW_FEEL),
@@ -74,8 +77,8 @@ ExpanderWindow::ExpanderWindow(BRect frame, const entry_ref* ref,
 		new BMessage(MSG_EXPAND));
 
 	BSize size = fDestButton->PreferredSize();
-	size.width = max_c(size.width, fSourceButton->PreferredSize().width);
-	size.width = max_c(size.width, fExpandButton->PreferredSize().width);
+	size.width = std::max(size.width, fSourceButton->PreferredSize().width);
+	size.width = std::max(size.width, fExpandButton->PreferredSize().width);
 
 	fDestButton->SetExplicitMaxSize(size);
 	fSourceButton->SetExplicitMaxSize(size);
@@ -213,9 +216,9 @@ ExpanderWindow::ValidateDest()
 
 
 void
-ExpanderWindow::MessageReceived(BMessage* msg)
+ExpanderWindow::MessageReceived(BMessage* message)
 {
-	switch (msg->what) {
+	switch (message->what) {
 		case MSG_SOURCE:
 		{
 			BEntry entry(fSourceText->Text(), true);
@@ -265,7 +268,7 @@ ExpanderWindow::MessageReceived(BMessage* msg)
 
 		case B_SIMPLE_DATA:
 		case B_REFS_RECEIVED:
-			RefsReceived(msg);
+			RefsReceived(message);
 			break;
 
 		case MSG_EXPAND:
@@ -350,16 +353,17 @@ ExpanderWindow::MessageReceived(BMessage* msg)
 			fExpandButton->SetEnabled(false);
 			fExpandItem->SetEnabled(false);
 			fShowItem->SetEnabled(false);
+			break;
 		}
-		break;
 
 		case MSG_DESTTEXT:
 			ValidateDest();
 			break;
 
 		case MSG_PREFERENCES:
-			if (!fPreferences)
+			if (fPreferences == NULL)
 				fPreferences = new ExpanderPreferences(&fSettings);
+
 			fPreferences->Show();
 			break;
 
@@ -367,7 +371,7 @@ ExpanderWindow::MessageReceived(BMessage* msg)
 			if (!fExpandingStarted && fListingStarted) {
 				BString string;
 				int32 i = 0;
-				while (msg->FindString("output", i++, &string) == B_OK) {
+				while (message->FindString("output", i++, &string) == B_OK) {
 					float length = fListingText->StringWidth(string.String());
 
 					if (length > fLongestLine)
@@ -379,7 +383,7 @@ ExpanderWindow::MessageReceived(BMessage* msg)
 			} else if (fExpandingStarted) {
 				BString string;
 				int32 i = 0;
-				while (msg->FindString("output", i++, &string) == B_OK) {
+				while (message->FindString("output", i++, &string) == B_OK) {
 					if (strstr(string.String(), "Enter password") != NULL) {
 						fExpandingThread->SuspendExternalExpander();
 						BString password;
@@ -396,7 +400,7 @@ ExpanderWindow::MessageReceived(BMessage* msg)
 		case 'errp':
 		{
 			BString string;
-			if (msg->FindString("error", &string) == B_OK
+			if (message->FindString("error", &string) == B_OK
 				&& fExpandingStarted) {
 				fExpandingThread->SuspendExternalExpander();
 				if (strstr(string.String(), "password") != NULL) {
@@ -420,8 +424,10 @@ ExpanderWindow::MessageReceived(BMessage* msg)
 			}
 			break;
 		}
+
 		case 'exit':
-			// thread has finished		(finished, quit, killed, we don't know)
+			// thread has finished
+			// (finished, quit, killed, we don't know)
 			// reset window state
 			if (fExpandingStarted) {
 				SetStatus(B_TRANSLATE("File expanded"));
@@ -436,7 +442,8 @@ ExpanderWindow::MessageReceived(BMessage* msg)
 				SetStatus("");
 			break;
 
-		case 'exrr':	// thread has finished
+		case 'exrr':
+			// thread has finished
 			// reset window state
 
 			SetStatus(B_TRANSLATE("Error when expanding archive"));
@@ -444,8 +451,7 @@ ExpanderWindow::MessageReceived(BMessage* msg)
 			break;
 
 		default:
-			BWindow::MessageReceived(msg);
-			break;
+			BWindow::MessageReceived(message);
 	}
 }
 
@@ -454,8 +460,9 @@ bool
 ExpanderWindow::CanQuit()
 {
 	if ((fSourcePanel && fSourcePanel->IsShowing())
-		|| (fDestPanel && fDestPanel->IsShowing()))
+		|| (fDestPanel && fDestPanel->IsShowing())) {
 		return false;
+	}
 
 	if (fExpandingStarted) {
 		fExpandingThread->SuspendExternalExpander();
@@ -465,6 +472,7 @@ ExpanderWindow::CanQuit()
 			B_TRANSLATE("Stop"), B_TRANSLATE("Continue"), NULL,
 			B_WIDTH_AS_USUAL, B_EVEN_SPACING, B_WARNING_ALERT);
 			alert->SetShortcut(0, B_ESCAPE);
+
 		if (alert->Go() == 0) {
 			fExpandingThread->ResumeExternalExpander();
 			StopExpanding();
@@ -473,6 +481,7 @@ ExpanderWindow::CanQuit()
 			return false;
 		}
 	}
+
 	return true;
 }
 
@@ -489,19 +498,20 @@ ExpanderWindow::QuitRequested()
 	be_app->PostMessage(B_QUIT_REQUESTED);
 	fSettings.ReplacePoint("window_position", Frame().LeftTop());
 	((ExpanderApp*)(be_app))->UpdateSettingsFrom(&fSettings);
+
 	return true;
 }
 
 
 void
-ExpanderWindow::RefsReceived(BMessage* msg)
+ExpanderWindow::RefsReceived(BMessage* message)
 {
 	entry_ref ref;
 	int32 i = 0;
-	int8 destination_folder = 0x63;
-	fSettings.FindInt8("destination_folder", &destination_folder);
+	int8 destinationFolder = 0x63;
+	fSettings.FindInt8("destination_folder", &destinationFolder);
 
-	while (msg->FindRef("refs", i++, &ref) == B_OK) {
+	while (message->FindRef("refs", i++, &ref) == B_OK) {
 		BEntry entry(&ref, true);
 		BPath path(&entry);
 		BNode node(&entry);
@@ -510,12 +520,12 @@ ExpanderWindow::RefsReceived(BMessage* msg)
 			fSourceChanged = true;
 			fSourceRef = ref;
 			fSourceText->SetText(path.Path());
-			if (destination_folder == 0x63) {
+			if (destinationFolder == 0x63) {
 				BPath parent;
 				path.GetParent(&parent);
 				fDestText->SetText(parent.Path());
 				get_ref_for_path(parent.Path(), &fDestRef);
-			} else if (destination_folder == 0x65) {
+			} else if (destinationFolder == 0x65) {
 				fSettings.FindRef("destination_folder_use", &fDestRef);
 				BEntry dEntry(&fDestRef, true);
 				BPath dPath(&dEntry);
@@ -537,7 +547,7 @@ ExpanderWindow::RefsReceived(BMessage* msg)
 			}
 
 			bool fromApp;
-			if (msg->FindBool("fromApp", &fromApp) == B_OK) {
+			if (message->FindBool("fromApp", &fromApp) == B_OK) {
 				AutoExpand();
 			} else
 				AutoListing();
@@ -557,10 +567,12 @@ ExpanderWindow::_CreateMenuBar()
 {
 	fBar = new BMenuBar("menu_bar", B_ITEMS_IN_ROW, B_INVALIDATE_AFTER_LAYOUT);
 	BMenu* menu = new BMenu(B_TRANSLATE("File"));
-	menu->AddItem(fSourceItem = new BMenuItem(B_TRANSLATE("Set source…"),
-		new BMessage(MSG_SOURCE), 'O'));
-	menu->AddItem(fDestItem = new BMenuItem(B_TRANSLATE("Set destination…"),
-		new BMessage(MSG_DEST), 'D'));
+	menu->AddItem(fSourceItem
+		= new BMenuItem(B_TRANSLATE("Set source" B_UTF8_ELLIPSIS),
+			new BMessage(MSG_SOURCE), 'O'));
+	menu->AddItem(fDestItem
+		= new BMenuItem(B_TRANSLATE("Set destination" B_UTF8_ELLIPSIS),
+			new BMessage(MSG_DEST), 'D'));
 	menu->AddSeparatorItem();
 	menu->AddItem(fExpandItem = new BMenuItem(B_TRANSLATE("Expand"),
 		new BMessage(MSG_EXPAND), 'E'));
@@ -578,8 +590,9 @@ ExpanderWindow::_CreateMenuBar()
 	fBar->AddItem(menu);
 
 	menu = new BMenu(B_TRANSLATE("Settings"));
-	menu->AddItem(fPreferencesItem = new BMenuItem(B_TRANSLATE("Settings…"),
-		new BMessage(MSG_PREFERENCES), 'S'));
+	menu->AddItem(fPreferencesItem
+		= new BMenuItem(B_TRANSLATE("Settings" B_UTF8_ELLIPSIS),
+			new BMessage(MSG_PREFERENCES), 'S'));
 	fBar->AddItem(menu);
 }
 
@@ -678,13 +691,13 @@ ExpanderWindow::_ExpandListingText()
 	if (minWidth < Frame().Width() + delta) {
 		// set the Zoom limit as the minimal required size
 		SetZoomLimits(Frame().Width() + delta,
-			min_c(fSizeLimit + fListingText->TextRect().Height()
+			std::min(fSizeLimit + fListingText->TextRect().Height()
 				+ fLineHeight + B_H_SCROLL_BAR_HEIGHT + 1.0f,
 				maxHeight));
 	} else {
 		// set the zoom limit based on minimal window size allowed
 		SetZoomLimits(minWidth,
-			min_c(fSizeLimit + fListingText->TextRect().Height()
+			std::min(fSizeLimit + fListingText->TextRect().Height()
 				+ fLineHeight + B_H_SCROLL_BAR_HEIGHT + 1.0f,
 				maxHeight));
 	}
@@ -712,7 +725,7 @@ ExpanderWindow::_UpdateWindowSize(bool showContents)
 		minHeight = bottom + 5.0 * fLineHeight;
 		maxHeight = 32767.0;
 
-		bottom = max_c(fPreviousHeight, minHeight);
+		bottom = std::max(fPreviousHeight, minHeight);
 	} else {
 		minHeight = fSizeLimit;
 		maxHeight = fSizeLimit;

@@ -1,29 +1,25 @@
-1	ukrainian	x-vnd.Haiku-About	2547069165
+1	ukrainian	x-vnd.Haiku-About	2441795911
 Copyright © 1999-2010 by the authors of Gutenprint. All rights reserved.	AboutView		Copyright © 1999-2010 авторів програми Gutenprint. Всі права застережені.
 Travis Geiselbrecht (and his NewOS kernel)\n	AboutView		Travis Geiselbrecht (і ядро його NewOS)\n
-BSD (4-clause)	AboutView		 4-пунктова BSD
 %ld Processors:	AboutView		%ld Процесорів:
 Copyright © 2000 Jean-Pierre ervbefeL and Remi Lefebvre.	AboutView		Всі права застережені © 2000 Jean-Pierre ervbefeL і Remi Lefebvre.
 Copyright © 1996-2005 Julian R Seward. All rights reserved.	AboutView		Всі права застережені © 1996-2005 Julian R Seward.
-%d MiB total	AboutView		Всьго %d MiB 
+%d MiB total	AboutView		%d MiB загалом 
 Michael Phipps (project founder)\n\n	AboutView		Michael Phipps (засновнику проекту)\n\n
 The Haiku-Ports team\n	AboutView		Команді Haiku-Ports\n
-Copyright © 1998-2003 Daniel Veillard. All rights reserved.	AboutView		 Всі права застережені © 1998-2003 Daniel Veillard.
+Copyright © 1998-2003 Daniel Veillard. All rights reserved.	AboutView		Всі права застережені © 1998-2003 Daniel Veillard.
 %d MiB used (%d%%)	AboutView		%d MiB викор. (%d%%)
 Website, marketing & documentation:\n	AboutView		Сайт, маркетинг і документація:\n
-GNU LGPL v2.1	AboutView		GNU LGPL версія 2.1
 AboutSystem	System name		Про систему
-MIT (no promotion)	AboutView		MIT (без реклами)
 Copyright © 2003 Peter Hanappe and others.	AboutView		Всі права застережені © 2003 Peter Hanappe і інші.
-Copyright © 1994-1997 Mark Kilgard. All rights reserved.	AboutView		 Всі права застережені © 1994-1997 Mark Kilgard.
+Copyright © 1994-1997 Mark Kilgard. All rights reserved.	AboutView		Всі права застережені © 1994-1997 Mark Kilgard.
 Revision	AboutView		Ревізія
 Copyright © 2002-2005 Industrial Light & Magic, a division of Lucas Digital Ltd. LLC.	AboutView		Всі права застережені © 2002-2005 Industrial Light & Magic, відділення Lucas Digital Ltd. LLC.
-Be Inc. and its developer team, for having created BeOS!\n\n	AboutView		 Корпорації Be і її команді розробників, за створення BeOS!\n\n
+Be Inc. and its developer team, for having created BeOS!\n\n	AboutView		Корпорації Be і її команді розробників, за створення BeOS!\n\n
 Copyright © 1999-2000 Y.Takagi. All rights reserved.	AboutView		Всі права застережені © 1999-2000 Y.Takagi.
 Source Code: 	AboutView		Вихідний код:
 Processor:	AboutView		Процесор:
 Kernel:	AboutView		Ядро:
-BSD (3-clause)	AboutView		3-пунктова BSD
 Copyright © 2001-2002 Thomas Broyer, Charlie Bozeman and Daniel Veillard. All rights reserved.	AboutView		Всі права застережені © 2001-2002 Thomas Broyer, Charlie Bozeman і Daniel Veillard. 
 Portions of this software are under copyright.\nCopyright © 1996-2006 The FreeType Project. All rights reserved.	AboutView		Частина цього програмного забезпечення захищена авторським правом.\nВсі права застережені © 1996-2006 Проект FreeType.
 The copyright to the Haiku code is property of Haiku, Inc. or of the respective authors where expressly noted in the source. Haiku® and the HAIKU logo® are registered trademarks of Haiku, Inc.\n\n	AboutView		Авторські права коду Haiku є власністю Haiku, Inc. або конкретним авторам, про що згадується в коді. Haiku® і лого HAIKU ® є зареєстрованою торговою маркою Haiku, Inc.\n\n
@@ -59,7 +55,6 @@ The Haikuware team and their bounty program\n	AboutView		Команді Haikuwar
 Copyright © 1995, 1998-2001 Jef Poskanzer. All rights reserved.	AboutView		Всі права застережені © 1995, 1998-2001 Jef Poskanzer.
 Copyright © 2010-2011 Google Inc. All rights reserved.	AboutView		Всі права застережені © 2010-2011 Google Inc.
 About this system	AboutWindow		Про цю систему
-BSD (2-clause)	AboutView		2-пунктова BSD
 Version:	AboutView		Версія:
 Copyright © 1994-2008 Xiph.Org. All rights reserved.	AboutView		Всі права застережені © 1994-2008 Xiph.Org.
 Copyright © 1998-2000 Thai Open Source Software Center Ltd and Clark Cooper.	AboutView		Всі права застережені © 1998-2000 Thai Open Source Software Center Ltd і Clark Cooper.
@@ -76,12 +71,11 @@ Copyright © 2003-2006 Intel Corporation. All rights reserved.	AboutView		Всі
 Copyright © 1997-2006 PDFlib GmbH and Thomas Merz. All rights reserved.\nPDFlib and PDFlib logo are registered trademarks of PDFlib GmbH.	AboutView		Всі права застережені © 1997-2006 PDFlib GmbH і Thomas Merz.\nPDFlib і логотип PDFlib є зареєстрованими торговими марками PDFlib GmbH.
 Copyright © 1991-2000 Silicon Graphics, Inc. All rights reserved.	AboutView		Всі права застережені © 1991-2000 Silicon Graphics, Inc.
 Contains software from the GNU Project, released under the GPL and LGPL licenses:\nGNU C Library, GNU coretools, diffutils, findutils, sharutils, gawk, bison, m4, make, gdb, wget, ncurses, termcap, Bourne Again Shell.\nCopyright © The Free Software Foundation.	AboutView		Містить програмне забезпечення проекту GNU , реалізоване під ліцензіями GPL і LGPL licenses:\nGNU C Library, GNU coretools, diffutils, findutils, sharutils, gawk, bison, m4, make, gdb, wget, ncurses, termcap, Bourne Again Shell.\nВсі права застережені © The Free Software Foundation.
-…and the many people making donations!\n\n	AboutView		і багатьом тим, що зробили пожертви !\n\n
+…and the many people making donations!\n\n	AboutView		…і багатьом тим, що зробили пожертви !\n\n
 MIT license. All rights reserved.	AboutView		Ліцензія MIT. Всі права застережені.
 [Click a license name to read the respective license.]\n\n	AboutView		[Клікніть ім'я ліцензії для прочитання її.]\n\n
 Copyright © 2007 Ralink Technology Corporation. All rights reserved.	AboutView		Всі права застережені © 2007 Ralink Technology Corporation.
 Copyright © 1990-2002 Info-ZIP. All rights reserved.	AboutView		Всі права застережені © 1990-2002 Info-ZIP.
 License: 	AboutView		Ліцензія:
 2001 by Andy Ritger based on the Generalized Timing Formula	AboutView		Розробив Andy Ritger в 2001,  на основі Generalized Timing Formula
-GCC %d Hybrid	AboutView		GCC %d Гібрид
 Translations:\n	AboutView		Перекладачі:\n

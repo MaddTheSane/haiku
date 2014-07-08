@@ -12,6 +12,7 @@
  * Translators:
  *		Loïc
  *		Humdinger
+ *		Wabouz
  *
 -->
 	<meta http-equiv="content-type" content="text/html; charset=utf-8" />
@@ -44,6 +45,7 @@
 <li><a href="../hu/workshop-wlan.html"><img src="../images/flags/hu.png" alt="" />Magyar</a></li>
 <li><a href="../pt_BR/workshop-wlan.html"><img src="../images/flags/pt_BR.png" alt="" />Português (Brazil)</a></li>
 <li><a href="../ca/workshop-wlan.html"><img src="../images/flags/ca.png" alt="" />Català</a></li>
+<li><a href="../pl/workshop-wlan.html"><img src="../images/flags/pl.png" alt="" />Polski</a></li>
 <li><a href="../en/workshop-wlan.html"><img src="../images/flags/gb.png" alt="" />English</a></li>
 </ul>
 
@@ -71,7 +73,7 @@
 <h1>Atelier : Réseaux sans-fils</h1>
 
 <p>Arriver à faire fonctionner le réseau est indispensable pour répondre au besoin actuel d'avoir en permanence une connexion internet. Comme maintenir à jour les pilotes pour du matériel toujours différent et en constante évolution est tout à fait impossible pour un petit projet, Haiku s'appuie sur une couche de compatibilité <a href="http://www.freebsd.org">FreeBSD</a> pour ses pilotes réseaux.<br />
-Cela permet de supporter un grand nombre de matériels, mais probablement pas 100% de ce qui existe. Consultez cette <a href="https://www.haiku-os.org/guides/daily-tasks/wireless#hardware-notes">liste des modèles supportés</a> ou compulsez les <a href="http://www.freebsd.org/releases/9.1R/hardware.html#WLAN">notes de parution FreeBSD 9.1 dédiées au matériel</a>.</p>
+Cela permet de supporter un grand nombre de matériels, mais probablement pas la totalité. Consultez cette <a href="https://www.haiku-os.org/guides/daily-tasks/wireless#hardware-notes">liste des modèles supportés</a> ou vérifiez les <a href="http://www.freebsd.org/releases/9.1R/hardware.html#WLAN">notes de parution FreeBSD 9.1 dédiées au matériel</a>.</p>
 <div class="box-info">Pour le moment, seuls les périphériques PCI, PCI-X, PCI-Express, Mini PCI, and Mini PCI-Express sont supportés.<br />Les périphériques PCMCIA, CardBus, ExpressCard, USB and ISA ont encore besoin de travail avant de devenir fonctionnels.</div>
 
 <h2>
@@ -98,7 +100,7 @@ En fonction de votre configuration matérielle et réseau, cela peut prendre un 
 <h2>
 <a href="#"><img src="../images/up.png" style="border:none;float:right" alt="index" /></a>
 <a id="commandline" name="commandline">Joindre un réseau à partir de la ligne de commande</a></h2>
-<p>S vous préférez utiliser la ligne de commande ou si vous écrire un script ou le <span class="path">~/config/boot/UserBootscript</span> pour automatiser le ralliement à un réseau en particulier au démarrage, vous disposez de la commande <tt>ifconfig</tt>.</p>
+<p>Si vous préférez utiliser la ligne de commande ou aimeriez utiliser un script ou les <span class="path">~/config/boot/UserBootscript</span> pour automatiser le ralliement à un réseau en particulier au démarrage, vous disposez de la commande <tt>ifconfig</tt>.</p>
 <p>Démarrer un Terminal et entrez la première ligne pour scanner les réseaux sans fils disponibles :</p>
 <pre class="terminal">ifconfig /dev/net/iprowifi3945/0 scan
 name                             address              signal  auth

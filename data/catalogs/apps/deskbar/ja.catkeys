@@ -22,7 +22,7 @@ Always on top	PreferencesWindow		常に手前に
 Show all	WindowMenu		すべて表示
 No windows	WindowMenu		ウィンドウ無し
 Deskbar	System name		Deskbar
-Restart system	DeskbarMenu		システムを再起動
+Restart system	DeskbarMenu		再起動
 Large	PreferencesWindow		大
 Auto-raise	PreferencesWindow		マウスオーバーで手前に
 Recent folders:	PreferencesWindow		最近開いたフォルダー
@@ -39,7 +39,7 @@ Tracker always first	PreferencesWindow		Tracker を常時先頭に表示
 Preferences	B_USER_DESKBAR_DIRECTORY/Preferences		環境設定
 Recent folders	DeskbarMenu		最近使ったフォルダー
 About this system	DeskbarMenu		このシステムについて
-Show calendar…	TimeView		カレンダーの表示…
+Show calendar…	TimeView		カレンダーを表示…
 Deskbar preferences…	DeskbarMenu		Deskbar の設定…
 Expand new applications	PreferencesWindow		新しいアプリケーションを展開表示
 Show replicants	DeskbarMenu		レプリカントを表示

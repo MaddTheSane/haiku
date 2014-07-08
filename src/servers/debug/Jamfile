@@ -4,6 +4,7 @@ UsePrivateHeaders app ;
 UsePrivateHeaders debug ;
 UsePrivateHeaders kernel ;
 UsePrivateHeaders shared ;
+UsePrivateHeaders storage ;
 
 AddResources debug_server : debug_server.rdef ;
 
@@ -11,11 +12,11 @@ Server debug_server
  	:
  	DebugServer.cpp
 	:
-	libroot.so	# Haiku libroot
-	libbe.so	# Haiku libbe
+	be
 	libdebug.so
+	libshared.a
 	$(TARGET_LIBSTDC++)
-	$(HAIKU_LOCALE_LIBS)
+	localestub
 ;
 
 DoCatalogs debug_server :

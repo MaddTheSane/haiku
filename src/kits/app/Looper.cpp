@@ -1,16 +1,16 @@
 /*
- * Copyright 2001-2011, Haiku.
+ * Copyright 2001-2013 Haiku, Inc. All rights reserved
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Erik Jaesler (erik@cgsoftware.com)
- *		DarkWyrm (bpmagic@columbus.rr.com)
- *		Ingo Weinhold, bonefish@@users.sf.net
+ *		DarkWyrm, bpmagic@columbus.rr.com
  *		Axel Dörfler, axeld@pinc-software.de
+ *		Erik Jaesler, erik@cgsoftware.com
+ *		Ingo Weinhold, bonefish@@users.sf.net
  */
 
 
-/*!	BLooper class spawns a thread that runs a message loop. */
+// BLooper class spawns a thread that runs a message loop.
 
 
 #include <AppMisc.h>
@@ -106,7 +106,8 @@ struct _loop_data_ {
 
 
 BLooper::BLooper(const char* name, int32 priority, int32 portCapacity)
-	: BHandler(name)
+	:
+	BHandler(name)
 {
 	_InitData(name, priority, portCapacity);
 }
@@ -297,6 +298,22 @@ BLooper::DetachCurrentMessage()
 	BMessage* message = fLastMessage;
 	fLastMessage = NULL;
 	return message;
+}
+
+
+void
+BLooper::DispatchExternalMessage(BMessage* message, BHandler* handler,
+	bool& _detached)
+{
+	AssertLocked();
+
+	BMessage* previousMessage = fLastMessage;
+	fLastMessage = message;
+
+	DispatchMessage(message, handler);
+
+	_detached = fLastMessage == NULL;
+	fLastMessage = previousMessage;
 }
 
 
@@ -610,8 +627,8 @@ BLooper::Sem() const
 
 
 BHandler*
-BLooper::ResolveSpecifier(BMessage* msg, int32 index, BMessage* specifier,
-	int32 form, const char* property)
+BLooper::ResolveSpecifier(BMessage* message, int32 index, BMessage* specifier,
+	int32 what, const char* property)
 {
 /**
 	@note	When I was first dumping the results of GetSupportedSuites() from
@@ -629,7 +646,7 @@ BLooper::ResolveSpecifier(BMessage* msg, int32 index, BMessage* specifier,
 	uint32 data;
 	status_t err = B_OK;
 	const char* errMsg = "";
-	if (propertyInfo.FindMatch(msg, index, specifier, form, property, &data)
+	if (propertyInfo.FindMatch(message, index, specifier, what, property, &data)
 			>= 0) {
 		switch (data) {
 			case BLOOPER_PROCESS_INTERNALLY:
@@ -638,13 +655,13 @@ BLooper::ResolveSpecifier(BMessage* msg, int32 index, BMessage* specifier,
 			case BLOOPER_HANDLER_BY_INDEX:
 			{
 				int32 index = specifier->FindInt32("index");
-				if (form == B_REVERSE_INDEX_SPECIFIER) {
+				if (what == B_REVERSE_INDEX_SPECIFIER) {
 					index = CountHandlers() - index;
 				}
 				BHandler* target = HandlerAt(index);
 				if (target) {
 					// Specifier has been fully handled
-					msg->PopSpecifier();
+					message->PopSpecifier();
 					return target;
 				} else {
 					err = B_BAD_INDEX;
@@ -656,17 +673,16 @@ BLooper::ResolveSpecifier(BMessage* msg, int32 index, BMessage* specifier,
 			default:
 				err = B_BAD_SCRIPT_SYNTAX;
 				errMsg = "Didn't understand the specifier(s)";
-				break;
 		}
 	} else {
-		return BHandler::ResolveSpecifier(msg, index, specifier, form,
+		return BHandler::ResolveSpecifier(message, index, specifier, what,
 			property);
 	}
 
 	BMessage reply(B_MESSAGE_NOT_UNDERSTOOD);
 	reply.AddInt32("error", err);
 	reply.AddString("message", errMsg);
-	msg->SendReply(&reply);
+	message->SendReply(&reply);
 
 	return NULL;
 }
@@ -693,7 +709,7 @@ BLooper::GetSupportedSuites(BMessage* data)
 void
 BLooper::AddCommonFilter(BMessageFilter* filter)
 {
-	if (!filter)
+	if (filter == NULL)
 		return;
 
 	AssertLocked();
@@ -703,7 +719,7 @@ BLooper::AddCommonFilter(BMessageFilter* filter)
 		return;
 	}
 
-	if (!fCommonFilters)
+	if (fCommonFilters == NULL)
 		fCommonFilters = new BList(FILTER_LIST_BLOCK_SIZE);
 
 	filter->SetLooper(this);
@@ -716,7 +732,7 @@ BLooper::RemoveCommonFilter(BMessageFilter* filter)
 {
 	AssertLocked();
 
-	if (!fCommonFilters)
+	if (fCommonFilters == NULL)
 		return false;
 
 	bool result = fCommonFilters->RemoveItem(filter);
@@ -817,24 +833,12 @@ BLooper::BLooper(int32 priority, port_id port, const char* name)
 
 
 status_t
-BLooper::_PostMessage(BMessage *msg, BHandler *handler, BHandler *replyTo)
+BLooper::_PostMessage(BMessage* msg, BHandler* handler, BHandler* replyTo)
 {
-	AutoLocker<BLooperList> listLocker(gLooperList);
-	if (!listLocker.IsLocked())
-		return B_ERROR;
-
-	if (!gLooperList.IsLooperValid(this))
-		return B_BAD_VALUE;
-
-	// Does handler belong to this looper?
-	if (handler && handler->Looper() != this)
-		return B_MISMATCHED_VALUES;
-
 	status_t status;
 	BMessenger messenger(handler, this, &status);
-	listLocker.Unlock();
 	if (status == B_OK)
-		status = messenger.SendMessage(msg, replyTo, 0);
+		return messenger.SendMessage(msg, replyTo, 0);
 
 	return status;
 }
@@ -875,7 +879,7 @@ BLooper::_Lock(BLooper* looper, port_id port, bigtime_t timeout)
 				return B_BAD_VALUE;
 			}
 		} else if (!gLooperList.IsLooperValid(looper)) {
-			//	Check looper validity
+			// Check looper validity
 			PRINT(("BLooper::_Lock() done 4\n"));
 			return B_BAD_VALUE;
 		}
@@ -904,7 +908,7 @@ BLooper::_Lock(BLooper* looper, port_id port, bigtime_t timeout)
 
 
 status_t
-BLooper::_LockComplete(BLooper *looper, int32 oldCount, thread_id thread,
+BLooper::_LockComplete(BLooper* looper, int32 oldCount, thread_id thread,
 	sem_id sem, bigtime_t timeout)
 {
 	status_t err = B_OK;
@@ -930,7 +934,7 @@ BLooper::_LockComplete(BLooper *looper, int32 oldCount, thread_id thread,
 
 
 void
-BLooper::_InitData(const char *name, int32 priority, int32 portCapacity)
+BLooper::_InitData(const char* name, int32 priority, int32 portCapacity)
 {
 	fOwner = B_ERROR;
 	fCachedStack = 0;
@@ -997,7 +1001,7 @@ BLooper::_AddMessagePriv(BMessage* message)
 status_t
 BLooper::_task0_(void* arg)
 {
-	BLooper* looper = (BLooper *)arg;
+	BLooper* looper = (BLooper*)arg;
 
 	PRINT(("LOOPER: _task0_()\n"));
 
@@ -1013,11 +1017,11 @@ BLooper::_task0_(void* arg)
 }
 
 
-void *
+void*
 BLooper::ReadRawFromPort(int32* msgCode, bigtime_t timeout)
 {
 	PRINT(("BLooper::ReadRawFromPort()\n"));
-	uint8 *buffer = NULL;
+	uint8* buffer = NULL;
 	ssize_t bufferSize;
 
 	do {
@@ -1030,7 +1034,7 @@ BLooper::ReadRawFromPort(int32* msgCode, bigtime_t timeout)
 	}
 
 	if (bufferSize > 0)
-		buffer = (uint8 *)malloc(bufferSize);
+		buffer = (uint8*)malloc(bufferSize);
 
 	// we don't want to wait again here, since that can only mean
 	// that someone else has read our message and our bufferSize
@@ -1044,7 +1048,9 @@ BLooper::ReadRawFromPort(int32* msgCode, bigtime_t timeout)
 		return NULL;
 	}
 
-	PRINT(("BLooper::ReadRawFromPort() read: %.4s, %p (%d bytes)\n", (char *)msgCode, buffer, bufferSize));
+	PRINT(("BLooper::ReadRawFromPort() read: %.4s, %p (%d bytes)\n",
+		(char*)msgCode, buffer, bufferSize));
+
 	return buffer;
 }
 
@@ -1054,10 +1060,10 @@ BLooper::ReadMessageFromPort(bigtime_t timeout)
 {
 	PRINT(("BLooper::ReadMessageFromPort()\n"));
 	int32 msgCode;
-	BMessage *message = NULL;
+	BMessage* message = NULL;
 
-	void *buffer = ReadRawFromPort(&msgCode, timeout);
-	if (!buffer)
+	void* buffer = ReadRawFromPort(&msgCode, timeout);
+	if (buffer == NULL)
 		return NULL;
 
 	message = ConvertToMessage(buffer, msgCode);
@@ -1072,7 +1078,7 @@ BMessage*
 BLooper::ConvertToMessage(void* buffer, int32 code)
 {
 	PRINT(("BLooper::ConvertToMessage()\n"));
-	if (!buffer)
+	if (buffer == NULL)
 		return NULL;
 
 	BMessage* message = new BMessage();
@@ -1105,7 +1111,7 @@ BLooper::task_looper()
 		// TODO: timeout determination algo
 		//	Read from message port (how do we determine what the timeout is?)
 		PRINT(("LOOPER: MessageFromPort()...\n"));
-		BMessage *msg = MessageFromPort();
+		BMessage* msg = MessageFromPort();
 		PRINT(("LOOPER: ...done\n"));
 
 		//	Did we get a message?
@@ -1127,12 +1133,15 @@ BLooper::task_looper()
 		bool dispatchNextMessage = true;
 		while (!fTerminating && dispatchNextMessage) {
 			PRINT(("LOOPER: inner loop\n"));
-			// Get next message from queue (assign to fLastMessage)
-			fLastMessage = fDirectTarget->Queue()->NextMessage();
+			// Get next message from queue (assign to fLastMessage after
+			// locking)
+			BMessage* message = fDirectTarget->Queue()->NextMessage();
 
 			Lock();
 
-			if (!fLastMessage) {
+			fLastMessage = message;
+
+			if (fLastMessage == NULL) {
 				// No more messages: Unlock the looper and terminate the
 				// dispatch loop.
 				dispatchNextMessage = false;
@@ -1142,7 +1151,7 @@ BLooper::task_looper()
 				DBG(fLastMessage->PrintToStream());
 
 				// Get the target handler
-				BHandler *handler = NULL;
+				BHandler* handler = NULL;
 				BMessage::Private messagePrivate(fLastMessage);
 				bool usePreferred = messagePrivate.UsePreferredTarget();
 
@@ -1153,7 +1162,7 @@ BLooper::task_looper()
 						handler = this;
 				} else {
 					gDefaultTokens.GetToken(messagePrivate.GetTarget(),
-						B_HANDLER_TOKEN, (void **)&handler);
+						B_HANDLER_TOKEN, (void**)&handler);
 
 					// if this handler doesn't belong to us, we drop the message
 					if (handler != NULL && handler->Looper() != this)
@@ -1185,14 +1194,15 @@ BLooper::task_looper()
 				return;
 			}
 
+			message = fLastMessage;
+			fLastMessage = NULL;
+
 			// Unlock the looper
 			Unlock();
 
 			// Delete the current message (fLastMessage)
-			if (fLastMessage) {
-				delete fLastMessage;
-				fLastMessage = NULL;
-			}
+			if (message != NULL)
+				delete message;
 
 			// Are any messages on the port?
 			if (port_count(fMsgPort) > 0) {
@@ -1287,24 +1297,25 @@ BHandler*
 BLooper::_ApplyFilters(BList* list, BMessage* message, BHandler* target)
 {
 	// This is where the action is!
-	// Check the parameters
-	if (!list || !message)
+
+	// check the parameters
+	if (list == NULL || message == NULL)
 		return target;
 
-	// For each filter in the provided list
+	// for each filter in the provided list
 	BMessageFilter* filter = NULL;
 	for (int32 i = 0; i < list->CountItems(); ++i) {
 		filter = (BMessageFilter*)list->ItemAt(i);
 
-		// Check command conditions
+		// check command conditions
 		if (filter->FiltersAnyCommand() || filter->Command() == message->what) {
-			// Check delivery conditions
+			// check delivery conditions
 			message_delivery delivery = filter->MessageDelivery();
 			bool dropped = message->WasDropped();
 			if (delivery == B_ANY_DELIVERY
 				|| (delivery == B_DROPPED_DELIVERY && dropped)
 				|| (delivery == B_PROGRAMMED_DELIVERY && !dropped)) {
-				// Check source conditions
+				// check source conditions
 				message_source source = filter->MessageSource();
 				bool remote = message->IsSourceRemote();
 				if (source == B_ANY_SOURCE
@@ -1312,15 +1323,15 @@ BLooper::_ApplyFilters(BList* list, BMessage* message, BHandler* target)
 					|| (source == B_LOCAL_SOURCE && !remote)) {
 					// Are we using an "external" function?
 					filter_result result;
-					filter_hook func = filter->FilterFunction();
-					if (func)
-						result = func(message, &target, filter);
+					filter_hook filterFunction = filter->FilterFunction();
+					if (filterFunction != NULL)
+						result = filterFunction(message, &target, filter);
 					else
 						result = filter->Filter(message, &target);
 
 					// Is further processing allowed?
 					if (result == B_SKIP_MESSAGE) {
-						// No; time to bail out
+						// no, time to bail out
 						return NULL;
 					}
 				}
@@ -1335,13 +1346,14 @@ BLooper::_ApplyFilters(BList* list, BMessage* message, BHandler* target)
 void
 BLooper::check_lock()
 {
-	// This is a cheap variant of AssertLocked()
-	// It is used in situations where it's clear that the looper is valid,
-	// ie. from handlers
+	// this is a cheap variant of AssertLocked()
+	// it is used in situations where it's clear that the looper is valid,
+	// i.e. from handlers
 	uint32 stack;
 	if (((addr_t)&stack & ~(B_PAGE_SIZE - 1)) == fCachedStack
-		|| fOwner == find_thread(NULL))
+		|| fOwner == find_thread(NULL)) {
 		return;
+	}
 
 	debugger("Looper must be locked.");
 }
@@ -1350,7 +1362,7 @@ BLooper::check_lock()
 BHandler*
 BLooper::resolve_specifier(BHandler* target, BMessage* message)
 {
-	// Check params
+	// check params
 	if (!target || !message)
 		return NULL;
 
@@ -1360,27 +1372,28 @@ BLooper::resolve_specifier(BHandler* target, BMessage* message)
 	const char* property;
 	status_t err = B_OK;
 	BHandler* newTarget = target;
-	// Loop to deal with nested specifiers
+	// loop to deal with nested specifiers
 	// (e.g., the 3rd button on the 4th view)
 	do {
-		err = message->GetCurrentSpecifier(&index, &specifier, &form, &property);
+		err = message->GetCurrentSpecifier(&index, &specifier, &form,
+			&property);
 		if (err != B_OK) {
 			BMessage reply(B_REPLY);
 			reply.AddInt32("error", err);
 			message->SendReply(&reply);
 			return NULL;
 		}
-		// Current target gets what was the new target
+		// current target gets what was the new target
 		target = newTarget;
 		newTarget = target->ResolveSpecifier(message, index, &specifier, form,
 			property);
-		// Check that new target is owned by looper; use IndexOf() to avoid
+		// check that new target is owned by looper; use IndexOf() to avoid
 		// dereferencing newTarget (possible race condition with object
 		// destruction by another looper)
-		if (!newTarget || IndexOf(newTarget) < 0)
+		if (newTarget == NULL || IndexOf(newTarget) < 0)
 			return NULL;
 
-		// Get current specifier index (may change in ResolveSpecifier())
+		// get current specifier index (may change in ResolveSpecifier())
 		err = message->GetCurrentSpecifier(&index);
 	} while (newTarget && newTarget != target && err == B_OK && index >= 0);
 
@@ -1418,4 +1431,3 @@ _get_looper_port_(const BLooper* looper)
 {
 	return looper->fMsgPort;
 }
-

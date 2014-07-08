@@ -1,7 +1,14 @@
 /*
- * Copyright 2011, Jérôme Duval, korli@users.berlios.de.
  * Copyright 2008-2010, Axel Dörfler, axeld@pinc-software.de.
- * This file may be used under the terms of the MIT License.
+ * Copyright 2011, Jérôme Duval, korli@users.berlios.de.
+ * Copyright 2014 Haiku, Inc. All rights reserved.
+ *
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		Jérôme Duval, korli@users.berlios.de
+ *		John Scipione, jscipione@gmail.com
  */
 #ifndef VOLUME_H
 #define VOLUME_H
@@ -9,6 +16,8 @@
 
 #include <lock.h>
 #include <string.h>
+
+#include <StorageDefs.h>
 
 #include "exfat.h"
 #include "SplayTree.h"
@@ -134,7 +143,8 @@ public:
 			Inode *				FindInode(ino_t id);
 			Inode *				FindInode(cluster_t cluster);
 			cluster_t			NextCluster(cluster_t cluster);
-			ino_t				GetIno(cluster_t cluster, uint32 offset, ino_t parent);
+			ino_t				GetIno(cluster_t cluster, uint32 offset,
+									ino_t parent);
 			struct node_key*	GetNode(ino_t ino, ino_t &parent);
 private:
 			ino_t				_NextID() { return fNextId++; }
@@ -143,7 +153,7 @@ private:
 			fs_volume*			fFSVolume;
 			int					fDevice;
 			exfat_super_block	fSuperBlock;
-			char				fName[32];
+			char				fName[B_FILE_NAME_LENGTH];
 
 			uint16				fFlags;
 			uint32				fBlockSize;

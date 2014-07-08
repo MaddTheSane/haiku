@@ -81,8 +81,12 @@ static const struct {
 } kCodecQuirks[] = {
 	{ HDA_ALL, HDA_ALL, HDA_ALL, HDA_ALL, HDA_QUIRK_IVREF, 0 },
 	{ HDA_ALL, HDA_ALL, HDA_ALL, HDA_ALL, HDA_QUIRK_IVREF, 0 },
+	{ 0x10de, 0x0d94, CIRRUSLOGIC_VENDORID, HDA_ALL,
+		HDA_QUIRK_GPIO1 | HDA_QUIRK_GPIO3, 0 },		// MacBookAir 3,1(2)
 	{ 0x10de, 0xcb79, CIRRUSLOGIC_VENDORID, 0x4206,
-		HDA_QUIRK_GPIO1 | HDA_QUIRK_GPIO3, 0 },		// MacBook Pro 5.5
+		HDA_QUIRK_GPIO1 | HDA_QUIRK_GPIO3, 0 },		// MacBook Pro 5,5
+	{ 0x10de, 0xcb89, CIRRUSLOGIC_VENDORID, 0x4206,
+		HDA_QUIRK_GPIO1 | HDA_QUIRK_GPIO3, 0 },		// MacBookPro 7,1
 	{ 0x8384, 0x7680, SIGMATEL_VENDORID, 0x7680,
 		HDA_QUIRK_GPIO0 | HDA_QUIRK_GPIO1, 0},		// Apple Intel Mac
 	{ 0x106b, 0x00a1, REALTEK_VENDORID, 0x0885,
@@ -1154,7 +1158,7 @@ TRACE("build tree!\n");
 
 
 static void
-hda_codec_switch_init(hda_audio_group* audioGroup)
+hda_audio_group_switch_init(hda_audio_group* audioGroup)
 {
 	for (uint32 i = 0; i < audioGroup->widget_count; i++) {
 		hda_widget& widget = audioGroup->widgets[i];
@@ -1174,6 +1178,55 @@ hda_codec_switch_init(hda_audio_group* audioGroup)
 }
 
 
+static void
+hda_audio_group_check_sense(hda_audio_group* audioGroup, bool disable)
+{
+	for (uint32 i = 0; i < audioGroup->widget_count; i++) {
+		hda_widget& widget = audioGroup->widgets[i];
+
+		if (widget.type != WT_PIN_COMPLEX
+			|| !PIN_CAP_IS_OUTPUT(widget.d.pin.capabilities)
+			|| CONF_DEFAULT_DEVICE(widget.d.pin.config)
+				!= PIN_DEV_HEAD_PHONE_OUT)
+			continue;
+
+		corb_t verb = MAKE_VERB(audioGroup->codec->addr, widget.node_id,
+			VID_GET_PINSENSE, 0);
+		uint32 response;
+		hda_send_verbs(audioGroup->codec, &verb, &response, 1);
+		disable = response & PIN_SENSE_PRESENCE_DETECT;
+		TRACE("hda: sensed pin widget %ld, %d\n", widget.node_id, disable);
+
+		uint32 ctrl = hda_widget_prepare_pin_ctrl(audioGroup, &widget,
+				true);
+		verb = MAKE_VERB(audioGroup->codec->addr, widget.node_id,
+			VID_SET_PIN_WIDGET_CONTROL, disable ? ctrl : 0);
+		hda_send_verbs(audioGroup->codec, &verb, NULL, 1);
+		break;
+	}
+
+	for (uint32 i = 0; i < audioGroup->widget_count; i++) {
+		hda_widget& widget = audioGroup->widgets[i];
+
+		if (widget.type != WT_PIN_COMPLEX
+			|| !PIN_CAP_IS_OUTPUT(widget.d.pin.capabilities))
+			continue;
+
+		int device = CONF_DEFAULT_DEVICE(widget.d.pin.config);
+		if (device != PIN_DEV_AUX
+			&& device != PIN_DEV_SPEAKER
+			&& device != PIN_DEV_LINE_OUT)
+			continue;
+
+		uint32 ctrl = hda_widget_prepare_pin_ctrl(audioGroup, &widget,
+				true);
+		corb_t verb = MAKE_VERB(audioGroup->codec->addr, widget.node_id,
+			VID_SET_PIN_WIDGET_CONTROL, disable ? 0 : ctrl);
+		hda_send_verbs(audioGroup->codec, &verb, NULL, 1);
+	}
+}
+
+
 static status_t
 hda_codec_switch_handler(hda_codec* codec)
 {
@@ -1183,52 +1236,8 @@ hda_codec_switch_handler(hda_codec* codec)
 
 		bool disable = response & 1;
 		hda_audio_group* audioGroup = codec->audio_groups[0];
-
-		for (uint32 i = 0; i < audioGroup->widget_count; i++) {
-			hda_widget& widget = audioGroup->widgets[i];
-
-			if (widget.type != WT_PIN_COMPLEX
-				|| !PIN_CAP_IS_OUTPUT(widget.d.pin.capabilities)
-				|| CONF_DEFAULT_DEVICE(widget.d.pin.config)
-					!= PIN_DEV_HEAD_PHONE_OUT)
-				continue;
-
-			corb_t verb = MAKE_VERB(audioGroup->codec->addr, widget.node_id,
-				VID_GET_PINSENSE, 0);
-			uint32 response;
-			hda_send_verbs(audioGroup->codec, &verb, &response, 1);
-			disable = response & PIN_SENSE_PRESENCE_DETECT;
-			TRACE("hda: sensed pin widget %ld, %d\n", widget.node_id, disable);
-
-			uint32 ctrl = hda_widget_prepare_pin_ctrl(audioGroup, &widget,
-					true);
-			verb = MAKE_VERB(audioGroup->codec->addr, widget.node_id,
-				VID_SET_PIN_WIDGET_CONTROL, disable ? ctrl : 0);
-			hda_send_verbs(audioGroup->codec, &verb, NULL, 1);
-			break;
-		}
-
-		for (uint32 i = 0; i < audioGroup->widget_count; i++) {
-			hda_widget& widget = audioGroup->widgets[i];
-
-			if (widget.type != WT_PIN_COMPLEX
-				|| !PIN_CAP_IS_OUTPUT(widget.d.pin.capabilities))
-				continue;
-
-			int device = CONF_DEFAULT_DEVICE(widget.d.pin.config);
-			if (device != PIN_DEV_AUX
-				&& device != PIN_DEV_SPEAKER
-				&& device != PIN_DEV_LINE_OUT)
-				continue;
-
-			uint32 ctrl = hda_widget_prepare_pin_ctrl(audioGroup, &widget,
-					true);
-			corb_t verb = MAKE_VERB(audioGroup->codec->addr, widget.node_id,
-				VID_SET_PIN_WIDGET_CONTROL, disable ? 0 : ctrl);
-			hda_send_verbs(audioGroup->codec, &verb, NULL, 1);
-		}
+		hda_audio_group_check_sense(audioGroup, disable);
 	}
-
 	return B_OK;
 }
 
@@ -1279,7 +1288,7 @@ hda_codec_new_audio_group(hda_codec* codec, uint32 audioGroupNodeID)
 
 	if (hda_audio_group_build_tree(audioGroup) != B_OK)
 		goto err;
-	hda_codec_switch_init(audioGroup);
+	hda_audio_group_switch_init(audioGroup);
 
 	audioGroup->playback_stream = hda_stream_new(audioGroup, STREAM_PLAYBACK);
 	audioGroup->record_stream = hda_stream_new(audioGroup, STREAM_RECORD);
@@ -1289,6 +1298,7 @@ hda_codec_new_audio_group(hda_codec* codec, uint32 audioGroupNodeID)
 	if (audioGroup->playback_stream != NULL
 		|| audioGroup->record_stream != NULL) {
 		codec->audio_groups[codec->num_audio_groups++] = audioGroup;
+		hda_audio_group_check_sense(audioGroup, false);
 		return B_OK;
 	}
 
@@ -1495,8 +1505,9 @@ hda_codec_new(hda_controller* controller, uint32 codecAddress)
 	hda_codec_get_quirks(codec);
 
 	TRACE("Codec %ld Vendor: %04lx Product: %04lx, Revision: "
-		"%lu.%lu.%lu.%lu\n", codecAddress, response.vendor, response.device,
-		response.major, response.minor, response.revision, response.stepping);
+		"%lu.%lu.%lu.%lu Quirks: %04lx\n", codecAddress, response.vendor,
+		response.device, response.major, response.minor, response.revision,
+		response.stepping, codec->quirks);
 
 	for (uint32 nodeID = response.start;
 			nodeID < response.start + response.count; nodeID++) {

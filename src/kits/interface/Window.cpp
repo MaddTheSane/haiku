@@ -32,6 +32,7 @@
 #include <Roster.h>
 #include <Screen.h>
 #include <String.h>
+#include <UnicodeChar.h>
 
 #include <AppMisc.h>
 #include <AppServerLink.h>
@@ -293,8 +294,7 @@ BWindow::Shortcut::PrepareModifiers(uint32 modifiers)
 uint32
 BWindow::Shortcut::PrepareKey(uint32 key)
 {
-	return tolower(key);
-		// TODO: support unicode and/or more intelligent key mapping
+	return BUnicodeChar::ToLower(key);
 }
 
 
@@ -1315,17 +1315,7 @@ FrameMoved(origin);
 				message->FindPoint("be:view_where", &where);
 				message->FindInt32("buttons", (int32*)&buttons);
 
-				delete fIdleMouseRunner;
-
-				if (transit != B_EXITED_VIEW && transit != B_OUTSIDE_VIEW) {
-					// Start new idle runner
-					BMessage idle(B_MOUSE_IDLE);
-					idle.AddPoint("be:view_where", where);
-					fIdleMouseRunner = new BMessageRunner(
-						BMessenger(NULL, this), &idle,
-						BToolTipManager::Manager()->ShowDelay(), 1);
-				} else {
-					fIdleMouseRunner = NULL;
+				if (transit == B_EXITED_VIEW || transit == B_OUTSIDE_VIEW) {
 					if (dynamic_cast<BPrivate::ToolTipWindow*>(this) == NULL)
 						BToolTipManager::Manager()->HideTip();
 				}
@@ -2018,7 +2008,7 @@ BWindow::Activate(bool active)
 
 
 void
-BWindow::WindowActivated(bool state)
+BWindow::WindowActivated(bool focus)
 {
 	// hook function
 	// does nothing
@@ -2794,7 +2784,6 @@ BWindow::_InitData(BRect frame, const char* title, window_look look,
 	fTopView = NULL;
 	fFocus = NULL;
 	fLastMouseMovedView	= NULL;
-	fIdleMouseRunner = NULL;
 	fKeyMenuBar = NULL;
 	fDefaultButton = NULL;
 
@@ -3048,12 +3037,17 @@ BWindow::task_looper()
 
 		bool dispatchNextMessage = true;
 		while (!fTerminating && dispatchNextMessage) {
-			// Get next message from queue (assign to fLastMessage)
-			fLastMessage = fDirectTarget->Queue()->NextMessage();
+			// Get next message from queue (assign to fLastMessage after
+			// locking)
+			BMessage* message = fDirectTarget->Queue()->NextMessage();
 
 			// Lock the looper
-			if (!Lock())
+			if (!Lock()) {
+				delete message;
 				break;
+			}
+
+			fLastMessage = message;
 
 			if (fLastMessage == NULL) {
 				// No more messages: Unlock the looper and terminate the
@@ -3532,10 +3526,28 @@ BWindow::_SanitizeMessage(BMessage* message, BHandler* target, bool usePreferred
 			break;
 		}
 
+		case B_MOUSE_IDLE:
+		{
+			// App Server sends screen coordinates, convert the point to
+			// local view coordinates, then add the point in be:view_where
+			BPoint where;
+			if (message->FindPoint("screen_where", &where) != B_OK)
+				break;
+
+			BView* view = dynamic_cast<BView*>(target);
+			if (view != NULL) {
+				// add local view coordinates
+				message->AddPoint("be:view_where",
+					view->ConvertFromScreen(where));
+			}
+			break;
+		}
+
 		case _MESSAGE_DROPPED_:
 		{
 			uint32 originalWhat;
-			if (message->FindInt32("_original_what", (int32*)&originalWhat) == B_OK) {
+			if (message->FindInt32("_original_what",
+					(int32*)&originalWhat) == B_OK) {
 				message->what = originalWhat;
 				message->RemoveName("_original_what");
 			}

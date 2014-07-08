@@ -30,11 +30,14 @@
 #define ERROR(x...) _sPrintf("radeon_hd: " x)
 
 
-static int
-dp_aux_speak(uint32 hwPin, uint8* send, int sendBytes,
+static status_t
+dp_aux_speak(uint32 connectorIndex, uint8* send, int sendBytes,
 	uint8* recv, int recvBytes, uint8 delay, uint8* ack)
 {
-	if (hwPin == 0) {
+	radeon_shared_info &info = *gInfo->shared_info;
+
+	dp_info* dpInfo = &gConnector[connectorIndex]->dpInfo;
+	if (dpInfo->auxPin == 0) {
 		ERROR("%s: cannot speak on invalid GPIO pin!\n", __func__);
 		return B_IO_ERROR;
 	}
@@ -49,16 +52,54 @@ dp_aux_speak(uint32 hwPin, uint8* send, int sendBytes,
 	union auxChannelTransaction args;
 	memset(&args, 0, sizeof(args));
 
-	args.v1.lpAuxRequest = 0;
-	args.v1.lpDataOut = 16;
+	args.v1.lpAuxRequest = B_HOST_TO_LENDIAN_INT16(0 + 4);
+	args.v1.lpDataOut = B_HOST_TO_LENDIAN_INT16(16 + 4);
 	args.v1.ucDataOutLen = 0;
-	args.v1.ucChannelID = hwPin;
+	args.v1.ucChannelID = dpInfo->auxPin;
 	args.v1.ucDelay = delay / 10;
 
-	//if (ASIC_IS_DCE4(rdev))
-	//	args.v2.ucHPD_ID = chan->rec.hpd;
+	uint16 hpdPinIndex = gConnector[connectorIndex]->hpdPinIndex;
+	if (info.dceMajor >= 4
+		&& gGPIOInfo[hpdPinIndex]->valid) {
 
-	unsigned char* base = (unsigned char*)gAtomContext->scratch;
+		uint32 targetReg = EVERGREEN_DC_GPIO_HPD_A;
+		if (info.dceMajor >= 6)
+			targetReg = SI_DC_GPIO_HPD_A;
+
+		// You're drunk AMD, go home. (this makes no sense)
+		if (gGPIOInfo[hpdPinIndex]->hwReg == targetReg) {
+			switch(gGPIOInfo[hpdPinIndex]->hwMask) {
+				case (1 << 0):
+					args.v2.ucHPD_ID = 0;
+					break;
+				case (1 << 8):
+					args.v2.ucHPD_ID = 1;
+					break;
+				case (1 << 16):
+					args.v2.ucHPD_ID = 2;
+					break;
+				case (1 << 24):
+					args.v2.ucHPD_ID = 3;
+					break;
+				case (1 << 26):
+					args.v2.ucHPD_ID = 4;
+					break;
+				case (1 << 28):
+					args.v2.ucHPD_ID = 5;
+					break;
+				default:
+					args.v2.ucHPD_ID = 0xff;
+					break;
+			}
+		} else {
+			args.v2.ucHPD_ID = 0xff;
+		}
+	}
+
+	unsigned char* base = (unsigned char*)(gAtomContext->scratch + 1);
+
+	// TODO: This isn't correct for big endian systems!
+	// send needs to be swapped on big endian.
 	memcpy(base, send, sendBytes);
 
 	atom_execute_table(gAtomContext, index, (uint32*)&args);
@@ -81,22 +122,26 @@ dp_aux_speak(uint32 hwPin, uint8* send, int sendBytes,
 	if (recvLength > recvBytes)
 		recvLength = recvBytes;
 
+	// TODO: This isn't correct for big endian systems!
+	// recv needs to be swapped on big endian.
 	if (recv && recvBytes)
 		memcpy(recv, base + 16, recvLength);
 
-	return recvLength;
+	return B_OK;
 }
 
 
-int
-dp_aux_write(uint32 hwPin, uint16 address,
+status_t
+dp_aux_write(uint32 connectorIndex, uint16 address,
 	uint8* send, uint8 sendBytes, uint8 delay)
 {
 	uint8 auxMessage[20];
 	int auxMessageBytes = sendBytes + 4;
 
-	if (sendBytes > 16)
+	if (sendBytes > 16) {
+		ERROR("%s: Too many bytes! (%" B_PRIu8 ")\n", __func__, sendBytes);
 		return -1;
+	}
 
 	auxMessage[0] = address;
 	auxMessage[1] = address >> 8;
@@ -105,30 +150,32 @@ dp_aux_write(uint32 hwPin, uint16 address,
 	memcpy(&auxMessage[4], send, sendBytes);
 
 	uint8 retry;
-	for (retry = 0; retry < 4; retry++) {
+	for (retry = 0; retry < 7; retry++) {
 		uint8 ack;
-		int result = dp_aux_speak(hwPin, auxMessage, auxMessageBytes,
-			NULL, 0, delay, &ack);
+		status_t result = dp_aux_speak(connectorIndex, auxMessage,
+			auxMessageBytes, NULL, 0, delay, &ack);
 
 		if (result == B_BUSY)
 			continue;
-		else if (result < B_OK)
+		else if (result != B_OK)
 			return result;
 
+		ack >>= 4;
 		if ((ack & AUX_NATIVE_REPLY_MASK) == AUX_NATIVE_REPLY_ACK)
-			return sendBytes;
+			return B_OK;
 		else if ((ack & AUX_NATIVE_REPLY_MASK) == AUX_NATIVE_REPLY_DEFER)
 			snooze(400);
 		else
 			return B_IO_ERROR;
 	}
 
+	ERROR("%s: IO Error. %" B_PRIu8 " attempts\n", __func__, retry);
 	return B_IO_ERROR;
 }
 
 
-int
-dp_aux_read(uint32 hwPin, uint16 address,
+status_t
+dp_aux_read(uint32 connectorIndex, uint16 address,
 	uint8* recv, int recvBytes, uint8 delay)
 {
 	uint8 auxMessage[4];
@@ -140,47 +187,54 @@ dp_aux_read(uint32 hwPin, uint16 address,
 	auxMessage[3] = (auxMessageBytes << 4) | (recvBytes - 1);
 
 	uint8 retry;
-	for (retry = 0; retry < 4; retry++) {
+	for (retry = 0; retry < 7; retry++) {
 		uint8 ack;
-		int result = dp_aux_speak(hwPin, auxMessage, auxMessageBytes,
-			recv, recvBytes, delay, &ack);
+		status_t result = dp_aux_speak(connectorIndex, auxMessage,
+			auxMessageBytes, recv, recvBytes, delay, &ack);
 
 		if (result == B_BUSY)
 			continue;
-		else if (result < B_OK)
+		else if (result != B_OK)
 			return result;
 
+		ack >>= 4;
 		if ((ack & AUX_NATIVE_REPLY_MASK) == AUX_NATIVE_REPLY_ACK)
-			return result;
+			return B_OK;
 		else if ((ack & AUX_NATIVE_REPLY_MASK) == AUX_NATIVE_REPLY_DEFER)
 			snooze(400);
 		else
 			return B_IO_ERROR;
 	}
 
+	ERROR("%s: IO Error. %" B_PRIu8 " attempts\n", __func__, retry);
 	return B_IO_ERROR;
 }
 
 
 void
-dpcd_reg_write(uint32 hwPin, uint16 address, uint8 value)
+dpcd_reg_write(uint32 connectorIndex, uint16 address, uint8 value)
 {
-	dp_aux_write(hwPin, address, &value, 1, 0);
+	status_t result = dp_aux_write(connectorIndex, address, &value, 1, 0);
+	if (result != B_OK)
+		ERROR("%s: error on DisplayPort aux write (0x%lX)\n", __func__, result);
 }
 
 
 uint8
-dpcd_reg_read(uint32 hwPin, uint16 address)
+dpcd_reg_read(uint32 connectorIndex, uint16 address)
 {
 	uint8 value = 0;
-	dp_aux_read(hwPin, address, &value, 1, 0);
+	status_t result = dp_aux_read(connectorIndex, address, &value, 1, 0);
+	if (result != B_OK)
+		ERROR("%s: error on DisplayPort aux read (0x%lX)\n", __func__, result);
 
 	return value;
 }
 
 
 status_t
-dp_aux_get_i2c_byte(uint32 hwPin, uint16 address, uint8* data, bool start, bool stop)
+dp_aux_get_i2c_byte(uint32 connectorIndex, uint16 address, uint8* data,
+	bool start, bool stop)
 {
 	uint8 auxMessage[5];
 	int auxMessageBytes = 4; // 4 for read
@@ -207,12 +261,12 @@ dp_aux_get_i2c_byte(uint32 hwPin, uint16 address, uint8* data, bool start, bool 
 		uint8 reply[2];
 		int replyBytes = 1;
 
-		int result = dp_aux_speak(hwPin, auxMessage, auxMessageBytes,
-			reply, replyBytes, 0, &ack);
+		status_t result = dp_aux_speak(connectorIndex, auxMessage,
+			auxMessageBytes, reply, replyBytes, 0, &ack);
 		if (result == B_BUSY)
 			continue;
-		else if (result < 0) {
-			ERROR("%s: aux_ch failed: %d\n", __func__, result);
+		else if (result != B_OK) {
+			ERROR("%s: aux_ch speak failed 0x%lX\n", __func__, result);
 			return B_ERROR;
 		}
 
@@ -257,7 +311,8 @@ dp_aux_get_i2c_byte(uint32 hwPin, uint16 address, uint8* data, bool start, bool 
 
 
 status_t
-dp_aux_set_i2c_byte(uint32 hwPin, uint16 address, uint8* data, bool start, bool stop)
+dp_aux_set_i2c_byte(uint32 connectorIndex, uint16 address, uint8* data,
+	bool start, bool stop)
 {
 	uint8 auxMessage[5];
 	int auxMessageBytes = 5; // 5 for write
@@ -285,12 +340,12 @@ dp_aux_set_i2c_byte(uint32 hwPin, uint16 address, uint8* data, bool start, bool 
 		uint8 reply[2];
 		int replyBytes = 1;
 
-		int result = dp_aux_speak(hwPin, auxMessage, auxMessageBytes,
-			reply, replyBytes, 0, &ack);
+		status_t result = dp_aux_speak(connectorIndex, auxMessage,
+			auxMessageBytes, reply, replyBytes, 0, &ack);
 		if (result == B_BUSY)
 			continue;
-		else if (result < 0) {
-			ERROR("%s: aux_ch failed: %d\n", __func__, result);
+		else if (result != B_OK) {
+			ERROR("%s: aux_ch speak failed 0x%lX\n", __func__, result);
 			return B_ERROR;
 		}
 
@@ -403,7 +458,7 @@ dp_get_link_rate(uint32 connectorIndex, display_mode* mode)
 
 	// TODO: DisplayPort 1.2
 	#if 0
-	if (is_dp12_capable(connectorIndex)) {
+	if (dp_is_dp12_capable(connectorIndex)) {
 		maxPixelClock = dp_get_pixel_clock_max(540000, laneCount, bitsPerPixel);
 		if (mode->timing.pixel_clock <= maxPixelClock)
 			return 540000;
@@ -422,42 +477,50 @@ dp_setup_connectors()
 	for (uint32 index = 0; index < ATOM_MAX_SUPPORTED_DEVICE; index++) {
 		dp_info* dpInfo = &gConnector[index]->dpInfo;
 		dpInfo->valid = false;
-		if (gConnector[index]->valid == false) {
-			dpInfo->config[0] = 0;
-			continue;
-		}
-
-		if (connector_is_dp(index) == false) {
+		if (gConnector[index]->valid == false
+			|| connector_is_dp(index) == false) {
 			dpInfo->config[0] = 0;
 			continue;
 		}
 
 		TRACE("%s: found dp connector on index %" B_PRIu32 "\n",
 			__func__, index);
-		uint32 gpioID = gConnector[index]->gpioID;
+		uint32 i2cPinIndex = gConnector[index]->i2cPinIndex;
 
-		uint32 auxPin = gGPIOInfo[gpioID]->hwPin;
+		uint32 auxPin = gGPIOInfo[i2cPinIndex]->hwPin;
 		dpInfo->auxPin = auxPin;
 
-		uint8 auxMessage[25];
-		int result;
+		uint8 auxMessage[DP_DPCD_SIZE];
 
-		result = dp_aux_read(auxPin, DP_DPCD_REV, auxMessage, 8, 0);
-		if (result > 0) {
+		status_t result = dp_aux_read(index, DP_DPCD_REV, auxMessage,
+			DP_DPCD_SIZE, 0);
+
+		if (result == B_OK) {
 			dpInfo->valid = true;
-			memcpy(dpInfo->config, auxMessage, 8);
+			memcpy(dpInfo->config, auxMessage, DP_DPCD_SIZE);
+			TRACE("%s: connector(%" B_PRIu32 "): successful read of DPCD\n",
+				__func__, index);
+		} else {
+			TRACE("%s: connector(%" B_PRIu32 "): failed read of DPCD\n",
+				__func__, index);
 		}
+		TRACE("%s: DPCD is ", __func__);
+		uint32 position; 
+		for (position = 0; position < DP_DPCD_SIZE; position++)
+			_sPrintf("%02x ", auxMessage[position]);
+		_sPrintf("\n");
 	}
 }
 
 
-static bool
-dp_get_link_status(dp_info* dp)
+bool
+dp_get_link_status(uint32 connectorIndex)
 {
-	int result = dp_aux_read(dp->auxPin, DP_LANE_STATUS_0_1,
+	dp_info* dp = &gConnector[connectorIndex]->dpInfo;
+	status_t result = dp_aux_read(connectorIndex, DP_LANE_STATUS_0_1,
 		dp->linkStatus, DP_LINK_STATUS_SIZE, 100);
 
-	if (result <= 0) {
+	if (result != B_OK) {
 		ERROR("%s: DisplayPort link status failed\n", __func__);
 		return false;
 	}
@@ -522,7 +585,7 @@ dp_update_vs_emph(uint32 connectorIndex)
 		dp->trainingSet[0], ATOM_TRANSMITTER_ACTION_SETUP_VSEMPH);
 
 	// Set vs and emph on the sink
-	dp_aux_write(dp->auxPin, DP_TRAIN_LANE0,
+	dp_aux_write(connectorIndex, DP_TRAIN_LANE0,
 		dp->trainingSet, dp->laneCount, 0);
 }
 
@@ -602,6 +665,7 @@ dp_set_tp(uint32 connectorIndex, int trainingPattern)
 
 	radeon_shared_info &info = *gInfo->shared_info;
 	dp_info* dp = &gConnector[connectorIndex]->dpInfo;
+	pll_info* pll = &gConnector[connectorIndex]->encoder.pll;
 
 	int rawTrainingPattern = 0;
 
@@ -618,8 +682,7 @@ dp_set_tp(uint32 connectorIndex, int trainingPattern)
 				rawTrainingPattern = ATOM_ENCODER_CMD_DP_LINK_TRAINING_PATTERN3;
 				break;
 		}
-		// TODO: PixelClock 0 ok?
-		encoder_dig_setup(connectorIndex, 0, rawTrainingPattern);
+		encoder_dig_setup(connectorIndex, pll->pixelClock, rawTrainingPattern);
 	} else {
 		ERROR("%s: TODO: dp_encoder_service\n", __func__);
 		return;
@@ -639,7 +702,7 @@ dp_set_tp(uint32 connectorIndex, int trainingPattern)
 	}
 
 	// Enable training pattern on the sink
-	dpcd_reg_write(dp->auxPin, DP_TRAIN, trainingPattern);
+	dpcd_reg_write(connectorIndex, DP_TRAIN, trainingPattern);
 }
 
 
@@ -667,7 +730,7 @@ dp_link_train_cr(uint32 connectorIndex)
 		else
 			snooze(1000 * 4 * dp->trainingReadInterval);
 
-		if (!dp_get_link_status(dp))
+		if (!dp_get_link_status(connectorIndex))
 			break;
 
 		if (dp_clock_recovery_ok(dp)) {
@@ -716,26 +779,30 @@ dp_link_train_cr(uint32 connectorIndex)
 
 
 status_t
-dp_link_train_ce(uint32 connectorIndex)
+dp_link_train_ce(uint32 connectorIndex, bool tp3Support)
 {
 	TRACE("%s\n", __func__);
 
 	dp_info* dp = &gConnector[connectorIndex]->dpInfo;
 
-	// TODO: DisplayPort: Supports TP3?
-	dp_set_tp(connectorIndex, DP_TRAIN_PATTERN_2);
+	if (tp3Support)
+		dp_set_tp(connectorIndex, DP_TRAIN_PATTERN_3);
+	else
+		dp_set_tp(connectorIndex, DP_TRAIN_PATTERN_2);
 
 	dp->trainingAttempts = 0;
 	bool channelEqual = false;
 
 	while (1) {
 		if (dp->trainingReadInterval == 0)
-			snooze(100);
+			snooze(400);
 		else
 			snooze(1000 * 4 * dp->trainingReadInterval);
 
-		if (!dp_get_link_status(dp))
+		if (!dp_get_link_status(connectorIndex)) {
+			ERROR("%s: ERROR: Unable to get link status!\n", __func__);
 			break;
+		}
 
 		if (dp_clock_equalization_ok(dp)) {
 			channelEqual = true;
@@ -772,7 +839,7 @@ dp_link_train(uint8 crtcID)
 {
 	TRACE("%s\n", __func__);
 
-        uint32 connectorIndex = gDisplay[crtcID]->connectorIndex;
+	uint32 connectorIndex = gDisplay[crtcID]->connectorIndex;
 	dp_info* dp = &gConnector[connectorIndex]->dpInfo;
 	display_mode* mode = &gDisplay[crtcID]->currentMode;
 
@@ -799,8 +866,6 @@ dp_link_train(uint8 crtcID)
 
 	uint32 linkEnumeration
 		= gConnector[connectorIndex]->encoder.linkEnumeration;
-	uint32 gpioID = gConnector[connectorIndex]->gpioID;
-	uint32 hwPin = gGPIOInfo[gpioID]->hwPin;
 
 	uint32 dpEncoderID = 0;
 	if (encoder_pick_dig(connectorIndex) > 0)
@@ -813,26 +878,27 @@ dp_link_train(uint8 crtcID)
 		dpEncoderID |= ATOM_DP_CONFIG_LINK_A;
 
 	dp->trainingReadInterval
-		= dpcd_reg_read(hwPin, DP_TRAINING_AUX_RD_INTERVAL);
+		= dpcd_reg_read(connectorIndex, DP_TRAINING_AUX_RD_INTERVAL);
 
-	uint8 sandbox = dpcd_reg_read(hwPin, DP_MAX_LANE_COUNT);
+	uint8 sandbox = dpcd_reg_read(connectorIndex, DP_MAX_LANE_COUNT);
 
 	radeon_shared_info &info = *gInfo->shared_info;
-	//bool dpTPS3Supported = false;
-	//if (info.dceMajor >= 5 && (sandbox & DP_TPS3_SUPPORTED) != 0)
-	//	dpTPS3Supported = true;
+	bool dpTPS3Supported = false;
+	if (info.dceMajor >= 5 && (sandbox & DP_TPS3_SUPPORTED) != 0)
+		dpTPS3Supported = true;
 
 	// *** DisplayPort link training initialization
 
 	// Power up the DP sink
 	if (dp->config[0] >= DP_DPCD_REV_11)
-		dpcd_reg_write(hwPin, DP_SET_POWER, DP_SET_POWER_D0);
+		dpcd_reg_write(connectorIndex, DP_SET_POWER, DP_SET_POWER_D0);
 
 	// Possibly enable downspread on the sink
-	if ((dp->config[3] & 0x1) != 0)
-		dpcd_reg_write(hwPin, DP_DOWNSPREAD_CTRL, DP_DOWNSPREAD_CTRL_AMP_EN);
-	else
-		dpcd_reg_write(hwPin, DP_DOWNSPREAD_CTRL, 0);
+	if ((dp->config[3] & 0x1) != 0) {
+		dpcd_reg_write(connectorIndex, DP_DOWNSPREAD_CTRL,
+			DP_DOWNSPREAD_CTRL_AMP_EN);
+	} else
+		dpcd_reg_write(connectorIndex, DP_DOWNSPREAD_CTRL, 0);
 
 	encoder_dig_setup(connectorIndex, mode->timing.pixel_clock,
 		ATOM_ENCODER_CMD_SETUP_PANEL_MODE);
@@ -842,11 +908,11 @@ dp_link_train(uint8 crtcID)
 	if ((dp->config[0] >= DP_DPCD_REV_11)
 		&& (dp->config[2] & DP_ENHANCED_FRAME_CAP_EN))
 		sandbox |= DP_ENHANCED_FRAME_EN;
-	dpcd_reg_write(hwPin, DP_LANE_COUNT, sandbox);
+	dpcd_reg_write(connectorIndex, DP_LANE_COUNT, sandbox);
 
 	// Set the link rate on the DP sink
 	sandbox = dp_encode_link_rate(dp->linkRate);
-	dpcd_reg_write(hwPin, DP_LINK_RATE, sandbox);
+	dpcd_reg_write(connectorIndex, DP_LINK_RATE, sandbox);
 
 	// Start link training on source
 	if (info.dceMajor >= 4 || !dp->trainingUseEncoder) {
@@ -858,16 +924,16 @@ dp_link_train(uint8 crtcID)
 	}
 
 	// Disable the training pattern on the sink
-	dpcd_reg_write(hwPin, DP_TRAIN, DP_TRAIN_PATTERN_DISABLED);
+	dpcd_reg_write(connectorIndex, DP_TRAIN, DP_TRAIN_PATTERN_DISABLED);
 
 	dp_link_train_cr(connectorIndex);
-	dp_link_train_ce(connectorIndex);
+	dp_link_train_ce(connectorIndex, dpTPS3Supported);
 
 	// *** DisplayPort link training finish
 	snooze(400);
 
 	// Disable the training pattern on the sink
-	dpcd_reg_write(hwPin, DP_TRAIN, DP_TRAIN_PATTERN_DISABLED);
+	dpcd_reg_write(connectorIndex, DP_TRAIN, DP_TRAIN_PATTERN_DISABLED);
 
 	// Disable the training pattern on the source
 	if (info.dceMajor >= 4 || !dp->trainingUseEncoder) {
@@ -889,40 +955,43 @@ ddc2_dp_read_edid1(uint32 connectorIndex, edid1_info* edid)
 
 	dp_info* dpInfo = &gConnector[connectorIndex]->dpInfo;
 
-	if (!dpInfo->valid)
+	if (!dpInfo->valid) {
+		ERROR("%s: connector(%" B_PRIu32 ") missing valid DisplayPort data!\n",
+			__func__, connectorIndex);
 		return false;
+	}
+
+	edid1_raw raw;
+	uint8* rdata = (uint8*)&raw;
+	uint8 sdata = 0;
 
 	// The following sequence is from a trace of the Linux kernel
 	// radeon code; not sure if the initial writes to address 0 are
 	// requried.
-
 	// TODO: This surely cane be cleaned up
-	edid1_raw raw;
-	uint8* rdata = (uint8*)&raw;
-	uint8 sdata = 0;
-	dp_aux_set_i2c_byte(dpInfo->auxPin, 0x00, &sdata, true, false);
-	dp_aux_set_i2c_byte(dpInfo->auxPin, 0x00, &sdata, false, true);
+	dp_aux_set_i2c_byte(connectorIndex, 0x00, &sdata, true, false);
+	dp_aux_set_i2c_byte(connectorIndex, 0x00, &sdata, false, true);
 
-	dp_aux_set_i2c_byte(dpInfo->auxPin, 0x50, &sdata, true, false);
-	dp_aux_set_i2c_byte(dpInfo->auxPin, 0x50, &sdata, false, false);
-	dp_aux_get_i2c_byte(dpInfo->auxPin, 0x50, rdata, true, false);
-	dp_aux_get_i2c_byte(dpInfo->auxPin, 0x50, rdata, false, false);
-	dp_aux_get_i2c_byte(dpInfo->auxPin, 0x50, rdata, false, true);
-	dp_aux_set_i2c_byte(dpInfo->auxPin, 0x50, &sdata, true, false);
-	dp_aux_set_i2c_byte(dpInfo->auxPin, 0x50, &sdata, false, false);
-	dp_aux_get_i2c_byte(dpInfo->auxPin, 0x50, rdata, true, false);
+	dp_aux_set_i2c_byte(connectorIndex, 0x50, &sdata, true, false);
+	dp_aux_set_i2c_byte(connectorIndex, 0x50, &sdata, false, false);
+	dp_aux_get_i2c_byte(connectorIndex, 0x50, rdata, true, false);
+	dp_aux_get_i2c_byte(connectorIndex, 0x50, rdata, false, false);
+	dp_aux_get_i2c_byte(connectorIndex, 0x50, rdata, false, true);
+	dp_aux_set_i2c_byte(connectorIndex, 0x50, &sdata, true, false);
+	dp_aux_set_i2c_byte(connectorIndex, 0x50, &sdata, false, false);
+	dp_aux_get_i2c_byte(connectorIndex, 0x50, rdata, true, false);
 
 	for (uint32 i = 0; i < sizeof(raw); i++) {
-		status_t ret = dp_aux_get_i2c_byte(dpInfo->auxPin, 0x50,
+		status_t result = dp_aux_get_i2c_byte(connectorIndex, 0x50,
 			rdata++, false, false);
-		if (ret) {
-			TRACE("%s: error reading EDID data at index %d, ret = %d\n",
-					__func__, i, ret);
-			dp_aux_get_i2c_byte(dpInfo->auxPin, 0x50, &sdata, false, true);
+		if (result != B_OK) {
+			TRACE("%s: error reading EDID data at index %" B_PRIu32 ", "
+				"result = 0x%lX\n", __func__, i, result);
+			dp_aux_get_i2c_byte(connectorIndex, 0x50, &sdata, false, true);
 			return false;
 		}
 	}
-	dp_aux_get_i2c_byte(dpInfo->auxPin, 0x50, &sdata, false, true);
+	dp_aux_get_i2c_byte(connectorIndex, 0x50, &sdata, false, true);
 
 	if (raw.version.version != 1 || raw.version.revision > 4) {
 		ERROR("%s: EDID version or revision out of range\n", __func__);
@@ -948,6 +1017,24 @@ dp_get_pixel_size_for(color_space space, size_t *pixelChunk,
 	}
 
 	return result;
+}
+
+
+bool
+dp_is_dp12_capable(uint32 connectorIndex)
+{
+	TRACE("%s\n", __func__);
+	radeon_shared_info &info = *gInfo->shared_info;
+
+	uint32 capabilities = gConnector[connectorIndex]->encoder.capabilities;
+
+	if (info.dceMajor >= 5
+		&& gInfo->dpExternalClock >= 539000
+		&& (capabilities & ATOM_ENCODER_CAP_RECORD_HBR2) != 0) {
+		return true;
+	}
+
+	return false;
 }
 
 

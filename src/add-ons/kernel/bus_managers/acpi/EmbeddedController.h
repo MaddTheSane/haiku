@@ -128,7 +128,7 @@ typedef uint8							EC_EVENT;
 
 #define ACPI_PKG_VALID(pkg, size) \
 		((pkg) != NULL && (pkg)->object_type == ACPI_TYPE_PACKAGE && \
-		(pkg)->data.package.count >= (size))
+		(pkg)->package.count >= (size))
 
 
 /*
@@ -151,7 +151,7 @@ struct acpi_ec_cookie {
 	mutex						ec_lock;
 	int							ec_burstactive;
 	int							ec_sci_pending;
-	vint32						ec_gencount;
+	int32						ec_gencount;
 	ConditionVariable			ec_condition_var;
 	int							ec_suspending;
 };

@@ -2,7 +2,7 @@ SubDir HAIKU_TOP src apps diskprobe ;
 
 SetSubDirSupportedPlatformsBeOSCompatible ;
 
-UsePrivateHeaders shared ;
+UsePrivateHeaders interface shared ;
 
 Application DiskProbe :
 	DiskProbe.cpp
@@ -15,7 +15,7 @@ Application DiskProbe :
 	ProbeView.cpp
 	OpenWindow.cpp
 	FindWindow.cpp
-	: be $(HAIKU_LOCALE_LIBS) tracker translation libexpression_parser.a
+	: be localestub tracker translation libexpression_parser.a
 		libmapm.a $(TARGET_LIBSUPC++)
 	: DiskProbe.rdef
 ;

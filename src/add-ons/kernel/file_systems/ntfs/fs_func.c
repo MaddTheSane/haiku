@@ -147,8 +147,7 @@ ntfs_inode_lookup(fs_volume *_vol, ino_t parent, const char *name)
 		else
 			ino = MREF(inum);
 	}
-	if (uname != NULL)
-		free(uname);
+	free(uname);
 	return (ino);
 }
 
@@ -264,7 +263,7 @@ fs_identify_partition(int fd, partition_data *partition, void **_cookie)
 	// get path for device
 	if (ioctl(fd, B_GET_PATH_FOR_DEVICE, devpath) != 0) {
 		// try mount
-		ntVolume = utils_mount_volume(devpath, MS_RDONLY | MS_RECOVER);
+		ntVolume = utils_mount_volume(devpath, NTFS_MNT_RDONLY | NTFS_MNT_RECOVER);
 		if (ntVolume != NULL) {
 			if (ntVolume->vol_name && ntVolume->vol_name[0] != '\0')
 				strcpy(cookie->label, ntVolume->vol_name);
@@ -274,7 +273,9 @@ fs_identify_partition(int fd, partition_data *partition, void **_cookie)
 
 	*_cookie = cookie;
 
-	return 0.8f;
+	// Make sure we return a higher number than the intel partition check
+	// as this one is more accurate.
+	return 0.82f;
 }
 
 
@@ -382,7 +383,7 @@ fs_mount(fs_volume *_vol, const char *device, ulong flags, const char *args,
 
 	if (ns->ro || (flags & B_MOUNT_READ_ONLY) != 0
 		|| is_device_read_only(device)) {
-		mountFlags |= MS_RDONLY;
+		mountFlags |= NTFS_MNT_RDONLY;
 		ns->flags |= B_FS_IS_READONLY;
 	}
 
@@ -416,7 +417,7 @@ fs_mount(fs_volume *_vol, const char *device, ulong flags, const char *args,
 		gNTFSVnodeOps.remove_attr = fs_remove_attrib;		
 	}
 
-	ns->ntvol = utils_mount_volume(device, mountFlags | MS_RECOVER);
+	ns->ntvol = utils_mount_volume(device, mountFlags | NTFS_MNT_RECOVER);
 	if (ns->ntvol != NULL)
 		result = B_NO_ERROR;
 	else
@@ -706,7 +707,7 @@ exit:
 	if (ni != NULL)
 		ntfs_inode_close(ni);
 
-	if (result != B_OK && newNode != NULL)
+	if (result != B_OK)
 		free(newNode);
 
 	TRACE("fs_read_vnode - EXIT, result is %s\n", strerror(result));
@@ -1165,9 +1166,8 @@ exit:
 		
 	if (dir_ni != NULL)
 		ntfs_inode_close(dir_ni);
-		
-	if (uname != NULL)
-		free(uname);
+
+	free(uname);
 
 	TRACE("fs_create - EXIT, result is %s\n", strerror(result));
 
@@ -1464,12 +1464,11 @@ fs_readlink(fs_volume *_vol, fs_vnode *_node, char *buffer, size_t *bufferSize)
 		goto exit;
 	}
 
-	TRACE("fs_readlink - LINK:[%s]\n", buffer);
-
 	strlcpy(buffer, tempBuffer, *bufferSize);
-	free(tempBuffer);
 
 	*bufferSize = l + 1;
+
+	TRACE("fs_readlink - LINK:[%s]\n", buffer);
 
 	result = B_NO_ERROR;
 
@@ -1479,6 +1478,8 @@ exit:
 		ntfs_attr_close(na);
 	if (ni != NULL)
 		ntfs_inode_close(ni);
+
+	free(tempBuffer);
 
 	TRACE("fs_readlink - EXIT, result is %s\n", strerror(result));
 
@@ -1570,10 +1571,9 @@ fs_create_symlink(fs_volume *_vol, fs_vnode *_dir, const char *name,
 exit:
 	if (dir_ni != NULL)
 		ntfs_inode_close(dir_ni);
-	if (utarget != NULL)
-		free(utarget);
-	if (uname != NULL)
-		free(uname);
+
+	free(utarget);
+	free(uname);
 
 	TRACE("fs_symlink - EXIT, result is %s\n", strerror(result));
 
@@ -1662,8 +1662,8 @@ fs_mkdir(fs_volume *_vol, fs_vnode *_dir, const char *name,	int perms)
 exit:
 	if (dir_ni != NULL)
 		ntfs_inode_close(dir_ni);
-	if (uname != NULL)
-		free(uname);
+
+	free(uname);
 
 	TRACE("fs_mkdir - EXIT, result is %s\n", strerror(result));
 

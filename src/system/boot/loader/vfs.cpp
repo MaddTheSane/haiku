@@ -1,5 +1,6 @@
 /*
  * Copyright 2003-2013, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2014, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Distributed under the terms of the MIT License.
  */
 
@@ -14,13 +15,17 @@
 
 #include <StorageDefs.h>
 
+#include <AutoDeleter.h>
+
 #include <boot/platform.h>
 #include <boot/partitions.h>
 #include <boot/stdio.h>
 #include <boot/stage2.h>
 #include <syscall_utils.h>
 
+#include "package_support.h"
 #include "RootFileSystem.h"
+#include "file_systems/packagefs/packagefs.h"
 
 
 using namespace boot;
@@ -33,6 +38,14 @@ using namespace boot;
 #endif
 
 
+struct __DIR {
+	Directory*	directory;
+	void*		cookie;
+	dirent		entry;
+	char		nameBuffer[B_FILE_NAME_LENGTH - 1];
+};
+
+
 class Descriptor {
 	public:
 		Descriptor(Node *node, void *cookie);
@@ -43,7 +56,7 @@ class Descriptor {
 		ssize_t WriteAt(off_t pos, const void *buffer, size_t bufferSize);
 		ssize_t Write(const void *buffer, size_t bufferSize);
 
-		status_t Stat(struct stat &stat);
+		void Stat(struct stat &stat);
 
 		off_t Offset() const { return fOffset; }
 		int32 RefCount() const { return fRefCount; }
@@ -98,6 +111,13 @@ Node::Close(void *cookie)
 
 
 status_t
+Node::ReadLink(char* buffer, size_t bufferSize)
+{
+	return B_BAD_VALUE;
+}
+
+
+status_t
 Node::GetName(char *nameBuffer, size_t bufferSize) const
 {
 	return B_ERROR;
@@ -129,6 +149,15 @@ ino_t
 Node::Inode() const
 {
 	return 0;
+}
+
+
+void
+Node::Stat(struct stat& stat)
+{
+	stat.st_mode = Type();
+	stat.st_size = Size();
+	stat.st_ino = Inode();
 }
 
 
@@ -205,6 +234,40 @@ int32
 Directory::Type() const
 {
 	return S_IFDIR;
+}
+
+
+Node*
+Directory::Lookup(const char* name, bool traverseLinks)
+{
+	Node* node = LookupDontTraverse(name);
+	if (node == NULL)
+		return NULL;
+
+	if (!traverseLinks || !S_ISLNK(node->Type()))
+		return node;
+
+	// the node is a symbolic link, so we have to resolve the path
+	char linkPath[B_PATH_NAME_LENGTH];
+	status_t error = node->ReadLink(linkPath, sizeof(linkPath));
+
+	node->Release();
+		// we don't need this one anymore
+
+	if (error != B_OK)
+		return NULL;
+
+	// let open_from() do the real work
+	int fd = open_from(this, linkPath, O_RDONLY);
+	if (fd < 0)
+		return NULL;
+
+	node = get_node_from(fd);
+	if (node != NULL)
+		node->Acquire();
+
+	close(fd);
+	return node;
 }
 
 
@@ -321,14 +384,10 @@ Descriptor::WriteAt(off_t pos, const void *buffer, size_t bufferSize)
 }
 
 
-status_t
+void
 Descriptor::Stat(struct stat &stat)
 {
-	stat.st_mode = fNode->Type();
-	stat.st_size = fNode->Size();
-	stat.st_ino = fNode->Inode();
-
-	return B_OK;
+	fNode->Stat(stat);
 }
 
 
@@ -356,6 +415,148 @@ Descriptor::Release()
 //	#pragma mark -
 
 
+BootVolume::BootVolume()
+	:
+	fRootDirectory(NULL),
+	fSystemDirectory(NULL),
+	fPackageVolumeInfo(NULL),
+	fPackageVolumeState(NULL)
+{
+}
+
+
+BootVolume::~BootVolume()
+{
+	Unset();
+}
+
+
+status_t
+BootVolume::SetTo(Directory* rootDirectory,
+	PackageVolumeInfo* packageVolumeInfo,
+	PackageVolumeState* packageVolumeState)
+{
+	Unset();
+
+	status_t error = _SetTo(rootDirectory, packageVolumeInfo,
+		packageVolumeState);
+	if (error != B_OK)
+		Unset();
+
+	return error;
+}
+
+
+void
+BootVolume::Unset()
+{
+	if (fRootDirectory != NULL) {
+		fRootDirectory->Release();
+		fRootDirectory = NULL;
+	}
+
+	if (fSystemDirectory != NULL) {
+		fSystemDirectory->Release();
+		fSystemDirectory = NULL;
+	}
+
+	if (fPackageVolumeInfo != NULL) {
+		fPackageVolumeInfo->ReleaseReference();
+		fPackageVolumeInfo = NULL;
+		fPackageVolumeState = NULL;
+	}
+}
+
+
+status_t
+BootVolume::_SetTo(Directory* rootDirectory,
+	PackageVolumeInfo* packageVolumeInfo,
+	PackageVolumeState* packageVolumeState)
+{
+	Unset();
+
+	if (rootDirectory == NULL)
+		return B_BAD_VALUE;
+
+	fRootDirectory = rootDirectory;
+	fRootDirectory->Acquire();
+
+	// find the system directory
+	Node* systemNode = fRootDirectory->Lookup("system", true);
+	if (systemNode == NULL || !S_ISDIR(systemNode->Type())) {
+		if (systemNode != NULL)
+			systemNode->Release();
+		Unset();
+		return B_ENTRY_NOT_FOUND;
+	}
+
+	fSystemDirectory = static_cast<Directory*>(systemNode);
+
+	if (packageVolumeInfo == NULL) {
+		// get a package volume info 
+		BReference<PackageVolumeInfo> packageVolumeInfoReference(
+			new(std::nothrow) PackageVolumeInfo);
+		status_t error = packageVolumeInfoReference->SetTo(fSystemDirectory,
+			"packages");
+		if (error != B_OK) {
+			// apparently not packaged
+			return B_OK;
+		}
+
+		fPackageVolumeInfo = packageVolumeInfoReference.Detach();
+	} else {
+		fPackageVolumeInfo = packageVolumeInfo;
+		fPackageVolumeInfo->AcquireReference();
+	}
+
+	fPackageVolumeState = packageVolumeState != NULL
+		? packageVolumeState : fPackageVolumeInfo->States().Head();
+
+	// try opening the system package
+	int packageFD = _OpenSystemPackage();
+	if (packageFD < 0)
+		return packageFD;
+
+	// mount packagefs
+	Directory* packageRootDirectory;
+	status_t error = packagefs_mount_file(packageFD, fSystemDirectory,
+		packageRootDirectory);
+	close(packageFD);
+	if (error != B_OK) {
+		Unset();
+		return error;
+	}
+
+	fSystemDirectory->Release();
+	fSystemDirectory = packageRootDirectory;
+
+	return B_OK;
+}
+
+
+int
+BootVolume::_OpenSystemPackage()
+{
+	// open the packages directory
+	Node* packagesNode = fSystemDirectory->Lookup("packages", false);
+	if (packagesNode == NULL)
+		return -1;
+	MethodDeleter<Node, status_t> packagesNodeReleaser(packagesNode,
+		&Node::Release);
+
+	if (!S_ISDIR(packagesNode->Type()))
+		return -1;
+	Directory* packageDirectory = (Directory*)packagesNode;
+
+	// open the system package
+	return open_from(packageDirectory, fPackageVolumeState->SystemPackage(),
+		O_RDONLY);
+}
+
+
+//	#pragma mark -
+
+
 status_t
 vfs_init(stage2_args *args)
 {
@@ -368,18 +569,28 @@ vfs_init(stage2_args *args)
 
 
 status_t
-register_boot_file_system(Directory *volume)
+register_boot_file_system(BootVolume& bootVolume)
 {
-	gRoot->AddLink("boot", volume);
+	Directory* rootDirectory = bootVolume.RootDirectory();
+	gRoot->AddLink("boot", rootDirectory);
 
 	Partition *partition;
-	status_t status = gRoot->GetPartitionFor(volume, &partition);
+	status_t status = gRoot->GetPartitionFor(rootDirectory, &partition);
 	if (status != B_OK) {
-		dprintf("register_boot_file_system(): could not locate boot volume in root!\n");
+		dprintf("register_boot_file_system(): could not locate boot volume in "
+			"root!\n");
 		return status;
 	}
 
-	gBootVolume.SetInt64(BOOT_VOLUME_PARTITION_OFFSET, partition->offset);
+	gBootVolume.SetInt64(BOOT_VOLUME_PARTITION_OFFSET,
+		partition->offset);
+
+	if (bootVolume.IsPackaged()) {
+		gBootVolume.SetBool(BOOT_VOLUME_PACKAGED, true);
+		PackageVolumeState* state = bootVolume.GetPackageVolumeState();
+		if (state->Name() != NULL)
+			gBootVolume.AddString(BOOT_VOLUME_PACKAGES_STATE, state->Name());
+	}
 
 	Node *device = get_node_from(partition->FD());
 	if (device == NULL) {
@@ -391,41 +602,50 @@ register_boot_file_system(Directory *volume)
 }
 
 
-/** Gets the boot device, scans all of its partitions, gets the
- *	boot partition, and mounts its file system.
- *	Returns the file system's root node or NULL for failure.
- */
+/*! Gets the boot device, scans all of its partitions, gets the
+	boot partition, and mounts its file system.
 
-Directory *
-get_boot_file_system(stage2_args *args)
+	\param args The stage 2 arguments.
+	\param _bootVolume On success set to the boot volume.
+	\return \c B_OK on success, another error code otherwise.
+*/
+status_t
+get_boot_file_system(stage2_args* args, BootVolume& _bootVolume)
 {
 	Node *device;
-	if (platform_add_boot_device(args, &gBootDevices) < B_OK)
-		return NULL;
+	status_t error = platform_add_boot_device(args, &gBootDevices);
+	if (error != B_OK)
+		return error;
 
 	// the boot device must be the first device in the list
 	device = gBootDevices.First();
 
-	if (add_partitions_for(device, false, true) < B_OK)
-		return NULL;
+	error = add_partitions_for(device, false, true);
+	if (error != B_OK)
+		return error;
 
 	Partition *partition;
-	if (platform_get_boot_partition(args, device, &gPartitions, &partition) < B_OK)
-		return NULL;
+	error = platform_get_boot_partition(args, device, &gPartitions, &partition);
+	if (error != B_OK)
+		return error;
 
 	Directory *fileSystem;
-	status_t status = partition->Mount(&fileSystem, true);
-
-	if (status < B_OK) {
+	error = partition->Mount(&fileSystem, true);
+	if (error != B_OK) {
 		// this partition doesn't contain any known file system; we
 		// don't need it anymore
 		gPartitions.Remove(partition);
 		delete partition;
-		return NULL;
+		return error;
 	}
 
+	// init the BootVolume
+	error = _bootVolume.SetTo(fileSystem);
+	if (error != B_OK)
+		return error;
+
 	sBootDevice = device;
-	return fileSystem;
+	return B_OK;
 }
 
 
@@ -476,6 +696,7 @@ mount_file_systems(stage2_args *args)
 				device = last;
 			}
 */
+(void)last;
 		}
 		last = device;
 	}
@@ -554,6 +775,19 @@ get_node_for_path(Directory *directory, char *path, Node **_node)
 	return B_ENTRY_NOT_FOUND;
 }
 
+
+/*!	Version of get_node_for_path() not modifying \a path.
+ */
+static status_t
+get_node_for_path(Directory* directory, const char* path, Node** _node)
+{
+	char* mutablePath = strdup(path);
+	if (mutablePath == NULL)
+		return B_NO_MEMORY;
+	MemoryDeleter mutablePathDeleter(mutablePath);
+
+	return get_node_for_path(directory, mutablePath, _node);
+}
 
 //	#pragma mark -
 
@@ -640,6 +874,13 @@ read_pos(int fd, off_t offset, void *buffer, size_t bufferSize)
 		RETURN_AND_SET_ERRNO(B_FILE_ERROR);
 
 	RETURN_AND_SET_ERRNO(descriptor->ReadAt(offset, buffer, bufferSize));
+}
+
+
+ssize_t
+pread(int fd, void* buffer, size_t bufferSize, off_t offset)
+{
+	return read_pos(fd, offset, buffer, bufferSize);
 }
 
 
@@ -791,6 +1032,27 @@ get_node_from(int fd)
 }
 
 
+status_t
+get_stat(Directory* directory, const char* path, struct stat& st)
+{
+	Node* node;
+	status_t error = get_node_for_path(directory, path, &node);
+	if (error != B_OK)
+		return error;
+
+	node->Stat(st);
+	node->Release();
+	return B_OK;
+}
+
+
+Directory*
+directory_from(DIR* dir)
+{
+	return dir != NULL ? dir->directory : NULL;
+}
+
+
 int
 close(int fd)
 {
@@ -821,5 +1083,117 @@ fstat(int fd, struct stat *stat)
 	if (descriptor == NULL)
 		RETURN_AND_SET_ERRNO(B_FILE_ERROR);
 
-	RETURN_AND_SET_ERRNO(descriptor->Stat(*stat));
+	descriptor->Stat(*stat);
+	return 0;
+}
+
+
+DIR*
+open_directory(Directory* baseDirectory, const char* path)
+{
+	DIR* dir = new(std::nothrow) DIR;
+	if (dir == NULL) {
+		errno = B_NO_MEMORY;
+		return NULL;
+	}
+	ObjectDeleter<DIR> dirDeleter(dir);
+
+	Node* node;
+	status_t error = get_node_for_path(baseDirectory, path, &node);
+	if (error != B_OK) {
+		errno = error;
+		return NULL;
+	}
+	MethodDeleter<Node, status_t> nodeReleaser(node, &Node::Release);
+
+	if (!S_ISDIR(node->Type())) {
+		errno = error;
+		return NULL;
+	}
+
+	dir->directory = static_cast<Directory*>(node);
+
+	error = dir->directory->Open(&dir->cookie, O_RDONLY);
+	if (error != B_OK) {
+		errno = error;
+		return NULL;
+	}
+
+	nodeReleaser.Detach();
+	return dirDeleter.Detach();
+}
+
+
+DIR*
+opendir(const char* dirName)
+{
+	return open_directory(gRoot, dirName);
+}
+
+
+int
+closedir(DIR* dir)
+{
+	if (dir != NULL) {
+		dir->directory->Close(dir->cookie);
+		dir->directory->Release();
+		delete dir;
+	}
+
+	return 0;
+}
+
+
+struct dirent*
+readdir(DIR* dir)
+{
+	if (dir == NULL) {
+		errno = B_BAD_VALUE;
+		return NULL;
+	}
+
+	for (;;) {
+		status_t error = dir->directory->GetNextEntry(dir->cookie,
+			dir->entry.d_name, B_FILE_NAME_LENGTH);
+		if (error != B_OK) {
+			errno = error;
+			return NULL;
+		}
+
+		dir->entry.d_pdev = 0;
+			// not supported
+		dir->entry.d_pino = dir->directory->Inode();
+		dir->entry.d_dev = dir->entry.d_pdev;
+			// not supported
+
+		if (strcmp(dir->entry.d_name, ".") == 0
+				|| strcmp(dir->entry.d_name, "..") == 0) {
+			// Note: That's obviously not correct for "..", but we can't
+			// retrieve that information.
+			dir->entry.d_ino = dir->entry.d_pino;
+		} else {
+			Node* node = dir->directory->Lookup(dir->entry.d_name, false);
+			if (node == NULL)
+				continue;
+
+			dir->entry.d_ino = node->Inode();
+			node->Release();
+		}
+
+		return &dir->entry;
+	}
+}
+
+
+void
+rewinddir(DIR* dir)
+{
+	if (dir == NULL) {
+		errno = B_BAD_VALUE;
+		return;
+	}
+
+	status_t error = dir->directory->Rewind(dir->cookie);
+	if (error != B_OK)
+		errno = error;
 }

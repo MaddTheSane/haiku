@@ -21,6 +21,9 @@ namespace BHPKG {
 using BHPKG::BPackageResolvableExpressionData;
 
 
+class BPackageResolvable;
+
+
 /*
  * Expresses a constraint on a specific resolvable, either just a name
  * or a name plus a relational operator and a version.
@@ -42,12 +45,12 @@ public:
 								BPackageResolvableExpression(
 									const BPackageResolvableExpressionData& data
 									);
+	explicit					BPackageResolvableExpression(
+									const BString& expressionString);
 								BPackageResolvableExpression(
 									const BString& name,
-									BPackageResolvableOperator _op
-										= B_PACKAGE_RESOLVABLE_OP_ENUM_COUNT,
-									const BPackageVersion& version
-										= BPackageVersion());
+									BPackageResolvableOperator _operator,
+									const BPackageVersion& version);
 
 			status_t			InitCheck() const;
 
@@ -57,12 +60,17 @@ public:
 
 			BString				ToString() const;
 
+			status_t			SetTo(const BString& expressionString);
 			void				SetTo(const BString& name,
-									BPackageResolvableOperator _op
-										= B_PACKAGE_RESOLVABLE_OP_ENUM_COUNT,
-									const BPackageVersion& version
-										= BPackageVersion());
+									BPackageResolvableOperator _operator,
+									const BPackageVersion& version);
 			void				Clear();
+
+			bool				Matches(const BPackageVersion& version,
+									const BPackageVersion& compatibleVersion)
+									const;
+			bool				Matches(const BPackageResolvable& provides)
+									const;
 
 public:
 	static	const char*			kOperatorNames[];

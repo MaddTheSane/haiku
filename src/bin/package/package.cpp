@@ -26,6 +26,9 @@ static const char* kUsage =
 	"  add [ <options> ] <package> <entries>...\n"
 	"    Adds the specified entries <entries> to package file <package>.\n"
 	"\n"
+	"    -0 ... -9  - Use compression level 0 ... 9. 0 means no, 9 best "
+		"compression.\n"
+	"                 Defaults to 9.\n"
 	"    -C <dir>   - Change to directory <dir> before adding entries.\n"
 	"    -f         - Force adding, replacing already existing entries. "
 		"Without\n"
@@ -41,6 +44,9 @@ static const char* kUsage =
 	"  create [ <options> ] <package>\n"
 	"    Creates package file <package> from contents of current directory.\n"
 	"\n"
+	"    -0 ... -9  - Use compression level 0 ... 9. 0 means no, 9 best "
+		"compression.\n"
+	"                 Defaults to 9.\n"
 	"    -b         - Create an empty build package. Only the .PackageInfo "
 		"will\n"
 	"                 be added.\n"
@@ -70,10 +76,38 @@ static const char* kUsage =
 	"                  of the archive.\n"
 	"    -i <info>  - Extract the .PackageInfo file to <info> instead.\n"
 	"\n"
+	"  info [ <options> ] <package>\n"
+	"    Prints individual meta information of package file <package>.\n"
+	"\n"
+	"    -f <format>, --format <format>\n"
+	"               - Print the given format string, performing the following\n"
+	"                 replacements:\n"
+	"                    %%fileName%%     - the package's canonical file name\n"
+	"                    %%name%%         - the package name\n"
+	"                    %%version%%      - the package version\n"
+	"                    %%%%             - %%\n"
+	"                    \\n             - new line\n"
+	"                    \\t             - tab\n"
+	"\n"
 	"  list [ <options> ] <package>\n"
 	"    Lists the contents of package file <package>.\n"
 	"\n"
 	"    -a         - Also list the file attributes.\n"
+	"    -i         - Only print the meta information, not the files.\n"
+	"    -p         - Only print a list of file paths.\n"
+	"\n"
+	"  recompress [ <options> ] <input package> [ <output package> ]\n"
+	"    Reads the package file <input package> and writes it to new package\n"
+	"    <output package> using the specified compression options. If the\n"
+	"    compression level 0 is specified (i.e. no compression), "
+		"<output package>\n"
+	"    can be omitted, in which case the data are written to stdout.\n"
+	"\n"
+	"    -0 ... -9  - Use compression level 0 ... 9. 0 means no, 9 best "
+		"compression.\n"
+	"                 Defaults to 9.\n"
+	"    -q         - Be quiet (don't show any output except for errors).\n"
+	"    -v         - Be verbose (show more info about created package).\n"
 	"\n"
 	"Common Options:\n"
 	"  -h, --help   - Print this usage info.\n"
@@ -109,6 +143,12 @@ main(int argc, const char* const* argv)
 
 	if (strcmp(command, "list") == 0)
 		return command_list(argc - 1, argv + 1);
+
+	if (strcmp(command, "info") == 0)
+		return command_info(argc - 1, argv + 1);
+
+	if (strcmp(command, "recompress") == 0)
+		return command_recompress(argc - 1, argv + 1);
 
 	if (strcmp(command, "help") == 0)
 		print_usage_and_exit(false);

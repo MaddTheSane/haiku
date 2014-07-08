@@ -1,4 +1,5 @@
 /*
+ * Copyright 2014, Paweł Dziepak, pdziepak@quarnos.org.
  * Copyright 2012, Alex Smith, alex@alex-smith.me.uk.
  * Distributed under the terms of the MIT License.
  */
@@ -15,23 +16,294 @@
 #include <arch/user_debugger.h>
 
 
+template<typename T, T (*Function)(unsigned), unsigned N, unsigned ...Index>
+struct GenerateTable : GenerateTable<T, Function, N - 1,  N - 1, Index...> {
+};
+
+template<typename T, T (*Function)(unsigned), unsigned ...Index>
+struct GenerateTable<T, Function, 0, Index...> {
+	GenerateTable()
+		:
+		fTable { Function(Index)... }
+	{
+	}
+
+	T	fTable[sizeof...(Index)];
+};
+
+enum class DescriptorType : unsigned {
+	DataWritable		= 0x2,
+	CodeExecuteOnly		= 0x8,
+	TSS					= 0x9,
+};
+
+class Descriptor {
+public:
+	constexpr				Descriptor();
+	inline					Descriptor(uint32_t first, uint32_t second);
+	constexpr				Descriptor(DescriptorType type, bool kernelOnly);
+
+protected:
+	union {
+		struct [[gnu::packed]] {
+			uint16_t		fLimit0;
+			unsigned		fBase0			:24;
+			unsigned		fType			:4;
+			unsigned		fSystem			:1;
+			unsigned		fDPL			:2;
+			unsigned		fPresent		:1;
+			unsigned		fLimit1			:4;
+			unsigned 		fUnused			:1;
+			unsigned		fLong			:1;
+			unsigned		fDB				:1;
+			unsigned		fGranularity	:1;
+			uint8_t			fBase1;
+		};
+
+		uint32_t			fDescriptor[2];
+	};
+};
+
+class TSSDescriptor : public Descriptor {
+public:
+	inline						TSSDescriptor(uintptr_t base, size_t limit);
+
+			const Descriptor&	GetLower() const	{ return *this; }
+			const Descriptor&	GetUpper() const	{ return fSecond; }
+
+	static	void				LoadTSS(unsigned index);
+
+private:
+			Descriptor			fSecond;
+};
+
+class GlobalDescriptorTable {
+public:
+	constexpr						GlobalDescriptorTable();
+
+	inline	void					Load() const;
+
+			unsigned				SetTSS(unsigned cpu,
+										const TSSDescriptor& tss);
+private:
+	static constexpr	unsigned	kFirstTSS = 5;
+	static constexpr	unsigned	kDescriptorCount
+										= kFirstTSS + SMP_MAX_CPUS * 2;
+
+	alignas(uint64_t)	Descriptor	fTable[kDescriptorCount];
+};
+
+enum class InterruptDescriptorType : unsigned {
+	Interrupt		= 14,
+	Trap,
+};
+
+class [[gnu::packed]] InterruptDescriptor {
+public:
+	constexpr						InterruptDescriptor(uintptr_t isr,
+										unsigned ist, bool kernelOnly);
+	constexpr						InterruptDescriptor(uintptr_t isr);
+
+	static constexpr	InterruptDescriptor	Generate(unsigned index);
+
+private:
+						uint16_t	fBase0;
+						uint16_t	fSelector;
+						unsigned	fIST		:3;
+						unsigned	fReserved0	:5;
+						unsigned	fType		:4;
+						unsigned	fReserved1	:1;
+						unsigned	fDPL		:2;
+						unsigned	fPresent	:1;
+						uint16_t	fBase1;
+						uint32_t	fBase2;
+						uint32_t	fReserved2;
+};
+
+class InterruptDescriptorTable {
+public:
+	inline				void		Load() const;
+
+	static constexpr	unsigned	kDescriptorCount = 256;
+
+private:
+	typedef GenerateTable<InterruptDescriptor, InterruptDescriptor::Generate,
+			kDescriptorCount> TableType;
+	alignas(uint64_t)	TableType	fTable;
+};
+
+class InterruptServiceRoutine {
+	alignas(16)	uint8_t	fDummy[16];
+};
+
+extern const InterruptServiceRoutine
+	isr_array[InterruptDescriptorTable::kDescriptorCount];
+
+static GlobalDescriptorTable	sGDT;
+static InterruptDescriptorTable	sIDT;
+
 typedef void interrupt_handler_function(iframe* frame);
+interrupt_handler_function*
+	gInterruptHandlerTable[InterruptDescriptorTable::kDescriptorCount];
 
 
-static segment_descriptor* sGDT;
-static interrupt_descriptor* sIDT;
-
-static const uint32 kInterruptHandlerTableSize = 256;
-interrupt_handler_function* gInterruptHandlerTable[kInterruptHandlerTableSize];
-
-extern uint8 isr_array[kInterruptHandlerTableSize][16];
-
-
-static void
-load_tss(int cpu)
+constexpr bool
+is_code_segment(DescriptorType type)
 {
-	uint16 seg = (TSS_SEGMENT(cpu) << 3) | DPL_KERNEL;
-	asm volatile("ltr %%ax" :: "a" (seg));
+	return type == DescriptorType::CodeExecuteOnly;
+};
+
+
+constexpr
+Descriptor::Descriptor()
+	:
+	fDescriptor { 0, 0 }
+{
+	static_assert(sizeof(Descriptor) == sizeof(uint64_t),
+		"Invalid Descriptor size.");
+}
+
+
+Descriptor::Descriptor(uint32_t first, uint32_t second)
+	:
+	fDescriptor { first, second }
+{
+}
+
+
+constexpr
+Descriptor::Descriptor(DescriptorType type, bool kernelOnly)
+	:
+	fLimit0(-1),
+	fBase0(0),
+	fType(static_cast<unsigned>(type)),
+	fSystem(1),
+	fDPL(kernelOnly ? 0 : 3),
+	fPresent(1),
+	fLimit1(0xf),
+	fUnused(0),
+	fLong(is_code_segment(type) ? 1 : 0),
+	fDB(is_code_segment(type) ? 0 : 1),
+	fGranularity(1),
+	fBase1(0)
+{
+}
+
+
+TSSDescriptor::TSSDescriptor(uintptr_t base, size_t limit)
+	:
+	fSecond(base >> 32, 0)
+{
+	fLimit0 = static_cast<uint16_t>(limit);
+	fBase0 = base & 0xffffff;
+	fType = static_cast<unsigned>(DescriptorType::TSS);
+	fPresent = 1;
+	fLimit1 = (limit >> 16) & 0xf;
+	fBase1 = static_cast<uint8_t>(base >> 24);
+}
+
+
+void
+TSSDescriptor::LoadTSS(unsigned index)
+{
+	asm volatile("ltr %w0" : : "r" (index << 3));
+}
+
+
+constexpr
+GlobalDescriptorTable::GlobalDescriptorTable()
+	:
+	fTable {
+		Descriptor(),
+		Descriptor(DescriptorType::CodeExecuteOnly, true),
+		Descriptor(DescriptorType::DataWritable, true),
+		Descriptor(DescriptorType::DataWritable, false),
+		Descriptor(DescriptorType::CodeExecuteOnly, false),
+	}
+{
+	static_assert(kDescriptorCount <= 8192,
+		"GDT cannot contain more than 8192 descriptors");
+}
+
+
+void
+GlobalDescriptorTable::Load() const
+{
+	struct [[gnu::packed]] {
+		uint16_t	fLimit;
+		const void*	fAddress;
+	} gdtDescriptor = {
+		sizeof(fTable) - 1,
+		static_cast<const void*>(fTable),
+	};
+
+	asm volatile("lgdt	%0" : : "m" (gdtDescriptor));
+}
+
+
+unsigned
+GlobalDescriptorTable::SetTSS(unsigned cpu, const TSSDescriptor& tss)
+{
+	auto index = kFirstTSS + cpu * 2;
+	ASSERT(index + 1 < kDescriptorCount);
+	fTable[index] = tss.GetLower();
+	fTable[index + 1] = tss.GetUpper();
+	return index;
+}
+
+
+constexpr
+InterruptDescriptor::InterruptDescriptor(uintptr_t isr, unsigned ist,
+	bool kernelOnly)
+	:
+	fBase0(isr),
+	fSelector(KERNEL_CODE_SELECTOR),
+	fIST(ist),
+	fReserved0(0),
+	fType(static_cast<unsigned>(InterruptDescriptorType::Interrupt)),
+	fReserved1(0),
+	fDPL(kernelOnly ? 0 : 3),
+	fPresent(1),
+	fBase1(isr >> 16),
+	fBase2(isr >> 32),
+	fReserved2(0)
+{
+	static_assert(sizeof(InterruptDescriptor) == sizeof(uint64_t) * 2,
+		"Invalid InterruptDescriptor size.");
+}
+
+
+constexpr
+InterruptDescriptor::InterruptDescriptor(uintptr_t isr)
+	:
+	InterruptDescriptor(isr, 0, true)
+{
+}
+
+
+void
+InterruptDescriptorTable::Load() const
+{
+	struct [[gnu::packed]] {
+		uint16_t	fLimit;
+		const void*	fAddress;
+	} gdtDescriptor = {
+		sizeof(fTable) - 1,
+		static_cast<const void*>(fTable.fTable),
+	};
+
+	asm volatile("lidt	%0" : : "m" (gdtDescriptor));
+}
+
+
+constexpr InterruptDescriptor
+InterruptDescriptor::Generate(unsigned index)
+{
+	return index == 3
+		? InterruptDescriptor(uintptr_t(isr_array + index), 0, false)
+		: (index == 8
+			? InterruptDescriptor(uintptr_t(isr_array + index), 1, true)
+			: InterruptDescriptor(uintptr_t(isr_array + index)));
 }
 
 
@@ -61,37 +333,41 @@ x86_64_general_protection_fault(iframe* frame)
 
 
 void
+x86_descriptors_preboot_init_percpu(kernel_args* args, int cpu)
+{
+	new(&sGDT) GlobalDescriptorTable;
+	sGDT.Load();
+
+	memset(&gCPU[cpu].arch.tss, 0, sizeof(struct tss));
+	gCPU[cpu].arch.tss.io_map_base = sizeof(struct tss);
+
+	// Set up the double fault IST entry (see x86_descriptors_init()).
+	struct tss* tss = &gCPU[cpu].arch.tss;
+	size_t stackSize;
+	tss->ist1 = (addr_t)x86_get_double_fault_stack(cpu, &stackSize);
+	tss->ist1 += stackSize;
+
+	// Set up the descriptor for this TSS.
+	auto tssIndex = sGDT.SetTSS(cpu,
+			TSSDescriptor(uintptr_t(&gCPU[cpu].arch.tss), sizeof(struct tss)));
+	TSSDescriptor::LoadTSS(tssIndex);
+
+	new(&sIDT) InterruptDescriptorTable;
+	sIDT.Load();
+}
+
+
+void
 x86_descriptors_init(kernel_args* args)
 {
-	// The boot loader sets up a GDT and allocates an empty IDT for us.
-	sGDT = (segment_descriptor*)args->arch_args.vir_gdt;
-	sIDT = (interrupt_descriptor*)args->arch_args.vir_idt;
-
-	// Fill out the IDT, pointing each entry to the corresponding entry in the
-	// ISR array created in arch_interrupts.S (see there to see how this works).
-	for(uint32 i = 0; i < kInterruptHandlerTableSize; i++) {
-		// x86_64 removes task gates, therefore we cannot use a separate TSS
-		// for the double fault exception. However, instead it adds a new stack
-		// switching mechanism, the IST. The IST is a table of stack addresses
-		// in the TSS. If the IST field of an interrupt descriptor is non-zero,
-		// the CPU will switch to the stack specified by that IST entry when
-		// handling that interrupt. So, we use IST entry 1 to store the double
-		// fault stack address (set up in x86_descriptors_init_post_vm()).
-		uint32 ist = (i == 8) ? 1 : 0;
-
-		// Breakpoint exception can be raised from userland.
-		uint32 dpl = (i == 3) ? DPL_USER : DPL_KERNEL;
-
-		set_interrupt_descriptor(&sIDT[i], (addr_t)&isr_array[i],
-			GATE_INTERRUPT, KERNEL_CODE_SEG, dpl, ist);
-	}
-
 	// Initialize the interrupt handler table.
 	interrupt_handler_function** table = gInterruptHandlerTable;
 	for (uint32 i = 0; i < ARCH_INTERRUPT_BASE; i++)
 		table[i] = x86_invalid_exception;
-	for (uint32 i = ARCH_INTERRUPT_BASE; i < kInterruptHandlerTableSize; i++)
+	for (uint32 i = ARCH_INTERRUPT_BASE;
+		i < InterruptDescriptorTable::kDescriptorCount; i++) {
 		table[i] = x86_hardware_interrupt;
+	}
 
 	table[0]  = x86_unexpected_exception;	// Divide Error Exception (#DE)
 	table[1]  = x86_handle_debug_exception; // Debug Exception (#DB)
@@ -114,59 +390,3 @@ x86_descriptors_init(kernel_args* args)
 	table[19] = x86_unexpected_exception;	// SIMD Floating-Point Exception (#XF)
 }
 
-
-void
-x86_descriptors_init_percpu(kernel_args* args, int cpu)
-{
-	// Load the IDT.
-	gdt_idt_descr idtr = {
-		256 * sizeof(interrupt_descriptor) - 1,
-		(addr_t)sIDT
-	};
-	asm volatile("lidt %0" :: "m" (idtr));
-
-	// Load the TSS for non-boot CPUs (boot CPU gets done below).
-	if (cpu != 0) {
-		load_tss(cpu);
-	}
-}
-
-
-status_t
-x86_descriptors_init_post_vm(kernel_args* args)
-{
-	area_id area;
-
-	// Create an area for the GDT.
-	area = create_area("gdt", (void**)&sGDT, B_EXACT_ADDRESS, B_PAGE_SIZE,
-		B_ALREADY_WIRED, B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
-	if (area < B_OK)
-		return area;
-
-	// Same for the IDT.
-	area = create_area("idt", (void**)&sIDT, B_EXACT_ADDRESS, B_PAGE_SIZE,
-		B_ALREADY_WIRED, B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
-	if (area < B_OK)
-		return area;
-
-	for (uint32 i = 0; i < args->num_cpus; i++) {
-		// Set up the task state segment.
-		memset(&gCPU[i].arch.tss, 0, sizeof(struct tss));
-		gCPU[i].arch.tss.io_map_base = sizeof(struct tss);
-
-		// Set up the descriptor for this TSS.
-		set_tss_descriptor(&sGDT[TSS_SEGMENT(i)], (addr_t)&gCPU[i].arch.tss,
-			sizeof(struct tss));
-
-		// Set up the double fault IST entry (see x86_descriptors_init()).
-		struct tss* tss = &gCPU[i].arch.tss;
-		size_t stackSize;
-		tss->ist1 = (addr_t)x86_get_double_fault_stack(i, &stackSize);
-		tss->ist1 += stackSize;
-	}
-
-	// Load the TSS for the boot CPU.
-	load_tss(0);
-
-	return B_OK;
-}

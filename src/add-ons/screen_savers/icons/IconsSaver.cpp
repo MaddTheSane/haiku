@@ -1,31 +1,43 @@
 /*
-	Copyright 2009 Vincent Duvert, vincent.duvert@free.fr
-	All rights reserved. Distributed under the terms of the MIT License.
-*/
+ * Copyright 2009 Vincent Duvert, vincent.duvert@free.fr
+ * Copyright 2014 Haiku, Inc. All rights reserved.
+ *
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Vincent Duvert, vincent.duvert@free.fr
+ *		John Scipione, jscipione@gmail.com
+ */
 
 
 #include "IconsSaver.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 
 #include <Bitmap.h>
 #include <Catalog.h>
 #include <MimeType.h>
-#include <StringView.h>
 
 #include <BuildScreenSaverDefaultSettingsView.h>
 
 #include "IconDisplay.h"
+#include "VectorIcon.h"
+
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Screensaver Icons"
 
 
-#define MAX_ICONS 15
-#define MAX_SIZE 20 // In percentage of the screen width
-#define MIN_SIZE 5 // Same here
 #define RAND_BETWEEN(a, b) ((rand() % ((b) - (a) + 1) + (a)))
+
+
+static const int32 kMaxConcurrentIcons = 15;
+static const int32 kMinIconWidthPercentage = 5;
+	// percentage of the screen width
+static const int32 kMaxIconWidthPercentage = 20;
+	// same here
+static const int32 kMinIconCount = 20;
+static const int32 kMaxIconCount = 384;
 
 
 const rgb_color kBackgroundColor = ui_color(B_DESKTOP_COLOR);
@@ -37,10 +49,12 @@ BScreenSaver* instantiate_screen_saver(BMessage* msg, image_id image)
 }
 
 
-IconsSaver::IconsSaver(BMessage* msg, image_id image)
+//	#pragma mark - IconsSaver
+
+
+IconsSaver::IconsSaver(BMessage* archive, image_id image)
 	:
-	BScreenSaver(msg, image),
-	fVectorIconsCount(0),
+	BScreenSaver(archive, image),
 	fIcons(NULL),
 	fBackBitmap(NULL),
 	fBackView(NULL),
@@ -56,34 +70,10 @@ IconsSaver::~IconsSaver()
 
 
 status_t
-IconsSaver::StartSaver(BView *view, bool /*preview*/)
+IconsSaver::StartSaver(BView* view, bool /*preview*/)
 {
-	if (fVectorIconsCount <= 0) {
-		// Load the vector icons from the MIME types
-		BMessage types;
-		BMimeType::GetInstalledTypes(&types);
-
-		for (int32 index = 0 ; ; index++) {
-			const char* type;
-			if (types.FindString("types", index, &type) != B_OK)
-				break;
-
-			BMimeType mimeType(type);
-			uint8* vectorData = NULL;
-			size_t size = 0;
-
-			if (mimeType.GetIcon(&vectorData, &size) != B_OK || size == 0)
-				continue;
-
-			VectorIcon* icon = new VectorIcon;
-			icon->data = vectorData;
-			icon->size = size;
-
-			fVectorIcons.AddItem(icon);
-		}
-
-		fVectorIconsCount = fVectorIcons.CountItems();
-	}
+	if (fVectorIcons.CountItems() < kMinIconCount)
+		_GetVectorIcons();
 
 	srand(system_time() % INT_MAX);
 
@@ -108,10 +98,10 @@ IconsSaver::StartSaver(BView *view, bool /*preview*/)
 		fBackBitmap->Unlock();
 	}
 
-	fIcons = new IconDisplay[MAX_ICONS];
+	fIcons = new IconDisplay[kMaxConcurrentIcons];
 
-	fMaxSize = (screenRect.IntegerWidth() * MAX_SIZE) / 100;
-	fMinSize = (screenRect.IntegerWidth() * MIN_SIZE) / 100;
+	fMaxSize = (screenRect.IntegerWidth() * kMaxIconWidthPercentage) / 100;
+	fMinSize = (screenRect.IntegerWidth() * kMinIconWidthPercentage) / 100;
 	if (fMaxSize > 255)
 		fMaxSize = 255;
 
@@ -133,34 +123,32 @@ IconsSaver::StopSaver()
 
 
 void
-IconsSaver::Draw(BView *view, int32 frame)
+IconsSaver::Draw(BView* view, int32 frame)
 {
 	static int32 previousFrame = 0;
 
-	// Update drawing
+	// update drawing
 	if (fBackBitmap->Lock()) {
-		for (uint8 i = 0 ; i < MAX_ICONS ; i++) {
+		for (uint8 i = 0 ; i < kMaxConcurrentIcons ; i++)
 			fIcons[i].ClearOn(fBackView);
-		}
 
 		int32 delta = frame - previousFrame;
-
-		for (uint8 i = 0 ; i < MAX_ICONS ; i++) {
+		for (uint8 i = 0 ; i < kMaxConcurrentIcons ; i++)
 			fIcons[i].DrawOn(fBackView, delta);
-		}
+
 		fBackView->Sync();
 		fBackBitmap->Unlock();
 	}
 
-	// Sync the view with the back buffer
+	// sync the view with the back buffer
 	view->DrawBitmap(fBackBitmap);
 	previousFrame = frame;
 
-	if (fVectorIconsCount <= 0)
+	if (fVectorIcons.CountItems() < kMinIconCount)
 		return;
 
-	// Restart one icon
-	for (uint8 i = 0 ; i < MAX_ICONS ; i++) {
+	// restart one icon
+	for (uint8 i = 0 ; i < kMaxConcurrentIcons ; i++) {
 		if (!fIcons[i].IsRunning()) {
 			uint16 size = RAND_BETWEEN(fMinSize, fMaxSize);
 			uint16 maxX = view->Frame().IntegerWidth() - size;
@@ -170,16 +158,14 @@ IconsSaver::Draw(BView *view, int32 frame)
 			iconFrame.OffsetTo(RAND_BETWEEN(0, maxX), RAND_BETWEEN(0, maxY));
 
 			// Check that the icon doesn't overlap with others
-			for (uint8 j = 0 ; j < MAX_ICONS ; j++) {
+			for (uint8 j = 0 ; j < kMaxConcurrentIcons ; j++) {
 				if (fIcons[j].IsRunning() &&
 					iconFrame.Intersects(fIcons[j].GetFrame()))
 					return;
 			}
 
-			int32 index = RAND_BETWEEN(0, fVectorIconsCount - 1);
-
-			fIcons[i].Run((VectorIcon*)fVectorIcons.ItemAt(index), iconFrame);
-
+			int32 index = RAND_BETWEEN(0, fVectorIcons.CountItems() - 1);
+			fIcons[i].Run(fVectorIcons.ItemAt(index), iconFrame);
 			return;
 		}
 	}
@@ -193,3 +179,47 @@ IconsSaver::StartConfig(BView* view)
 		B_TRANSLATE("by Vincent Duvert"));
 }
 
+
+//	#pragma mark - IconsSaver private methods
+
+
+void
+IconsSaver::_GetVectorIcons()
+{
+	// Load vector icons from the MIME type database
+	BMessage types;
+	if (BMimeType::GetInstalledTypes(&types) != B_OK)
+		return;
+
+	const char* type;
+	for (int32 i = 0; types.FindString("types", i, &type) == B_OK; i++) {
+		BMimeType mimeType(type);
+		if (mimeType.InitCheck() != B_OK)
+			continue;
+
+		uint8* data;
+		size_t size;
+
+		if (mimeType.GetIcon(&data, &size) != B_OK) {
+			// didn't find an icon
+			continue;
+		}
+
+		vector_icon* icon = (vector_icon*)malloc(sizeof(vector_icon));
+		if (icon == NULL) {
+			// ran out of memory, delete the icon data
+			delete[] data;
+			continue;
+		}
+
+		icon->data = data;
+		icon->size = size;
+
+		// found a vector icon, add it to the list
+		fVectorIcons.AddItem(icon);
+		if (fVectorIcons.CountItems() >= kMaxIconCount) {
+			// this is enough to choose from, stop eating memory...
+			return;
+		}
+	}
+}

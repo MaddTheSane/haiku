@@ -8,6 +8,7 @@
 
 #include <Looper.h>
 
+#include "Function.h"
 #include "Team.h"
 #include "TeamMemoryBlock.h"
 #include "ValueNodeContainer.h"
@@ -16,7 +17,7 @@
 class entry_ref;
 class Architecture;
 class AreaInfo;
-class BString;
+class BFile;
 class DebuggerInterface;
 class SemaphoreInfo;
 class StackFrame;
@@ -30,7 +31,8 @@ class ValueNodeManager;
 
 
 class DebugReportGenerator : public BLooper, private Team::Listener,
-	private TeamMemoryBlock::Listener, private ValueNodeContainer::Listener {
+	private TeamMemoryBlock::Listener, private ValueNodeContainer::Listener,
+	private Function::Listener {
 public:
 								DebugReportGenerator(::Team* team,
 									UserInterfaceListener* listener,
@@ -58,17 +60,21 @@ private:
 	// ValueNodeContainer::Listener
 	virtual	void				ValueNodeValueChanged(ValueNode* node);
 
+	// Function::Listener
+	virtual	void				FunctionSourceCodeChanged(Function* function);
 
 private:
 			status_t			_GenerateReport(const entry_ref& outputPath);
-			status_t			_GenerateReportHeader(BString& _output);
-			status_t			_DumpLoadedImages(BString& _output);
-			status_t			_DumpAreas(BString& _output);
-			status_t			_DumpSemaphores(BString& _output);
-			status_t			_DumpRunningThreads(BString& _output);
-			status_t			_DumpDebuggedThreadInfo(BString& _output,
+			status_t			_GenerateReportHeader(BFile& _output);
+			status_t			_DumpLoadedImages(BFile& _output);
+			status_t			_DumpAreas(BFile& _output);
+			status_t			_DumpSemaphores(BFile& _output);
+			status_t			_DumpRunningThreads(BFile& _output);
+			status_t			_DumpDebuggedThreadInfo(BFile& _output,
 									::Thread* thread);
-			void				_DumpStackFrameMemory(BString& _output,
+			status_t			_DumpFunctionDisassembly(BFile& _output,
+									target_addr_t instructionPointer);
+			status_t			_DumpStackFrameMemory(BFile& _output,
 									CpuState* state,
 									target_addr_t framePointer,
 									uint8 stackDirection);
@@ -97,6 +103,7 @@ private:
 			TeamMemoryBlock*	fCurrentBlock;
 			status_t			fBlockRetrievalStatus;
 			::Thread*			fTraceWaitingThread;
+			Function*			fSourceWaitingFunction;
 };
 
 #endif // DEBUG_REPORT_GENERATOR_H

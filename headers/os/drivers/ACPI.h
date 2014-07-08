@@ -11,7 +11,7 @@
 
 
 typedef struct acpi_module_info acpi_module_info;
-typedef struct acpi_object_type acpi_object_type;
+typedef union acpi_object_type acpi_object_type;
 
 #define B_ACPI_MODULE_NAME "bus_managers/acpi/v1"
 
@@ -83,36 +83,43 @@ enum {
 
 /* ACPI control method arg type */
 
-struct acpi_object_type {
+union acpi_object_type {
 	uint32 object_type;
-	union {
+	struct {
+		uint32 object_type;
 		uint64 integer;
-		struct {
-			uint32 len;
-			char *string; /* You have to allocate string space yourself */
-		} string;
-		struct {
-			size_t length;
-			void *buffer;
-		} buffer;
-		struct {
-			uint32 count;
-			acpi_object_type *objects;
-		} package;
-		struct {
-			uint32 actual_type;
-			acpi_handle handle;
-		} reference;
-		struct {
-			uint32 cpu_id;
-			int pblk_address;
-			size_t pblk_length;
-		} processor;
-		struct {
-			uint32 min_power_state;
-			uint32 resource_order;
-		} power_resource;
-	} data;
+	} integer;
+	struct {
+		uint32 object_type;
+		uint32 len;
+		char *string; /* You have to allocate string space yourself */
+	} string;
+	struct {
+		uint32 object_type;
+		uint32 length;
+		void *buffer;
+	} buffer;
+	struct {
+		uint32 object_type;
+		uint32 count;
+		acpi_object_type *objects;
+	} package;
+	struct {
+		uint32 object_type;
+		uint32 actual_type;
+		acpi_handle handle;
+	} reference;
+	struct {
+		uint32 object_type;
+		uint32 cpu_id;
+		acpi_io_address pblk_address;
+		uint32 pblk_length;
+	} processor;
+	struct {
+		uint32 object_type;
+		uint32 min_power_state;
+		uint32 resource_order;
+	} power_resource;
 };
 
 
@@ -142,12 +149,17 @@ enum {
  */
 typedef uint32 acpi_status;
 
+typedef struct acpi_resource acpi_resource;
+
+#define ACPI_REENABLE_GPE	0x80
+
+
 #endif	// __ACTYPES_H__
 
 
-typedef uint32 (*acpi_event_handler)(void *Context);
+typedef uint32 (*acpi_event_handler)(void *context);
 typedef uint32 (*acpi_gpe_handler) (acpi_handle GpeDevice, uint32 GpeNumber,
-	void *Context);
+	void *context);
 
 typedef acpi_status (*acpi_adr_space_handler)(uint32 function,
 	acpi_physical_address address, uint32 bitWidth, int *value,
@@ -158,6 +170,9 @@ typedef acpi_status (*acpi_adr_space_setup)(acpi_handle regionHandle,
 
 typedef void (*acpi_notify_handler)(acpi_handle device, uint32 value,
 	void *context);
+
+typedef acpi_status (*acpi_walk_resources_callback)(acpi_resource* resource,
+	void* context);
 
 
 struct acpi_module_info {
@@ -213,9 +228,9 @@ struct acpi_module_info {
 	void		(*reset_fixed_event) (uint32 event);
 
 	status_t	(*install_fixed_event_handler)(uint32 event,
-					interrupt_handler *handler, void *data);
+					acpi_event_handler handler, void *data);
 	status_t	(*remove_fixed_event_handler)(uint32 event,
-					interrupt_handler *handler);
+					acpi_event_handler handler);
 
 	/* Namespace Access */
 
@@ -251,6 +266,9 @@ struct acpi_module_info {
 					acpi_data *retBuffer);
 	status_t	(*set_current_resources)(acpi_handle busDeviceHandle,
 					acpi_data *buffer);
+	status_t	(*walk_resources)(acpi_handle busDeviceHandle,
+					char *method, acpi_walk_resources_callback callback,
+					void* context);
 
 	/* Power state setting */
 
@@ -317,6 +335,10 @@ typedef struct acpi_device_module_info {
 	/* Control method execution and data acquisition */
 	status_t	(*evaluate_method)(acpi_device device, const char *method,
 					acpi_objects *args, acpi_data *returnValue);
+
+	/* Resource Management */
+	status_t	(*walk_resources)(acpi_device device, char *method,
+					acpi_walk_resources_callback callback, void* context);
 } acpi_device_module_info;
 
 

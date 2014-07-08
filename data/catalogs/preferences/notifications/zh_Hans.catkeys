@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-Notifications	814394708
+1	english	x-vnd.Haiku-Notifications	68793008
 An error occurred saving the preferences.\nIt's possible you are running out of disk space.	GeneralView		首选项保存出错。\n您可能已经用尽了磁盘空间。
 Notifications	GeneralView		通知
 seconds of inactivity	GeneralView		静止秒数
@@ -7,7 +7,6 @@ Mini icon	DisplayView		迷你图标
 Enable notifications	GeneralView		启用通知
 Error	NotificationView		错误
 OK	GeneralView		确定
-Events are not notified	GeneralView		事件未通知
 Type	NotificationView		类型
 Notifications cannot be stopped, because the server can't be reached.	GeneralView		由于无法获取服务，无法禁用通知。
 Cannot enable notifications because the server cannot be found.\nThis means your InfoPopper installation was not successfully completed.	GeneralView		由于未发现服务，无法启用通知。\n也就意味着，您的 InfoPopper 未成功的完成安装。
@@ -17,6 +16,7 @@ Cannot disable notifications because the server can't be reached.	GeneralView		�
 Progress	NotificationView		进度
 Last Received	NotificationView		最近通知
 General	PrefletView		常规
+Apply	PrefletWin		应用
 Display	PrefletView		显示
 Can't enable notifications at startup time, you probably don't have write permission to the boot settings directory.	GeneralView		无法在启动时启用通知，可能您不具有引导设置目录的写入权限。
 Search:	NotificationView		搜索：
@@ -28,7 +28,6 @@ Yes	NotificationView		是
 Large icon	DisplayView		大图标
 Icon size:	DisplayView		图标大小：
 Hide notifications from screen after	GeneralView		从屏幕隐藏通知
-Disable notifications	GeneralView		禁用通知
 Notifications	System name		通知
 Notifications	NotificationView		通知
 No	NotificationView		否
@@ -39,11 +38,10 @@ Application	NotificationView		应用程序
 Enabled	NotificationView		启用
 OK	DisplayView		确定
 Unknown	NotificationView		未知
-Can't save preferences, you probably don't have write access to the boot settings directory.	GeneralView		无法保存首选项，您可能不具有引导设置目录的写入权限。
 There was a problem saving the preferences.\nIt's possible you don't have write access to the settings directory.	GeneralView		保存首选项存在问题。\n你可能不具有设置目录的写入权限。
 There was a problem saving the preferences.\nIt's possible you don't have write access to the settings directory.	NotificationView		保存首选项存在问题。\n你可能不具有设置目录的写入权限。
 Enable notifications at startup	GeneralView		启动时启用通知
 Notifications	PrefletView		通知
 The notifications server cannot be found, this means your InfoPopper installation was not successfully completed.	GeneralView		通知服务器无法找到。\n您 InfoPopper 没有成功完成安装。
+Can't save preferences, you probably don't have write access to the settings directory.	GeneralView		无法保存首选项，您可能没有配置文件夹写入权限。
 Applications	NotificationView		应用程序
-Events are notified	GeneralView		事件已通知

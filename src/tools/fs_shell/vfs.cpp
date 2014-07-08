@@ -112,7 +112,6 @@ struct fs_mount {
 	fssh_file_system_module_info *fs;
 	fssh_mount_id		id;
 	fssh_fs_volume		*volume;
-	void			*cookie;
 	char			*device_name;
 	char			*fs_name;
 	fssh_recursive_lock	rlock;	// guards the vnodes list
@@ -2683,7 +2682,7 @@ vfs_get_vnode_name(void *_vnode, char *name, fssh_size_t nameSize)
 
 fssh_status_t
 vfs_entry_ref_to_path(fssh_dev_t device, fssh_ino_t inode, const char *leaf,
-	char *path, fssh_size_t pathLength)
+	bool kernel, char *path, fssh_size_t pathLength)
 {
 	struct vnode *vnode;
 	fssh_status_t status;
@@ -3609,10 +3608,10 @@ common_lock_node(int fd, bool kernel)
 	// We need to set the locking atomically - someone
 	// else might set one at the same time
 #ifdef __x86_64__
-	if (fssh_atomic_test_and_set64((vint64_t *)&vnode->mandatory_locked_by,
+	if (fssh_atomic_test_and_set64((int64_t *)&vnode->mandatory_locked_by,
 			(fssh_addr_t)descriptor, 0) != 0)
 #else
-	if (fssh_atomic_test_and_set((vint32_t *)&vnode->mandatory_locked_by,
+	if (fssh_atomic_test_and_set((int32_t *)&vnode->mandatory_locked_by,
 			(fssh_addr_t)descriptor, 0) != 0)
 #endif
 		status = FSSH_B_BUSY;
@@ -3637,10 +3636,10 @@ common_unlock_node(int fd, bool kernel)
 	// We need to set the locking atomically - someone
 	// else might set one at the same time
 #ifdef __x86_64__
-	if (fssh_atomic_test_and_set64((vint64_t *)&vnode->mandatory_locked_by,
+	if (fssh_atomic_test_and_set64((int64_t *)&vnode->mandatory_locked_by,
 			0, (fssh_addr_t)descriptor) != (int64_t)descriptor)
 #else
-	if (fssh_atomic_test_and_set((vint32_t *)&vnode->mandatory_locked_by,
+	if (fssh_atomic_test_and_set((int32_t *)&vnode->mandatory_locked_by,
 			0, (fssh_addr_t)descriptor) != (int32_t)descriptor)
 #endif
 		status = FSSH_B_BAD_VALUE;
@@ -4942,7 +4941,7 @@ fs_next_device(int32_t *_cookie)
 
 	while (device < sNextMountID) {
 		mount = find_mount(device++);
-		if (mount != NULL && mount->cookie != NULL)
+		if (mount != NULL && mount->volume->private_volume != NULL)
 			break;
 	}
 
@@ -5684,7 +5683,7 @@ fssh_status_t
 _kern_entry_ref_to_path(fssh_dev_t device, fssh_ino_t inode, const char *leaf,
 	char* path, fssh_size_t pathLength)
 {
-	return vfs_entry_ref_to_path(device, inode, leaf, path, pathLength);
+	return vfs_entry_ref_to_path(device, inode, leaf, true, path, pathLength);
 }
 
 

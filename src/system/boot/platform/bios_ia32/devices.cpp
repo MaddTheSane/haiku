@@ -409,6 +409,16 @@ compute_check_sum(BIOSDrive *drive, off_t offset)
 	return sum;
 }
 
+/**	Checks if the specified drive is usable for reading.
+ */
+
+static bool
+is_drive_readable(BIOSDrive *drive)
+{
+	char buffer;
+	return drive->ReadAt(NULL, 0, &buffer, sizeof(buffer)) > 0;
+}
+
 
 static void
 find_unique_check_sums(NodeList *devices)
@@ -451,11 +461,24 @@ find_unique_check_sums(NodeList *devices)
 					|| compareDrive->Identifier().device_type != UNKNOWN_DEVICE)
 					continue;
 
+// TODO: Until we can actually get and compare *all* fields of the disk
+// identifier in the kernel, we cannot compare the whole structure (we also
+// should be more careful zeroing the structure before we fill it).
+#if 0
 				if (!memcmp(&drive->Identifier(), &compareDrive->Identifier(),
 						sizeof(disk_identifier))) {
 					clash = true;
 					break;
 				}
+#else
+				const disk_identifier& ourId = drive->Identifier();
+				const disk_identifier& otherId = compareDrive->Identifier();
+				if (memcmp(&ourId.device.unknown.check_sums,
+						&otherId.device.unknown.check_sums,
+						sizeof(ourId.device.unknown.check_sums)) == 0) {
+					clash = true;
+				}
+#endif
 			}
 
 			if (clash)
@@ -519,7 +542,14 @@ add_block_devices(NodeList *devicesList, bool identifierMissing)
 			continue;
 		}
 
-		devicesList->Add(drive);
+		// Only add usable drives
+		if (is_drive_readable(drive))
+			devicesList->Add(drive);
+		else {
+			dprintf("could not read from drive %" B_PRIu8 ", not adding\n", driveID);
+			delete drive;
+			continue;
+		}
 
 		if (drive->FillIdentifier() != B_OK)
 			identifierMissing = true;

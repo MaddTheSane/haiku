@@ -4,7 +4,7 @@
 <head>
 <!-- 
  *
- * Copyright 2008-2012, Haiku. All rights reserved.
+ * Copyright 2008-2013, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -44,6 +44,7 @@
 <li><a href="../../hu/preferences/appearance.html"><img src="../../images/flags/hu.png" alt="" />Magyar</a></li>
 <li><a href="../../pt_BR/preferences/appearance.html"><img src="../../images/flags/pt_BR.png" alt="" />Português (Brazil)</a></li>
 <li><a href="../../ca/preferences/appearance.html"><img src="../../images/flags/ca.png" alt="" />Català</a></li>
+<li><a href="../../pl/preferences/appearance.html"><img src="../../images/flags/pl.png" alt="" />Polski</a></li>
 <li><a href="../../en/preferences/appearance.html"><img src="../../images/flags/gb.png" alt="" />English</a></li>
 </ul>
 <span>
@@ -60,7 +61,6 @@
 <tr><td>桌面栏：</td><td style="width:15px;"></td><td><span class="menu">首选项</span></td></tr>
 <tr><td>位置：</td><td></td><td><span class="path">/boot/system/preferences/Appearance</span></td></tr>
 <tr><td>设置：</td><td></td><td><span class="path">~/config/settings/system/app_server/appearance</span><br />
-<span class="path">~/config/settings/system/app_server/decorator_settings</span><br />
 <span class="path">~/config/settings/system/app_server/fonts</span></td></tr>
 </table>
 <p>外观首选项允许你对 Haiku 的外观做出一些修改。</p>
@@ -74,7 +74,11 @@
 <h3>
 <a href="#"><img src="../../images/up.png" style="border:none;float:right" alt="index" /></a>
 <a id="installing_fonts" name="installing_fonts">安装字体</a></h3>
-<p>您可以通过将字体复制到如下用于目录，例如 <span class="path">/boot/common/data/fonts/</span> 或者 <span class="path">/boot/home/config/data/fonts/</span> 以实现安装（详情查看 <a href="../filesystem-layout.html">文件系统布局</a>）。</p>
+<p>新字体将不会以常规的 .hpkg 包形式提供，您可以根据字体类型（<tt>psfonts</tt> 或者 <tt>ttfonts</tt>）将字体复制到 <tt>non-packaged</tt> 下的相应子目录进行安装（详情查看 <a href="../filesystem-layout.html">文件系统布局</a>）。对于 TrueType 字体如下：</p>
+<table summary="layout" border="0" cellspacing="0" cellpadding="2">
+<tr><td><span class="path">/boot/system/non-packaged/data/fonts/ttfonts/</span></td><td>   </td><td>用于对所有用户都可用的字体。</td></tr>
+<tr><td><span class="path">/boot/home/config/non-packaged/data/fonts/ttfonts/</span></td><td>   </td><td>用于仅对自己可用的字体。</td></tr>
+</table>
 
 <h2>
 <a href="#"><img src="../../images/up.png" style="border:none;float:right" alt="index" /></a>

@@ -1,12 +1,22 @@
 /*
-	Copyright 2009 Vincent Duvert, vincent.duvert@free.fr
-	All rights reserved. Distributed under the terms of the MIT License.
-*/
+ * Copyright 2009 Vincent Duvert, vincent.duvert@free.fr
+ * Copyright 2014 Haiku, Inc. All rights reserved.
+ *
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Vincent Duvert, vincent.duvert@free.fr
+ *		John Scipione, jscipione@gmail.com
+ */
 #ifndef ICONS_SAVER_H
 #define ICONS_SAVER_H
 
-#include <List.h>
+
+#include <ObjectList.h>
 #include <ScreenSaver.h>
+
+
+struct vector_icon;
 
 
 class IconDisplay;
@@ -25,14 +35,17 @@ public:
 	virtual	void				StartConfig(BView* view);
 
 private:
-	BList						fVectorIcons;
-	int32						fVectorIconsCount;
-	IconDisplay*				fIcons;
+			void				_GetVectorIcons();
 
-	BBitmap*					fBackBitmap;
-	BView*						fBackView;
+	BObjectList<vector_icon>	fVectorIcons;
+			IconDisplay*		fIcons;
 
-	uint16						fMinSize, fMaxSize;
+			BBitmap*			fBackBitmap;
+			BView*				fBackView;
+
+			uint16				fMinSize;
+			uint16				fMaxSize;
 };
 
-#endif
+
+#endif	// ICONS_SAVER_H

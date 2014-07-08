@@ -1,8 +1,9 @@
 /*
- * Copyright 2008-2012, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2008-2013, Axel Dörfler, axeld@pinc-software.de.
  * Copyright 2002/03, Thomas Kurschel. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
+
 
 /*!	Peripheral driver to handle any kind of SCSI disks,
 	i.e. hard disk and floopy disks (ZIP etc.)
@@ -20,7 +21,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <AutoDeleter.h>
+
 #include <fs/devfs.h>
+#include <util/fs_trim_support.h>
 
 #include "dma_resources.h"
 #include "IORequest.h"
@@ -93,7 +97,6 @@ get_geometry(das_handle* handle, device_geometry* geometry)
 	if (status != B_OK)
 		return status;
 
-
 	devfs_compute_geometry_size(geometry, info->capacity, info->block_size);
 
 	geometry->device_type = B_DISK;
@@ -150,6 +153,31 @@ synchronize_cache(das_driver_info *device)
 	device->scsi->free_ccb(ccb);
 
 	return result.error_code;
+}
+
+
+static status_t
+trim_device(das_driver_info* device, fs_trim_data* trimData)
+{
+	TRACE("trim_device()\n");
+
+	scsi_ccb* request = device->scsi->alloc_ccb(device->scsi_device);
+	if (request == NULL)
+		return B_NO_MEMORY;
+
+	uint64 trimmedSize = 0;
+	for (uint32 i = 0; i < trimData->range_count; i++) {
+		trimmedSize += trimData->ranges[i].size;
+	}
+	status_t status = sSCSIPeripheral->trim_device(device->scsi_periph_device,
+		request, (scsi_block_range*)&trimData->ranges[0],
+		trimData->range_count);
+
+	device->scsi->free_ccb(request);
+	if (status == B_OK)
+		trimData->trimmed_size = trimmedSize;
+
+	return status;
 }
 
 
@@ -384,6 +412,22 @@ das_ioctl(void* cookie, uint32 op, void* buffer, size_t length)
 
 		case B_FLUSH_DRIVE_CACHE:
 			return synchronize_cache(info);
+
+		case B_TRIM_DEVICE:
+		{
+			fs_trim_data* trimData;
+			MemoryDeleter deleter;
+			status_t status = get_trim_data_from_user(buffer, length, deleter,
+				trimData);
+			if (status != B_OK)
+				return status;
+
+			status = trim_device(info, trimData);
+			if (status != B_OK)
+				return status;
+
+			return copy_trim_data_to_user(buffer, trimData);
+		}
 
 		default:
 			return sSCSIPeripheral->ioctl(handle->scsi_periph_handle, op,
@@ -649,7 +693,7 @@ struct driver_module_info sSCSIDiskDriver = {
 	das_init_driver,
 	das_uninit_driver,
 	das_register_child_devices,
-	das_rescan_child_devices,	
+	das_rescan_child_devices,
 	NULL,	// removed
 };
 

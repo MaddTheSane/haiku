@@ -341,6 +341,14 @@ enum {
 	AS_DUMP_ALLOCATOR,
 	AS_DUMP_BITMAPS,
 
+	// transformation in addition to origin/scale
+	AS_VIEW_SET_TRANSFORM,
+	AS_VIEW_GET_TRANSFORM,
+
+	// Polygon filling rules
+	AS_VIEW_SET_FILL_RULE,
+	AS_VIEW_GET_FILL_RULE,
+
 	AS_LAST_CODE
 };
 

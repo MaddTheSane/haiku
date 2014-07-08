@@ -118,8 +118,8 @@ typedef uint64_t uintmax_t;
 #define UINTMAX_MAX	UINT64_MAX
 
 /* Limits of other integer types */
-#define PTDIFF_MIN __HAIKU_SADDR_MIN
-#define PTDIFF_MAX __HAIKU_SADDR_MAX
+#define PTRDIFF_MIN __HAIKU_SADDR_MIN
+#define PTRDIFF_MAX __HAIKU_SADDR_MAX
 
 #define SIG_ATOMIC_MIN INT32_MIN
 #define SIG_ATOMIC_MAX INT32_MAX
@@ -136,16 +136,22 @@ typedef uint64_t uintmax_t;
 #define INT8_C(value) 	value
 #define INT16_C(value) 	value
 #define INT32_C(value) 	value
-#define INT64_C(value) 	value ## LL
 
 #define UINT8_C(value) 	value ## U
 #define UINT16_C(value) value ## U
 #define UINT32_C(value) value ## U
-#define UINT64_C(value) value ## ULL
 
-/* Macros for greatest-width integer constant expressions */
+#if defined(__SIZEOF_LONG__) && __SIZEOF_LONG__ > 4
+#define INT64_C(value)		value ## L
+#define UINT64_C(value) 	value ## UL
+#define INTMAX_C(value) 	value ## L
+#define UINTMAX_C(value)	value ## UL
+#else
+#define INT64_C(value) 		value ## LL
+#define UINT64_C(value) 	value ## ULL
 #define INTMAX_C(value) 	value ## LL
-#define UINTMAX_C(value) 	value ## ULL
+#define UINTMAX_C(value)	value ## ULL
+#endif
 
 #endif /* !defined(__cplusplus) || defined(__STDC_CONSTANT_MACROS) */
 

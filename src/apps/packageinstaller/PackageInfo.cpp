@@ -45,6 +45,21 @@ enum {
 	P_SCRIPT
 };
 
+typedef enum {
+    B_BEBOX_PLATFORM = 0,
+    B_MAC_PLATFORM,
+    B_AT_CLONE_PLATFORM,
+    B_ENIAC_PLATFORM,
+    B_APPLE_II_PLATFORM,
+    B_CRAY_PLATFORM,
+    B_LISA_PLATFORM,
+    B_TI_994A_PLATFORM,
+    B_TIMEX_SINCLAIR_PLATFORM,
+    B_ORAC_1_PLATFORM,
+    B_HAL_PLATFORM,
+	B_INVALID_PLATFORM
+} platform_type;
+
 
 PackageInfo::PackageInfo()
 	:
@@ -131,8 +146,19 @@ PackageInfo::Parse()
 
 	const char padding[7] = { 0, 0, 0, 0, 0, 0, 0 };
 
-	system_info sysinfo;
-	get_system_info(&sysinfo);
+	platform_type thisPlatform = B_INVALID_PLATFORM;
+	cpu_topology_node_info topologyRoot;
+	uint32 topologyNodeCount = 1;
+	if (get_cpu_topology_info(&topologyRoot, &topologyNodeCount) == B_OK) {
+		switch (topologyRoot.data.root.platform) {
+			case B_CPU_x86:
+				thisPlatform = B_AT_CLONE_PLATFORM;
+				break;
+
+			default:
+				break;
+		}
+	}
 
 	uint64 infoOffset = 0, groupsOffset = 0;
 	uint64 length = 0;
@@ -255,7 +281,7 @@ PackageInfo::Parse()
 			uint8 *compressed = new uint8[length];
 			if (fPackageFile->Read(compressed, length)
 					!= static_cast<int64>(length)) {
-				delete compressed;
+				delete[] compressed;
 				RETURN_AND_SET_STATUS(B_ERROR);
 			}
 
@@ -263,14 +289,14 @@ PackageInfo::Parse()
 			status_t ret = inflate_data(compressed, length, disclaimer,
 				original);
 			disclaimer[original] = 0;
-			delete compressed;
+			delete[] compressed;
 			if (ret != B_OK) {
-				delete disclaimer;
+				delete[] disclaimer;
 				RETURN_AND_SET_STATUS(B_ERROR);
 			}
 
 			fDisclaimer = (char *)disclaimer;
-			delete disclaimer;
+			delete[] disclaimer;
 
 			continue;
 		} else if (!memcmp(buffer, splashScreenMarker, 7)) {
@@ -291,7 +317,7 @@ PackageInfo::Parse()
 			uint8 *compressed = new uint8[length];
 			if (fPackageFile->Read(compressed, length)
 					!= static_cast<int64>(length)) {
-				delete compressed;
+				delete[] compressed;
 				RETURN_AND_SET_STATUS(B_ERROR);
 			}
 
@@ -299,7 +325,7 @@ PackageInfo::Parse()
 			status_t ret = inflate_data(compressed, length,
 				static_cast<uint8 *>(const_cast<void *>(fImage.Buffer())),
 				original);
-			delete compressed;
+			delete[] compressed;
 			if (ret != B_OK) {
 				RETURN_AND_SET_STATUS(B_ERROR);
 			}
@@ -370,7 +396,7 @@ PackageInfo::Parse()
 					fPackageFile->Read(name, length);
 					name[length] = 0;
 					group.name = name;
-					delete name;
+					delete[] name;
 				} else if (!memcmp(buffer, "GrpD", 5)) {
 					if (!groupStarted) {
 						RETURN_AND_SET_STATUS(B_ERROR);
@@ -385,7 +411,7 @@ PackageInfo::Parse()
 					fPackageFile->Read(desc, length);
 					desc[length] = 0;
 					group.description = desc;
-					delete desc;
+					delete[] desc;
 				} else if (!memcmp(buffer, "GrHt", 5)) {
 					if (!groupStarted) {
 						RETURN_AND_SET_STATUS(B_ERROR);
@@ -465,7 +491,7 @@ PackageInfo::Parse()
 					}
 					fDescription.Remove(0, i);
 
-					delete description;
+					delete[] description;
 					parser_debug("Description text reached\n");
 
 					// After this, there's a known size sequence of bytes, which
@@ -494,7 +520,7 @@ PackageInfo::Parse()
 					fPackageFile->Read(name, length);
 					name[length] = 0;
 					fName = name;
-					delete name;
+					delete[] name;
 				} else if (!memcmp(buffer, versionMarker, 7)) {
 					parser_debug("Package version reached\n");
 					fPackageFile->Read(&length, 4);
@@ -505,7 +531,7 @@ PackageInfo::Parse()
 					fPackageFile->Read(version, length);
 					version[length] = 0;
 					fVersion = version;
-					delete version;
+					delete[] version;
 				} else if (!memcmp(buffer, devMarker, 7)) {
 					parser_debug("Package developer reached\n");
 					fPackageFile->Read(&length, 4);
@@ -516,7 +542,7 @@ PackageInfo::Parse()
 					fPackageFile->Read(dev, length);
 					dev[length] = 0;
 					fDeveloper = dev;
-					delete dev;
+					delete[] dev;
 				} else if (!memcmp(buffer, shortDescMarker, 7)) {
 					parser_debug("Package short description reached\n");
 					fPackageFile->Read(&length, 4);
@@ -527,7 +553,7 @@ PackageInfo::Parse()
 					fPackageFile->Read(desc, length);
 					desc[length] = 0;
 					fShortDesc = desc;
-					delete desc;
+					delete[] desc;
 				} else if (!memcmp(buffer, helpMarker, 7)) {
 					// The help text is a stored in deflated state, preceded by a 64 bit
 					// compressed size, 64 bit inflated size and a 32 bit integer
@@ -564,7 +590,7 @@ PackageInfo::Parse()
 					fPackageFile->Read(ti, length);
 					ti[length] = 0;
 					parser_debug("DQTi - %s\n", ti);
-					delete ti;
+					delete[] ti;
 				} else if (!memcmp(buffer, "DQSz", 5)) {
 					parser_debug("DQSz\n");
 					uint64 size;
@@ -588,7 +614,7 @@ PackageInfo::Parse()
 					fPackageFile->Read(signature, length);
 					signature[length] = 0;
 					parser_debug("DQMi - %s\n", signature);
-					delete signature;
+					delete[] signature;
 				} else if (!memcmp(buffer, "PaNa", 5)) {
 					parser_debug("PaNa\n");
 					fPackageFile->Read(&length, 4);
@@ -602,7 +628,7 @@ PackageInfo::Parse()
 					if (length > 0 && pathname[length - 1] == '/')
 						path->Remove(length - 1, 1);
 					userPaths.AddItem(path);
-					delete pathname;
+					delete[] pathname;
 				} else if (!memcmp(buffer, padding, 7)) {
 					parser_debug("Padding!\n");
 					continue;
@@ -675,7 +701,7 @@ PackageInfo::Parse()
 			name[length] = 0;
 
 			nameString = name;
-			delete name;
+			delete[] name;
 		} else if (!memcmp(buffer, "Grps", 5)) {
 			if (element == P_NONE) {
 				RETURN_AND_SET_STATUS(B_ERROR);
@@ -763,7 +789,7 @@ PackageInfo::Parse()
 			parser_debug("Mime: %s\n", mime);
 
 			mimeString = mime;
-			delete mime;
+			delete[] mime;
 		} else if (!memcmp(buffer, "CmpS", 5)) {
 			if (element == P_NONE) {
 				RETURN_AND_SET_STATUS(B_ERROR);
@@ -821,7 +847,7 @@ PackageInfo::Parse()
 			parser_debug("Signature: %s\n", signature);
 
 			signatureString = signature;
-			delete signature;
+			delete[] signature;
 		} else if (!memcmp(buffer, "Link", 5)) {
 			if (element != P_LINK) {
 				RETURN_AND_SET_STATUS(B_ERROR);
@@ -837,14 +863,13 @@ PackageInfo::Parse()
 			parser_debug("Link: %s\n", link);
 
 			linkString = link;
-			delete link;
+			delete[] link;
 		} else if (!memcmp(buffer, padding, 7)) {
 			PackageItem *item = NULL;
 
 			parser_debug("Padding!\n");
 			if (platform != 0xffffffff
-				&& static_cast<platform_types>(platform)
-					!= sysinfo.platform_type) {
+				&& static_cast<platform_type>(platform) != thisPlatform) {
 				// If the file/directory/item's platform is different than the
 				// target platform (or different than the 'any' constant),
 				// ignore this file
@@ -999,8 +1024,20 @@ PackageInfo::Parse()
 						localType, ctime, mtime, mode, offset, size);
 				}
 			} else if (element == P_SCRIPT) {
-				fScripts.AddItem(new PackageScript(fPackageFile, offset, size,
-					originalSize));
+				parser_debug("Adding the script %s!\n",
+					nameString.String());
+
+				BString workingDirectory;
+				uint8 localType = P_SYSTEM_PATH;
+				if (path == 1)
+					workingDirectory << itemPath;
+				else if (path == 0xffffffff) {
+					workingDirectory << installDirectory;
+					localType = P_INSTALL_PATH;
+				}
+
+				fScripts.AddItem(new PackageScript(fPackageFile,
+					workingDirectory, localType, offset, size, originalSize));
 			} else {
 				// If the directory tree count is equal to zero, this means all
 				// directory trees have been closed and a padding sequence means the

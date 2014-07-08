@@ -4,7 +4,7 @@
 <head>
 <!-- 
  *
- * Copyright 2008-2012, Haiku. All rights reserved.
+ * Copyright 2008-2013, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -43,6 +43,7 @@
 <li><a href="../../sk/preferences/appearance.html"><img src="../../images/flags/sk.png" alt="" />Slovenčina</a></li>
 <li><a href="../../hu/preferences/appearance.html"><img src="../../images/flags/hu.png" alt="" />Magyar</a></li>
 <li><a href="../../pt_BR/preferences/appearance.html"><img src="../../images/flags/pt_BR.png" alt="" />Português (Brazil)</a></li>
+<li><a href="../../pl/preferences/appearance.html"><img src="../../images/flags/pl.png" alt="" />Polski</a></li>
 <li><a href="../../en/preferences/appearance.html"><img src="../../images/flags/gb.png" alt="" />English</a></li>
 </ul>
 <span>
@@ -73,7 +74,12 @@
 <h3>
 <a href="#"><img src="../../images/up.png" style="border:none;float:right" alt="index" /></a>
 <a id="installing_fonts" name="installing_fonts">Instal·lació de nous tipus de lletra</a></h3>
-<p>Per tal d'instal·lar nous tipus de lletra, els heu de copiar a la pcarpeta corresponent de l'usuari, per exemple. <span class="path">/boot/common/data/fonts/</span> o <span class="path">/boot/home/config/data/fonts/</span> (veieu l'apartat <a href="../filesystem-layout.html">Sistema d'arxius</a>).</p>
+<p>Per tal d'instal·lar els nous tipus de lletra, que no venen com un paquet .hpkg corrent, els heu de copiar a una subcarpeta segons el tipus de lletra (<tt>psfonts</tt> or <tt>ttfonts</tt>) dintre de les respectives carpetes <tt>non-packaged</tt> (veieu l'apartat <a href="../filesystem-layout.html">Sistema d'arxius</a>).
+</p>
+<table summary="layout" border="0" cellspacing="0" cellpadding="2">
+<tr><td><span class="path">/boot/system/non-packaged/data/fonts/ttfonts/</span></td><td>   </td><td>pels tipus de lletra disponibles per a tots els usuaris.</td></tr>
+<tr><td><span class="path">/boot/home/config/non-packaged/data/fonts/ttfonts/</span></td><td>   </td><td>pels tipus de lletra només disponibles per vos.</td></tr>
+</table>
 
 <h2>
 <a href="#"><img src="../../images/up.png" style="border:none;float:right" alt="index" /></a>

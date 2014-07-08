@@ -8,6 +8,7 @@
 
 #include <Archivable.h>
 #include <Message.h>
+#include <Path.h>
 #include <String.h>
 
 
@@ -16,6 +17,8 @@ public:
 								BUrl(const char* url);
 								BUrl(BMessage* archive);
 								BUrl(const BUrl& other);
+								BUrl(const BUrl& base, const BString& relative);
+								BUrl(const BPath& path);
 								BUrl();
 	virtual						~BUrl();
 
@@ -24,6 +27,7 @@ public:
 			BUrl&				SetProtocol(const BString& scheme);
 			BUrl&				SetUserName(const BString& user);
 			BUrl&				SetPassword(const BString& password);
+			void				SetAuthority(const BString& authority);
 			BUrl&				SetHost(const BString& host);
 			BUrl&				SetPort(int port);
 			BUrl&				SetPath(const BString& path);
@@ -67,6 +71,12 @@ public:
 	static	BString				UrlDecode(const BString& url, 
 									bool strict = false);
 
+	// utility functionality
+			bool				HasPreferredApplication() const;
+			BString				PreferredApplication() const;
+			status_t			OpenWithPreferredApplication(
+									bool onProblemAskUser = true) const;
+
 	// BArchivable members
 	virtual	status_t			Archive(BMessage* into,
 									bool deep = true) const;
@@ -87,15 +97,8 @@ public:
 private:
 			void				_ResetFields();
 			void				_ExplodeUrlString(const BString& urlString);
-
-			void				_ExtractProtocol(const BString& urlString, 
-									int16* origin);
-			void				_ExtractAuthority(const BString& urlString, 
-									int16* origin);
-			void				_ExtractPath(const BString& urlString, 
-									int16* origin);
-			void				_ExtractRequestAndFragment(
-									const BString& urlString, int16* origin);
+			BString				_MergePath(const BString& relative) const;
+			void				_SetPathUnsafe(const BString& path);
 
 	static	BString				_DoUrlEncodeChunk(const BString& chunk, 
 									bool strict, bool directory = false);
@@ -103,12 +106,11 @@ private:
 									bool strict);
 
 			bool				_IsProtocolValid();
-	static	bool				_IsAuthorityTerminator(char c);
-	static	bool				_IsPathTerminator(char c);
-	static	bool				_IsRequestTerminator(char c);
 	static	bool				_IsUnreserved(char c);
 	static	bool				_IsGenDelim(char c);
 	static	bool				_IsSubDelim(char c);
+
+			BString				_UrlMimeType() const;
 
 private:
 	mutable	BString				fUrlString;
@@ -128,15 +130,11 @@ private:
 	mutable	bool				fAuthorityValid : 1;
 	mutable bool				fUserInfoValid : 1;
 
-			bool				fBasicUri : 1;
-			
 			bool				fHasProtocol : 1;
 			bool				fHasUserName : 1;
 			bool				fHasPassword : 1;
-			bool				fHasUserInfo : 1;
 			bool				fHasHost : 1;
 			bool				fHasPort : 1;
-			bool				fHasAuthority : 1;
 			bool				fHasPath : 1;
 			bool				fHasRequest : 1;
 			bool				fHasFragment : 1;

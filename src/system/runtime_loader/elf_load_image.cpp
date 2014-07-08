@@ -18,6 +18,7 @@
 #include "add_ons.h"
 #include "elf_haiku_version.h"
 #include "elf_symbol_lookup.h"
+#include "elf_tls.h"
 #include "elf_versioning.h"
 #include "images.h"
 #include "runtime_loader_private.h"
@@ -77,6 +78,9 @@ count_regions(const char* imagePath, char const* buff, int phnum, int phentsize)
 			case PT_STACK:
 				// we don't use it
 				break;
+			case PT_TLS:
+				// will be handled at some other place
+				break;
 			default:
 				FATAL("%s: Unhandled pheader type in count 0x%" B_PRIx32 "\n",
 					imagePath, pheaders->p_type);
@@ -95,6 +99,8 @@ parse_program_headers(image_t* image, uint64_t imageOffset, char* buff,
 	elf_phdr* pheader;
 	int regcount;
 	int i;
+
+	image->dso_tls_id = unsigned(-1);
 
 	regcount = 0;
 	for (i = 0; i < phnum; i++) {
@@ -195,6 +201,12 @@ parse_program_headers(image_t* image, uint64_t imageOffset, char* buff,
 				break;
 			case PT_STACK:
 				// we don't use it
+				break;
+			case PT_TLS:
+				image->dso_tls_id
+					= TLSBlockTemplates::Get().Register(
+						TLSBlockTemplate((void*)pheader->p_vaddr,
+							pheader->p_filesz, pheader->p_memsz));
 				break;
 			default:
 				FATAL("%s: Unhandled pheader type in parse 0x%" B_PRIx32 "\n",
@@ -318,6 +330,10 @@ parse_dynamic_segment(image_t* image)
 				uint32 flags = d[i].d_un.d_val;
 				if ((flags & DF_SYMBOLIC) != 0)
 					image->flags |= RFLAG_SYMBOLIC;
+				if ((flags & DF_STATIC_TLS) != 0) {
+					FATAL("Static TLS model is not supported.\n");
+					return false;
+				}
 				break;
 			}
 			default:
@@ -448,7 +464,7 @@ parse_elf_header(elf_ehdr* eheader, int32* _pheaderSize,
 
 status_t
 load_image(char const* name, image_type type, const char* rpath,
-	image_t** _image)
+	const char* requestingObjectPath, image_t** _image)
 {
 	int32 pheaderSize, sheaderSize;
 	char path[PATH_MAX];
@@ -494,7 +510,7 @@ load_image(char const* name, image_type type, const char* rpath,
 
 	// find and open the file
 	fd = open_executable(path, type, rpath, get_program_path(),
-		sSearchPathSubDir);
+		requestingObjectPath, sSearchPathSubDir);
 	if (fd < 0) {
 		FATAL("Cannot open file %s: %s\n", name, strerror(fd));
 		KTRACE("rld: load_container(\"%s\"): failed to open file", name);
@@ -610,10 +626,10 @@ load_image(char const* name, image_type type, const char* rpath,
 	if (type == B_APP_IMAGE) {
 		#if __GNUC__ == 2
 			if ((image->abi & B_HAIKU_ABI_MAJOR) == B_HAIKU_ABI_GCC_4)
-				sSearchPathSubDir = "gcc4";
+				sSearchPathSubDir = "x86";
 		#elif __GNUC__ == 4
 			if ((image->abi & B_HAIKU_ABI_MAJOR) == B_HAIKU_ABI_GCC_2)
-				sSearchPathSubDir = "gcc2";
+				sSearchPathSubDir = "x86_gcc2";
 		#endif
 	}
 
@@ -637,8 +653,8 @@ load_image(char const* name, image_type type, const char* rpath,
 
 	*_image = image;
 
-	KTRACE("rld: load_container(\"%s\"): done: id: %ld (ABI: %#lx)", name,
-		image->id, image->abi);
+	KTRACE("rld: load_container(\"%s\"): done: id: %" B_PRId32 " (ABI: %#"
+		B_PRIx32 ")", name, image->id, image->abi);
 
 	return B_OK;
 

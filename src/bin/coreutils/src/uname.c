@@ -50,6 +50,10 @@
 # include <mach-o/arch.h>
 #endif
 
+#ifdef __HAIKU__
+# include <OS.h>
+#endif
+
 #include "system.h"
 #include "error.h"
 #include "quote.h"
@@ -339,6 +343,27 @@ main (int argc, char **argv)
 # endif
         }
 #endif
+
+#ifdef __HAIKU__
+	  {
+		cpu_topology_node_info root;
+		uint32_t count = 1;
+		status_t error = get_cpu_topology_info(&root, &count);
+		if (error != B_OK || count < 1)
+			element = "unknown";
+		else {
+			switch (root.data.root.platform) {
+				case B_CPU_x86:
+					element = "x86";
+					break;
+				case B_CPU_x86_64:
+					element = "x86_64";
+					break;
+			}
+		}
+	  }
+#endif
+
       if (! (toprint == UINT_MAX && element == unknown))
         print_element (element);
     }

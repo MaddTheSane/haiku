@@ -15,6 +15,7 @@
 #include <net_notifications.h>
 #include <AutoDeleter.h>
 #include <NetServer.h>
+#include <RouteSupport.h>
 
 
 // TODO: using AF_INET for the socket isn't really a smart idea, as one
@@ -159,6 +160,13 @@ status_t
 BNetworkRoster::RemoveInterface(const BNetworkInterface& interface)
 {
 	return RemoveInterface(interface.Name());
+}
+
+
+status_t
+BNetworkRoster::GetRoutes(int family, BObjectList<route_entry>& routes) const
+{
+	return BPrivate::get_routes(NULL, family, routes);
 }
 
 

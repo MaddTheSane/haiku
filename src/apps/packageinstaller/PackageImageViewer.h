@@ -5,46 +5,38 @@
  * Author:
  *		Łukasz 'Sil2100' Zemczak <sil2100@vexillium.org>
  */
-#ifndef PACKAGEIMAGEVIEWER_H
-#define PACKAGEIMAGEVIEWER_H
+#ifndef PACKAGE_IMAGE_VIEWER_H
+#define PACKAGE_IMAGE_VIEWER_H
 
-#include <Window.h>
 #include <View.h>
 #include <Bitmap.h>
 #include <DataIO.h>
 
+#include "BlockingWindow.h"
 
 
 class ImageView : public BView {
-	public:
-		ImageView(BPositionIO *image);
-		~ImageView();
+public:
+								ImageView(BPositionIO* image);
+	virtual						~ImageView();
 
-		void AttachedToWindow();
-		void Draw(BRect updateRect);
-		void MouseUp(BPoint point);
+	virtual	void				AttachedToWindow();
+	virtual	void				Draw(BRect updateRect);
+	virtual	void				MouseUp(BPoint point);
 
-	private:
-		BBitmap *fImage;
-		bool fSuccess;
+private:
+			BBitmap*			fImage;
 };
 
 
-class PackageImageViewer : public BWindow {
-	public:
-		PackageImageViewer(BPositionIO *image);
-		~PackageImageViewer();
+class PackageImageViewer : public BlockingWindow {
+public:
+								PackageImageViewer(BPositionIO* image);
 		
-		void Go();
-
-		void MessageReceived(BMessage *msg);
-		
-	private:
-		ImageView *fBackground;
-
-		sem_id fSemaphore;
+private:
+			ImageView*			fBackground;
 };
 
 
-#endif
+#endif // PACKAGE_IMAGE_VIEWER_H
 

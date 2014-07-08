@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-FileTypes	599989122
+1	ukrainian	x-vnd.Haiku-FileTypes	133192727
 Application types…	FileTypes Window		Типи додатків…
 Description:	Application Types Window		Опис:
 Args only	Application Type Window		Тільки аргументи
@@ -45,9 +45,12 @@ Could not open file	FileType Window		Неможливо відкрити фай�
 Description:	FileTypes Window		Опис:
 File	FileTypes Window		Файл
 Name:	Application Types Window		Ім'я:
-Group name:	New File Type Window		Ім'я групи
+Group name:	New File Type Window		Ім'я групи:
 Preferred application	FileType Window		Бажаний додаток
 Progress	Application Types Window		Хід
+Set preferred application	Preferred App Menu		Вибрати бажаний додаток
+Don't save	Application Type Window		Не зберігати
+Save changes before closing?	Application Type Window		Зберегти зміни перед закриттям?
 File	Application Type Window		Файл
 Version:	Application Type Window		Версія:
 Select…	FileTypes Window		Вибрати…

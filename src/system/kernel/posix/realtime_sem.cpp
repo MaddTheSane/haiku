@@ -141,7 +141,7 @@ public:
 
 private:
 	char*		fName;
-	vint32		fRefCount;
+	int32		fRefCount;
 	uid_t		fUID;
 	gid_t		fGID;
 	mode_t		fPermissions;
@@ -946,7 +946,7 @@ _user_realtime_sem_open(const char* userName, int openFlagsOrShared,
 
 	// open the semaphore
 	sem_t* usedUserSem;
-	bool created;
+	bool created = false;
 	int32_t id;
 	error = context->OpenSem(name, openFlagsOrShared, mode, semCount, userSem,
 		usedUserSem, id, created);

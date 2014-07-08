@@ -209,7 +209,7 @@ draw_menu(Menu *menu)
 	print_centered(2, "Haiku Boot Loader");
 
 	console_set_color(kCopyrightColor, kBackgroundColor);
-	print_centered(4, "Copyright 2004-2012 Haiku Inc.");
+	print_centered(4, "Copyright 2004-2014 Haiku, Inc.");
 
 	if (menu->Title()) {
 		console_set_cursor(kOffsetX, kFirstLine - 2);
@@ -390,6 +390,7 @@ static void
 run_menu(Menu* menu)
 {
 	sMenuOffset = 0;
+	menu->Entered();
 	menu->Show();
 
 	draw_menu(menu);
@@ -412,6 +413,9 @@ run_menu(Menu* menu)
 		item = menu->ItemAt(selected);
 
 		if (TEXT_CONSOLE_IS_CURSOR_KEY(key)) {
+			if (item == NULL)
+				continue;
+
 			int32 oldSelected = selected;
 
 			switch (key) {
@@ -459,7 +463,7 @@ run_menu(Menu* menu)
 			}
 		} else if (key == TEXT_CONSOLE_KEY_RETURN
 			|| key == TEXT_CONSOLE_KEY_SPACE) {
-			if (invoke_item(menu, item, selected, key))
+			if (item != NULL && invoke_item(menu, item, selected, key))
 				break;
 		} else if (key == TEXT_CONSOLE_KEY_ESCAPE
 			&& menu->Type() != MAIN_MENU) {
@@ -481,6 +485,7 @@ run_menu(Menu* menu)
 	}
 
 	menu->Hide();
+	menu->Exited();
 }
 
 

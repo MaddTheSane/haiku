@@ -1,4 +1,4 @@
-1	ukrainian	x-vnd.Haiku-Notifications	814394708
+1	ukrainian	x-vnd.Haiku-Notifications	68793008
 An error occurred saving the preferences.\nIt's possible you are running out of disk space.	GeneralView		Виникла помилка збереження настройок.\nМожливо, що закінчилось місце на диску.
 Notifications	GeneralView		Повідомлення
 seconds of inactivity	GeneralView		секунд бездіяльності
@@ -7,7 +7,6 @@ Mini icon	DisplayView		Міні іконки
 Enable notifications	GeneralView		Включити повідомлення
 Error	NotificationView		Помилка
 OK	GeneralView		Гаразд
-Events are not notified	GeneralView		Події не повідомлені
 Type	NotificationView		Тип
 Notifications cannot be stopped, because the server can't be reached.	GeneralView		Повідомлення не можуть бути зупинені, бо сервер недоступний.
 Cannot enable notifications because the server cannot be found.\nThis means your InfoPopper installation was not successfully completed.	GeneralView		Неможливо включити повідомлення бо сервер не знайдено.\nЦе означає, що ваш InfoPopper встановлений не повністю.
@@ -17,6 +16,7 @@ Cannot disable notifications because the server can't be reached.	GeneralView		�
 Progress	NotificationView		Хід
 Last Received	NotificationView		Останє повідомлення  отримано
 General	PrefletView		Основні
+Apply	PrefletWin		Застосувати
 Display	PrefletView		Дисплей
 Can't enable notifications at startup time, you probably don't have write permission to the boot settings directory.	GeneralView		Невдалося включити повідомлення під час старту, можливо у вас немає доступу до директорії завантаження.
 Search:	NotificationView		Пошук:
@@ -28,7 +28,6 @@ Yes	NotificationView		Так
 Large icon	DisplayView		Великі іконки
 Icon size:	DisplayView		Розмір іконки:
 Hide notifications from screen after	GeneralView		Приховати повідомлення з екрану після
-Disable notifications	GeneralView		Вимкнути повідомлення
 Notifications	System name		Notifications
 Notifications	NotificationView		Повідомлення
 No	NotificationView		Ні
@@ -39,11 +38,10 @@ Application	NotificationView		Додаток
 Enabled	NotificationView		Включити
 OK	DisplayView		Гаразд
 Unknown	NotificationView		Невідомий
-Can't save preferences, you probably don't have write access to the boot settings directory.	GeneralView		Неможливо зберегти настройки, бо Ви не маєте доступу до директорії налаштувань загрузки.
 There was a problem saving the preferences.\nIt's possible you don't have write access to the settings directory.	GeneralView		Виникла проблема в збережені настройок.\nМожливо у Вас немає доступу на запис до директорії налаштувань.
 There was a problem saving the preferences.\nIt's possible you don't have write access to the settings directory.	NotificationView		Виникла проблема в збереженні настройок.\nМожливо у Вас немає доступу на запис до директорії налаштувань.
 Enable notifications at startup	GeneralView		Включити повідомлення при старті
 Notifications	PrefletView		Повідомлення
 The notifications server cannot be found, this means your InfoPopper installation was not successfully completed.	GeneralView		Невдалося знайти сервер повідомлень, Це означає, що установка  InfoPopper Вами була завершена невдало.
+Can't save preferences, you probably don't have write access to the settings directory.	GeneralView		Не вдалося зберегти налаштування, можливо ви не прав на запис до ціеї папки.
 Applications	NotificationView		Додатки
-Events are notified	GeneralView		Події занотовані

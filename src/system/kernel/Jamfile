@@ -27,6 +27,7 @@ KernelMergeObject kernel_core.o :
 	boot_splash.cpp
 	commpage.cpp
 	condition_variable.cpp
+	convertutf.cpp
 	cpu.cpp
 	DPC.cpp
 	elf.cpp
@@ -62,10 +63,12 @@ KernelMergeObject kernel_core.o :
 	user_mutex.cpp
 
 	# scheduler
+	low_latency.cpp
+	power_saving.cpp
 	scheduler.cpp
-	scheduler_affine.cpp
-	scheduler_simple.cpp
-	scheduler_simple_smp.cpp
+	scheduler_cpu.cpp
+	scheduler_profiler.cpp
+	scheduler_thread.cpp
 	scheduler_tracing.cpp
 	scheduling_analysis.cpp
 
@@ -74,16 +77,19 @@ KernelMergeObject kernel_core.o :
 
 # Generate the header defining macros for C++ structure sizes.
 local kernelC++StructSizesHeader = [ FGristFiles kernel_c++_struct_sizes.h ] ;
-TARGET_HDRS on $(kernelC++StructSizesHeader)
-	= [ on $(kernelC++StructSizesHeader) return $(TARGET_HDRS) ]
+TARGET_HDRS_$(TARGET_PACKAGING_ARCH) on $(kernelC++StructSizesHeader)
+	= [ on $(kernelC++StructSizesHeader)
+			return $(TARGET_HDRS_$(TARGET_PACKAGING_ARCH)) ]
 		$(TARGET_PRIVATE_KERNEL_HEADERS) ;
 CreateAsmStructOffsetsHeader $(kernelC++StructSizesHeader)
 	: kernel_c++_structs.cpp ;
 
 # We need to specify the dependency on the generated syscalls files explicitly.
 Includes [ FGristFiles syscalls.cpp ]
-	: <syscalls>syscall_dispatcher.h <syscalls>syscall_table.h
-	  <syscalls>syscall_numbers.h
+	:
+	<syscalls!$(TARGET_PACKAGING_ARCH)>syscall_dispatcher.h
+	<syscalls!$(TARGET_PACKAGING_ARCH)>syscall_table.h
+	<syscalls!$(TARGET_PACKAGING_ARCH)>syscall_numbers.h
 ;
 
 # TODO: fix or update binutils for ppc, in the meantime this should get things going.
@@ -126,7 +132,7 @@ KernelLd kernel_$(TARGET_ARCH) :
 	kernel_lib_posix_arch_$(TARGET_ARCH).o
 	kernel_misc.o
 
-	$(HAIKU_KERNEL_LIBSUPC++)
+	$(TARGET_KERNEL_LIBSUPC++)
 
 	: $(HAIKU_TOP)/src/system/ldscripts/$(TARGET_ARCH)/kernel.ld
 	: -Bdynamic -export-dynamic -dynamic-linker /foo/bar
@@ -134,7 +140,7 @@ KernelLd kernel_$(TARGET_ARCH) :
 	:
 ;
 
-if $(HAIKU_ARCH) = x86_64 {
+if $(HAIKU_ARCH) in x86_64 arm {
 	# Cannot relink everything as a shared object on x86_64 as shared library
 	# code is required to be position-independent. Instead create a copy of the
 	# executable kernel image and change the ELF header type to DYN. A bit of
@@ -168,7 +174,7 @@ if $(HAIKU_ARCH) = x86_64 {
 		kernel_lib_posix_arch_$(TARGET_ARCH).o
 		kernel_misc.o
 
-		$(HAIKU_KERNEL_LIBSUPC++)
+		$(TARGET_KERNEL_LIBSUPC++)
 
 		: $(HAIKU_TOP)/src/system/ldscripts/$(TARGET_ARCH)/kernel.ld
 		: -Bdynamic -shared -export-dynamic -dynamic-linker /foo/bar
@@ -181,9 +187,8 @@ Depends kernel : kernel_$(TARGET_ARCH) ;
 Depends kernel.so : kernel ;
 	# kernel.so will be rebuilt with the kernel
 
-# propagate HAIKU_INCLUDE_IN_IMAGE variable from kernel to kernel_$(TARGET_ARCH)
-HAIKU_INCLUDE_IN_IMAGE on kernel_$(TARGET_ARCH)
-		= [ on kernel return $(HAIKU_INCLUDE_IN_IMAGE) ] ;
+# propagate the container update variable from kernel to kernel_$(TARGET_ARCH)
+PropagateContainerUpdateTargetFlags kernel_$(TARGET_ARCH) : kernel ;
 
 # Copy kernel and update the copy's revision section. We link everything
 # against the original, but the copy will end up on the disk image (this way

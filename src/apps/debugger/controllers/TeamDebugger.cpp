@@ -1,6 +1,6 @@
 /*
  * Copyright 2009-2012, Ingo Weinhold, ingo_weinhold@gmx.de.
- * Copyright 2010-2013, Rene Gollent, rene@gollent.com.
+ * Copyright 2010-2014, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 
@@ -32,12 +32,16 @@
 #include "Function.h"
 #include "FunctionID.h"
 #include "ImageDebugInfo.h"
+#include "ImageDebugInfoLoadingState.h"
+#include "ImageDebugLoadingStateHandler.h"
+#include "ImageDebugLoadingStateHandlerRoster.h"
 #include "Jobs.h"
 #include "LocatableFile.h"
 #include "MessageCodes.h"
 #include "SettingsManager.h"
 #include "SourceCode.h"
 #include "SpecificImageDebugInfo.h"
+#include "SpecificImageDebugInfoLoadingState.h"
 #include "StackFrame.h"
 #include "StackFrameValues.h"
 #include "Statement.h"
@@ -290,12 +294,13 @@ TeamDebugger::~TeamDebugger()
 		fReportGenerator->Quit();
 	}
 
+	delete fWorker;
+
 	delete fImageInfoPendingThreads;
 
 	delete fBreakpointManager;
 	delete fWatchpointManager;
 	delete fMemoryBlockManager;
-	delete fWorker;
 	delete fTeam;
 	delete fFileManager;
 
@@ -462,8 +467,7 @@ TeamDebugger::Init(team_id teamID, thread_id threadID, int argc,
 				return error;
 
 			ThreadHandler* handler = new(std::nothrow) ThreadHandler(thread,
-				fWorker, fDebuggerInterface,
-				fBreakpointManager);
+				fWorker, fDebuggerInterface, this, fBreakpointManager);
 			if (handler == NULL)
 				return B_NO_MEMORY;
 
@@ -786,6 +790,20 @@ TeamDebugger::MessageReceived(BMessage* message)
 			break;
 		}
 
+		case MSG_DEBUG_INFO_NEEDS_USER_INPUT:
+		{
+			Job* job;
+			ImageDebugInfoLoadingState* state;
+			if (message->FindPointer("job", (void**)&job) != B_OK)
+				break;
+			if (message->FindPointer("state", (void**)&state) != B_OK)
+				break;
+
+			_HandleDebugInfoJobUserInput(state);
+			fWorker->ResumeJob(job);
+			break;
+		}
+
 		default:
 			BLooper::MessageReceived(message);
 			break;
@@ -847,7 +865,7 @@ TeamDebugger::FunctionSourceCodeRequested(FunctionInstance* functionInstance,
 void
 TeamDebugger::ImageDebugInfoRequested(Image* image)
 {
-	LoadImageDebugInfoJob::ScheduleIfNecessary(fWorker, image);
+	LoadImageDebugInfoJob::ScheduleIfNecessary(fWorker, image, this);
 }
 
 
@@ -1117,6 +1135,20 @@ TeamDebugger::JobAborted(Job* job)
 	TRACE_JOBS("TeamDebugger::JobAborted(%p)\n", job);
 	// TODO: For a stack frame source loader thread we should reset the
 	// loading state! Asynchronously due to locking order.
+}
+
+
+void
+TeamDebugger::ImageDebugInfoJobNeedsUserInput(Job* job,
+	ImageDebugInfoLoadingState* state)
+{
+	TRACE_JOBS("TeamDebugger::DebugInfoJobNeedsUserInput(%p, %p)\n",
+		job, state);
+
+	BMessage message(MSG_DEBUG_INFO_NEEDS_USER_INPUT);
+	message.AddPointer("job", job);
+	message.AddPointer("state", state);
+	PostMessage(&message);
 }
 
 
@@ -1404,8 +1436,7 @@ TeamDebugger::_HandleThreadCreated(ThreadCreatedEvent* event)
 		fTeam->AddThread(info, &thread);
 
 		ThreadHandler* handler = new(std::nothrow) ThreadHandler(thread,
-			fWorker, fDebuggerInterface,
-			fBreakpointManager);
+			fWorker, fDebuggerInterface, this, fBreakpointManager);
 		if (handler != NULL) {
 			fThreadHandlers.Insert(handler);
 			handler->Init();
@@ -1908,6 +1939,24 @@ TeamDebugger::_HandleSetArguments(int argc, const char* const* argv)
 }
 
 
+void
+TeamDebugger::_HandleDebugInfoJobUserInput(ImageDebugInfoLoadingState* state)
+{
+	SpecificImageDebugInfoLoadingState* specificState
+		= state->GetSpecificDebugInfoLoadingState();
+
+	ImageDebugLoadingStateHandler* handler;
+	if (ImageDebugLoadingStateHandlerRoster::Default()
+			->FindStateHandler(specificState, handler) != B_OK) {
+		TRACE_JOBS("TeamDebugger::_HandleDebugInfoJobUserInput(): "
+			"Failed to find appropriate information handler, aborting.");
+		return;
+	}
+
+	handler->HandleState(specificState, fUserInterface);
+}
+
+
 ThreadHandler*
 TeamDebugger::_GetThreadHandler(thread_id threadID)
 {
@@ -1991,6 +2040,8 @@ TeamDebugger::_LoadSettings()
 			breakpointSetting->IsEnabled());
 	}
 
+	fFileManager->LoadLocationMappings(fTeamSettings.FileManagerSettings());
+
 	const TeamUiSettings* uiSettings = fTeamSettings.UiSettingFor(
 		fUserInterface->ID());
 	if (uiSettings != NULL)
@@ -2022,6 +2073,8 @@ TeamDebugger::_SaveSettings()
 				settings.AddUiSettings(clonedSettings);
 		}
 	}
+
+	fFileManager->SaveLocationMappings(settings.FileManagerSettings());
 	locker.Unlock();
 
 	// save the settings

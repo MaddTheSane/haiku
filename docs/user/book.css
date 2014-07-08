@@ -113,6 +113,19 @@ a:hover, a:active {
 	color: #ff4500; /* vermilion */
 }
 
+dl.since {
+	margin-top: 1em;
+}
+
+dl.since dt {
+	display: inline;
+	padding-right: 0.5em;
+}
+
+dl.since dd {
+	display: inline;
+}
+
 
 /* Some headers act as anchors, don't give them a hover effect */
 
@@ -141,13 +154,30 @@ h4 a:hover, a:active, h5 a:hover, a:active, h6 a:hover, a:active {
 
 #banner span.subtitle {
 	position: relative;
-	top: 54px;
+	top: 48px;
 	left: 272px;
 	color: #333333; /* mine shaft */
 	text-transform: uppercase;
 	letter-spacing: 3px;
 	font-family: Myriad Pro,Myriad Web Pro Regular,Lucida Grande,Geneva,Trebuchet MS,sans-serif;
 	font-weight: normal;
+}
+
+#banner span.search {
+	position: relative;
+	top: 48px;
+	left: 462px;
+}
+
+input[type=text], input[type=password] {
+	font-size: inherit;
+	border-top: 1px solid #818181;
+	border-left: 1px solid #818181;
+	border-bottom: 1px solid #858585;
+	border-right: 1px solid #858585;
+	margin-top: 3px;
+	padding: 2px;
+	width: 200px;
 }
 
 div.header {
@@ -244,7 +274,7 @@ div.tabs ul.tablist li li.current a, div.tabs2 ul.tablist li li.current a,
 
 /* Contents div */
 
-div.contents {
+div.contents, footer {
 	line-height: 1.5;
 	margin: 10px auto;
 	width: 59em;
@@ -320,7 +350,7 @@ div.contents hr {
 	display: none;
 }
 
-div.contents ol,ul {
+div.contents ul {
 	list-style: none;
 }
 

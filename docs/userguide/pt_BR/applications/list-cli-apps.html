@@ -4,7 +4,7 @@
 <head>
 <!-- 
  *
- * Copyright 2010-2012, Haiku. All rights reserved.
+ * Copyright 2010-2014, Haiku. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -45,6 +45,7 @@
 <li><a href="../../sk/applications/list-cli-apps.html"><img src="../../images/flags/sk.png" alt="" />Slovenčina</a></li>
 <li><a href="../../hu/applications/list-cli-apps.html"><img src="../../images/flags/hu.png" alt="" />Magyar</a></li>
 <li><a href="../../ca/applications/list-cli-apps.html"><img src="../../images/flags/ca.png" alt="" />Català</a></li>
+<li><a href="../../pl/applications/list-cli-apps.html"><img src="../../images/flags/pl.png" alt="" />Polski</a></li>
 <li><a href="../../en/applications/list-cli-apps.html"><img src="../../images/flags/gb.png" alt="" />English</a></li>
 </ul>
 
@@ -59,17 +60,17 @@
 
 <h2><img src="../../images/apps-images/cli-app-icon_64.png" alt="cli-app-icon_64.png" width="64" height="64" />Lista de todos os aplicativos de linha de comando</h2>
 <table summary="layout" border="0" cellspacing="0" cellpadding="2">
-<tr><td>Localização:</td><td style="width:15px;"></td><td><span class="path">/boot/system/bin</span><br /><span class="path">/boot/common/bin</span><br /><span class="path">~/config/bin</span></td></tr>
+<tr><td>Localização:</td><td style="width:15px;"></td><td><span class="path">/boot/system/bin/</span><br /><span class="path">~/config/bin/</span><br /><span class="path">~/config/non-packaged/bin/</span></td></tr>
 </table>
 <p><br /></p>
-<p>Todos os aplicativos de linha de comando fornecidos com o Haiku estão em <span class="path">/boot/system/bin</span> ou <span class="path">/boot/common/bin</span>. Seus próprios aplicativos de linha de comando ou adicionalmente instalados devem ir para <span class="path">~/config/bin</span>. Todas essas localidades são parte da variável PATH e são, portanto, automaticamente encontradas.<br />
+<p>Todos os aplicativos de linha de comando fornecidos com o Haiku estão em <span class="path">/boot/system/bin</span>. Seus próprios aplicativos de linha de comando ou adicionalmente instalados aparecerão em <span class="path">~/config/bin</span> quando instalados a partir de um pacote .hpkg. Do contrário, ponha-os dentro de <span class="path">~/config/non-packaged/bin/</span>. Todas essas localidades são parte da variável PATH e são, portanto, automaticamente encontradas.<br />
 Aqui está uma lista de todos os aplicativos de linha de comando que são fornecidos com o Haiku, cada qual com apenas uma descrição curta do que faz. Para informações mais detalhadas do seu uso, execute o comando com o parâmetro <tt>--help</tt>.</p>
 <p><br /></p>
 <p>Índice:   <a href="#A">A – E</a>   ::   <a href="#F"> F – J </a>   ::   <a href="#K"> K – O </a>   ::   <a href="#P"> P – S </a>   ::   <a href="#T"> T – Z </a></p>
 <p><br /></p>
 <table summary="layout" border="0" cellpadding="2" cellspacing="0"> 
 <tr><td><tt>CortexAddOnHost</tt></td><td style="width:10px;"> </td><td>Inicia o serviço para monitorar adicionais de mídia de áudio e vídeo em uso. </td></tr>
-<tr><td><tt>ReadOnlyBootPrompt</tt></td><td> </td><td>Configuração de idioma. </td></tr>
+<tr><td><tt>FirstBootPrompt</tt></td><td> </td><td>Configuração de idioma e teclado. </td></tr>
 <tr><td><tt>[</tt></td><td> </td><td>Retorna verdadeiro/falso após comparar itens.</td></tr>
 <tr><td colspan="3"><a id="A" name="A"><h2><a href="#"><img src="../../images/up.png" style="border:none;float:right" alt="index" /></a>A</h2></a></td></tr>
 <tr><td><tt>addattr</tt></td><td> </td><td>Grava um atributo em um arquivo, Writes an attribute to a file, levando em conta o tipo e convertendo os valores de acordo. <a href="cli-apps.html">(específico do Haiku)</a></td></tr>
@@ -81,10 +82,9 @@ Aqui está uma lista de todos os aplicativos de linha de comando que são fornec
 <tr><td><tt>bash</tt></td><td> </td><td>Bourne-again shell</td></tr>
 <tr><td><tt>bc</tt></td><td> </td><td>Uma linguagem de cálculo de precisão arbitrária.</td></tr>
 <tr><td><tt>beep</tt></td><td> </td><td>Toca um sino. </td></tr>
-<tr><td><tt>bootman</tt></td><td> </td><td>Instala ou desinstala um menu de inicialização. </td></tr>
 <tr><td><tt>bunzip2</tt></td><td> </td><td>Ver <tt>bzip2</tt>.</td></tr>
-<tr><td><tt>bzip2</tt></td><td> </td><td>Compressor de arquivos</td></tr>
-<tr><td><tt>c++</tt></td><td> </td><td>Compilador C++</td></tr>
+<tr><td><tt>bzip2</tt></td><td> </td><td>Compressor de arquivos.</td></tr>
+<tr><td><tt>c++</tt></td><td> </td><td>Compilador C</td></tr>
 <tr><td><tt>cal</tt></td><td> </td><td>Exibe um calendário. </td></tr>
 <tr><td><tt>cat</tt></td><td> </td><td>Concatena arquivos e impressões para a saída padrão. </td></tr>
 <tr><td><tt>catattr</tt></td><td> </td><td>Imprime o conteúdo de um atributo de um arquivo. <a href="cli-apps.html">(específico do Haiku)</a></td></tr>
@@ -145,6 +145,7 @@ Aqui está uma lista de todos os aplicativos de linha de comando que são fornec
 <tr><td><tt>fortune</tt></td><td> </td><td>Imprime um adágio aleatório, provavelmente interessante. </td></tr>
 <tr><td><tt>frcode</tt></td><td> </td><td>Chamado pelo updatedb para comprimir a lista de nomes de arquivos.</td></tr>
 <tr><td><tt>freetype-config</tt></td><td> </td><td>Exibe informação de compilação e vinculação do FreeType.</td></tr>
+<tr><td><tt>fstrim</tt></td><td> </td><td>Envia um comando TRIM para um dispositivo SSD.</td></tr>
 <tr><td><tt>ftp</tt></td><td> </td><td>Programa de transferência de arquivos</td></tr>
 <tr><td><tt>ftpd</tt></td><td> </td><td>Daemon FTP</td></tr>
 <tr><td><tt>funzip</tt></td><td> </td><td>Extrai o primeiro ítem de um arquivo compactado para a saída padrão.</td></tr>
@@ -166,7 +167,6 @@ Aqui está uma lista de todos os aplicativos de linha de comando que são fornec
 <tr><td><tt>ifconfig</tt></td><td> </td><td>Configura uma interface de rede. </td></tr>
 <tr><td><tt>install</tt></td><td> </td><td>Copia arquivos em um destino sem interromper o sistema em execução.</td></tr>
 <tr><td><tt>install-wifi-firmwares.sh</tt></td><td> </td><td>Installa o firmware para várias placas de rede sem fio. </td></tr>
-<tr><td><tt>installoptionalpackage</tt></td><td> </td><td>Solução temporária para instalar pacotes opcionais. </td></tr>
 <tr><td><tt>installsound</tt></td><td> </td><td>Instala um novo evento de som na janela Preferências de Sons. </td></tr>
 <tr><td><tt>iroster</tt></td><td> </td><td>Lista dispositivos de entrada. </td></tr>
 <tr><td><tt>isvolume</tt></td><td> </td><td>Obtém informação sobre um volume montado.</td></tr>
@@ -204,7 +204,7 @@ Aqui está uma lista de todos os aplicativos de linha de comando que são fornec
 <tr><td><tt>merge</tt></td><td> </td><td>Fusão de arquivos em três vias. </td></tr>
 <tr><td><tt>message</tt></td><td> </td><td>Imprime um arquivo BMessage comprimido. </td></tr>
 <tr><td><tt>mimeset</tt></td><td> </td><td>Define o tipo MIME de um arquivo. </td></tr>
-<tr><td><tt>mkdepend</tt></td><td> </td><td>Gerador de dependências do Makefile</td></tr>
+<tr><td><tt>mkdepend</tt></td><td> </td><td>Gerador de dependências do Makefile.</td></tr>
 <tr><td><tt>mkdir</tt></td><td> </td><td>Cria um diretório. </td></tr>
 <tr><td><tt>mkdos</tt></td><td> </td><td>Inicializa partições FAT. </td></tr>
 <tr><td><tt>mkfifo</tt></td><td> </td><td>Cria pipes nomeados. </td></tr>
@@ -225,12 +225,16 @@ Aqui está uma lista de todos os aplicativos de linha de comando que são fornec
 <tr><td><tt>od</tt></td><td> </td><td>Grava uma inequívoca representação de um arquivo.</td></tr>
 <tr><td><tt>open</tt></td><td> </td><td>Carrega um aplicativo/documento a partir do shell. <a href="cli-apps.html">(específico do Haiku)</a></td></tr>
 <tr><td colspan="3"><a id="P" name="P"><h2><a href="#"><img src="../../images/up.png" style="border:none;float:right" alt="index" /></a>P</h2></a></td></tr>
+<tr><td><tt>package</tt></td><td> </td><td>Cria, inspeciona ou extrai um pacote Haiku.</td></tr>
+<tr><td><tt>package_repo</tt></td><td> </td><td>Cria ou inspeciona um arquivo de repositório de pacotes Haiku.</td></tr>
 <tr><td><tt>passwd</tt></td><td> </td><td>Altera a senha do usuário. </td></tr>
 <tr><td><tt>paste</tt></td><td> </td><td>Imprime linhas, consistindo das linhas sequencialmente correspondentes de cada arquivo, separadas por tabulações.</td></tr>
 <tr><td><tt>patch</tt></td><td> </td><td>Aplica um arquivo diff para um original. </td></tr>
 <tr><td><tt>pathchk</tt></td><td> </td><td>Diagnostica nomes de arquivo inválidos ou não portáveis. </td></tr>
 <tr><td><tt>pc</tt></td><td> </td><td>Calculadora do Programador</td></tr>
 <tr><td><tt>ping</tt></td><td> </td><td>Envia ICMP-echo-request para o anfritião da rede. </td></tr>
+<tr><td><tt>pkg-config</tt></td><td> </td><td>Analisa e configura um pacote Haiku.</td></tr>
+<tr><td><tt>pkgman</tt></td><td> </td><td>Gerencia pacotes e repositórios de pacotes.</td></tr>
 <tr><td><tt>play</tt></td><td> </td><td>Toca faixas de um CD. </td></tr>
 <tr><td><tt>playfile</tt></td><td> </td><td>Toca um arquivo de áudio. </td></tr>
 <tr><td><tt>playsound</tt></td><td> </td><td>Toca um arquivo de áudio.</td></tr>

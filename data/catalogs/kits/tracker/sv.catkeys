@@ -1,5 +1,4 @@
-1	swedish	x-vnd.Haiku-libtracker	1762695842
-common	B_COMMON_DIRECTORY		gemensam
+1	swedish	x-vnd.Haiku-libtracker	2212190051
 OK	WidgetAttributeText		OK
 Icon view	VolumeWindow		Ikonvy
 Add-ons	FilePanelPriv		Tillägg
@@ -77,7 +76,6 @@ Preparing to empty Trash…	StatusWindow		Förbereder inför tömning av Pappers
 You cannot put the selected item(s) into the trash.	FSUtils		Du kan inte lägga de valda objekten i papperskorgen.
 Disks	Model		Volymer
 Create link	ContainerWindow		Skapa länk
-develop	B_COMMON_DEVELOP_DIRECTORY		utvecklare
 Decrease size	DeskWindow		Minska storleken
 Size	ContainerWindow		Storlek
 All disks	AutoMounterSettings		Alla diskar
@@ -102,6 +100,7 @@ New folder	FilePanelPriv		Ny mapp
 %name info	InfoWindow	InfoWindow Title	%name information
 Favorites	FavoritesMenu		Favoriter
 Add-ons	VolumeWindow		Tillägg
+\"%name\" is an unsupported executable.	FSUtils		\"%name\" är en osupporterad körbarfil
 Sorry, you can't copy items to the Trash.	PoseView		Du kan inte kopiera filer till Papperskorgen.
 List view	VolumeWindow		Listvy
 matches wildcard expression	SelectionWindow		matchar jokeruttryck
@@ -149,7 +148,6 @@ Could not open \"%document\" with application \"%app\" (%error). 	FSUtils		Kunde
 Sorry, saving more than one item is not allowed.	FilePanelPriv		Ledsen, att spara mer än ett objekt är inte tillåtet.
 Searching for disks to mount…	StatusWindow		Letar efter diskar för montering...
 New folder	FSUtils		Ny mapp
-If you %ifYouDoAction the common folder, %osName may not behave properly!\n\nAre you sure you want to do this?\n\nTo %toDoAction the common folder anyway, hold down the Shift key and click \"%toConfirmAction\".	FSUtils		Om du %ifYouDoAction common foldern, %osName kommer kanske inte att fungera som den ska!\n \n Är du säker på att du vill göra detta?\n\nFör att %toDoAction common foldern ändå, håll nere Shift och klicka \"%toConfirmAction\".
 Free space color	SettingsView		Färg för ledigt utrymme
 Cut	ContainerWindow		Klipp ut
 Remove	FindPanel		Ta bort
@@ -250,7 +248,6 @@ Mount settings…	SettingsView		Monterings inställningar...
 Edit name	InfoWindow		Redigera namn
 Could not open \"%name\" (%error). 	FSUtils		Kunde inte öppna "%name" (%error).
 Paste	ContainerWindow		Klistra in
-optional	/boot/optional		valfri
 Modified:	InfoWindow		Modifierad:
 Error moving \"%name\".	FSUtils		Fel vid flytt av "%name".
 TiB	WidgetAttributeText		TiB
@@ -412,6 +409,7 @@ Paste layout	ContainerWindow		Klistra in layout
 Select	InfoWindow		Markera
 Could not update permissions of file \"%name\". %error	FSUtils		Kunde inte uppdatera rättigheterna i filen "%name". %error
 Select…	FilePanelPriv		Markera...
+\"%name\" is a legacy executable. Please obtain an updated version or recompile the application.	FSUtils		\"%name\" Den körbara filen är från ett gammalt system. Var vänlig uppdatera din fil eller bygg om programmet.
 There was an error resolving the link.	Tracker		Det uppstod ett fel vid uppslag av länk.
 %BytesPerSecond/s	StatusWindow		%BytesPerSecond/s
 You can't move or copy the trash.	FSUtils		Du kan inte flytta eller kopiera Papperskorgen.
@@ -431,6 +429,7 @@ New	ContainerWindow		Ny
 Name matches wildcard expression:###	SelectionWindow		Namn matchar jokertuttryck:###
 less than	FindPanel		mindre än
 64 x 64	DeskWindow		64 x 64
+develop	B_SYSTEM_DEVELOP_DIRECTORY		utvecklare
 Modified	ContainerWindow		Ändrad
 Edit Query template	FindPanel		Redigera sökmall
 Prompt	FSUtils		Prompt

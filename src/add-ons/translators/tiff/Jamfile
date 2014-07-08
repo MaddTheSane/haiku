@@ -2,24 +2,34 @@ SubDir HAIKU_TOP src add-ons translators tiff ;
 
 SetSubDirSupportedPlatformsBeOSCompatible ;
 
-UseLibraryHeaders tiff zlib ;
-
 SubDirHdrs [ FDirName $(SUBDIR) $(DOTDOT) shared ] ;
 
 AddResources TIFFTranslator : TIFFTranslator.rdef ;
 
-Translator TIFFTranslator : 
-	# [ FGristFiles $(tiff_files:S=$(SUFOBJ)) ]
+local architectureObject ;
+for architectureObject in [ MultiArchSubDirSetup ] {
+	on $(architectureObject) {
+		UseBuildFeatureHeaders tiff ;
 
-	# TIFFTranslator classes
-	TIFFMain.cpp
-	TIFFTranslator.cpp
-	TIFFView.cpp
+		Translator [ MultiArchDefaultGristFiles TIFFTranslator ] :
+			# [ FGristFiles $(tiff_files:S=$(SUFOBJ)) ]
 
-	: be libtiff.so translation libtranslatorsutils.a $(TARGET_LIBSUPC++)
-	$(HAIKU_LOCALE_LIBS)
-	: true
-;
+			# TIFFTranslator classes
+			TIFFMain.cpp
+			TIFFTranslator.cpp
+			TIFFView.cpp
+
+			: be translation 
+			[ MultiArchDefaultGristFiles libtranslatorsutils.a ]
+			[ BuildFeatureAttribute tiff : library ]
+			$(TARGET_LIBSUPC++) localestub
+			: true
+		;
+
+		Includes [ FGristFiles TIFFTranslator.cpp TIFFView.cpp ]
+			: [ BuildFeatureAttribute tiff : headers ] ;
+	}
+}
 
 DoCatalogs TIFFTranslator :
 	x-vnd.Haiku-TIFFTranslator
@@ -28,8 +38,3 @@ DoCatalogs TIFFTranslator :
 	TIFFTranslator.cpp
 	TIFFView.cpp
 ;
-
-Package haiku-translationkit-cvs :
-	TIFFTranslator :
-	boot home config add-ons Translators ;
-

@@ -190,7 +190,7 @@ arch_team_init_team_struct(Team* p, bool kernel)
 status_t
 arch_thread_init_tls(Thread* thread)
 {
-	size_t tls[TLS_USER_THREAD_SLOT + 1];
+	addr_t tls[TLS_FIRST_FREE_SLOT];
 
 	thread->user_local_storage = thread->user_stack_base
 		+ thread->user_stack_size;
@@ -229,9 +229,8 @@ arch_thread_context_switch(Thread* from, Thread* to)
 					!= activePagingStructures) {
 		// update on which CPUs the address space is used
 		int cpu = cpuData->cpu_num;
-		atomic_and(&activePagingStructures->active_on_cpus,
-			~((uint32)1 << cpu));
-		atomic_or(&toPagingStructures->active_on_cpus, (uint32)1 << cpu);
+		activePagingStructures->active_on_cpus.ClearBitAtomic(cpu);
+		toPagingStructures->active_on_cpus.SetBitAtomic(cpu);
 
 		// assign the new paging structures to the CPU
 		toPagingStructures->AddReference();

@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2012, Rene Gollent, rene@gollent.com.
+ * Copyright 2011-2014, Rene Gollent, rene@gollent.com.
  * Copyright 2012, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Distributed under the terms of the MIT License.
  */
@@ -13,6 +13,7 @@
 
 #include <ArgumentVector.h>
 #include <AutoDeleter.h>
+#include <AutoLocker.h>
 #include <Referenceable.h>
 
 #include "CliContext.h"
@@ -93,11 +94,12 @@ private:
 
 
 CommandLineUserInterface::CommandLineUserInterface(bool saveReport,
-	const char* reportPath)
+	const char* reportPath, thread_id reportTargetThread)
 	:
 	fCommands(20, true),
 	fReportPath(reportPath),
 	fSaveReport(saveReport),
+	fReportTargetThread(reportTargetThread),
 	fShowSemaphore(-1),
 	fShown(false),
 	fTerminating(false)
@@ -169,6 +171,15 @@ CommandLineUserInterface::Terminate()
 }
 
 
+bool
+CommandLineUserInterface::IsInteractive() const
+{
+	// if we were invoked solely for the purpose of saving a crash report,
+	// then we're not taking user input into account.
+	return !fSaveReport;
+}
+
+
 status_t
 CommandLineUserInterface::LoadSettings(const TeamUiSettings* settings)
 {
@@ -199,6 +210,13 @@ CommandLineUserInterface::SynchronouslyAskUser(const char* title,
 }
 
 
+status_t
+CommandLineUserInterface::SynchronouslyAskUserForFile(entry_ref* _ref)
+{
+	return B_UNSUPPORTED;
+}
+
+
 void
 CommandLineUserInterface::Run()
 {
@@ -219,10 +237,31 @@ CommandLineUserInterface::Run()
 		ArgumentVector args;
 		char buffer[256];
 		const char* parseErrorLocation;
-		snprintf(buffer, sizeof(buffer), "save-report %s",
-			fReportPath != NULL ? fReportPath : "");
-		args.Parse(buffer, &parseErrorLocation);
-		_ExecuteCommand(args.ArgumentCount(), args.Arguments());
+		if (_ReportTargetThreadStopNeeded()) {
+			snprintf(buffer, sizeof(buffer), "stop %" B_PRId32,
+				fReportTargetThread);
+			args.Parse(buffer, &parseErrorLocation);
+			_ExecuteCommand(args.ArgumentCount(), args.Arguments());
+		} else
+			_SubmitSaveReport();
+	}
+}
+
+
+void
+CommandLineUserInterface::ThreadStateChanged(const Team::ThreadEvent& event)
+{
+	if (fSaveReport) {
+		Thread* thread = event.GetThread();
+		// If we were asked to attach/report on a specific thread
+		// rather than a team, and said thread was still
+		// running, when we attached, we need to wait for its corresponding
+		// stop state before generating a report, else we might not get its
+		// stack trace.
+		if (thread->ID() == fReportTargetThread
+			&& thread->State() == THREAD_STATE_STOPPED) {
+			_SubmitSaveReport();
+		}
 	}
 }
 
@@ -443,3 +482,30 @@ CommandLineUserInterface::_CompareCommandEntries(const CommandEntry* command1,
 }
 
 
+bool
+CommandLineUserInterface::_ReportTargetThreadStopNeeded() const
+{
+	if (fReportTargetThread < 0)
+		return false;
+
+	Team* team = fContext.GetTeam();
+	AutoLocker<Team> teamLocker(team);
+	Thread* thread = team->ThreadByID(fReportTargetThread);
+	if (thread == NULL)
+		return false;
+
+	return thread->State() != THREAD_STATE_STOPPED;
+}
+
+
+void
+CommandLineUserInterface::_SubmitSaveReport()
+{
+	ArgumentVector args;
+	char buffer[256];
+	const char* parseErrorLocation;
+	snprintf(buffer, sizeof(buffer), "save-report %s",
+		fReportPath != NULL ? fReportPath : "");
+	args.Parse(buffer, &parseErrorLocation);
+	_ExecuteCommand(args.ArgumentCount(), args.Arguments());
+}

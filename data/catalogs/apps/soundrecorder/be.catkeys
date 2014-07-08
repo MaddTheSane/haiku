@@ -1,14 +1,15 @@
-1	belarusian	x-vnd.Haiku-SoundRecorder	2149017672
+1	belarusian	x-vnd.Haiku-SoundRecorder	24440888
 Loop	RecorderWindow		Зацыкліць
 Cannot find default audio hardware	RecorderWindow		Немагчыма знайсці стандартную аўдыё апаратуру
 Cannot find the temporary file created to hold the new recording	RecorderWindow		Немагчыма знайсці часовы файл, створаны для захавання новага запісу
 Sample size:	RecorderWindow		Памер сэмплу:
 Nothing to play	RecorderWindow		Няма чаго іграць
+None of the files appear to be audio files.	RecorderWindow		Ні адзін з файлаў не месціць аўдыё даных
 Duration: 	RecorderWindow		Працягласць: 
-Some of the files don't appear to be audio files	RecorderWindow		Некаторыя з файлаў не падобныя да аўдыё файлаў
 File info	RecorderWindow		Інфа пра файл
 Drop files here	SoundListView		Кідайце файлы сюды
 Input	RecorderWindow		Уваход
+Some of the files don't appear to be audio files.	RecorderWindow		Некаторыя з файлаў не падобныя да аўдыё файлаў
 Stop	RecorderWindow		Стоп
 Format:	RecorderWindow		Фармат:
 Sound List	RecorderWindow		Спіс Гуку
@@ -19,7 +20,6 @@ Invalid audio files	RecorderWindow		Няправільныя аўдыё файл
  seconds	RecorderWindow		 секунды
 OK	RecorderWindow		ОК
 Cannot open the temporary file created to hold the new recording	RecorderWindow		Немагчыма адкрыць часовы файл, створаны для захавання новага запісу
-None of the files appear to be audio files	RecorderWindow		Ні адзін з файлаў не месціць аўдыё даных
 Input:	RecorderWindow		Уваход:
 Forward	RecorderWindow		Уперад
 Play	RecorderWindow		Іграць
@@ -42,4 +42,5 @@ Channels: 	RecorderWindow		Каналы:
 Save	RecorderWindow		Захаваць
 Sample rate: 	RecorderWindow		Частата дыскрэтызацыі: 
 Cannot connect to media server	RecorderWindow		Немагчыма далучыцца да медыясервера
+The file doesn't appear to be an audio file.	RecorderWindow		Гэты файл не з'яўляецца аўдыё файлам.
 File name:	RecorderWindow		Імя файла:

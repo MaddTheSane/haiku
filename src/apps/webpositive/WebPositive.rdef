@@ -14,7 +14,12 @@ resource app_flags B_SINGLE_LAUNCH;
 
 resource file_types message {
 	"types" = "text/html",
+	"types" = "multipart/related",
+	"types" = "image/gif",
+	"types" = "image/jpeg",
+	"types" = "image/png",
 	"types" = "image/svg+xml",
+	"types" = "application/xhtml+xml",
 	"types" = "application/x-vnd.Be.URL.file",
 	"types" = "application/x-vnd.Be.URL.ftp",
 	"types" = "application/x-vnd.Be.URL.http",

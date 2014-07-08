@@ -16,8 +16,7 @@
 class BNetworkCookie : public BArchivable {
 public:
 								BNetworkCookie(const char* name,
-									const char* value);
-								BNetworkCookie(const BString& cookieString);
+									const char* value, const BUrl& url);
 								BNetworkCookie(const BString& cookieString,
 									const BUrl& url);
 								BNetworkCookie(BMessage* archive);
@@ -26,15 +25,14 @@ public:
 
 	// Parse a "SetCookie" string
 
-			BNetworkCookie&		ParseCookieStringFromUrl(const BString& string,
+			status_t			ParseCookieString(const BString& string,
 									const BUrl& url);
-			BNetworkCookie& 	ParseCookieString(const BString& cookieString);
 
 	// Modify the cookie fields
 			BNetworkCookie&		SetName(const BString& name);
 			BNetworkCookie&		SetValue(const BString& value);
-			BNetworkCookie&		SetDomain(const BString& domain);
-			BNetworkCookie&		SetPath(const BString& path);
+			status_t			SetDomain(const BString& domain);
+			status_t			SetPath(const BString& path);
 			BNetworkCookie&		SetMaxAge(int32 maxAge);
 			BNetworkCookie&		SetExpirationDate(time_t expireDate);
 			BNetworkCookie&		SetExpirationDate(BDateTime& expireDate);
@@ -76,7 +74,6 @@ public:
 	static	BArchivable*		Instantiate(BMessage* archive);
 
 	// Overloaded operators
-			BNetworkCookie&		operator=(const char* string);
 			bool				operator==(const BNetworkCookie& other);
 			bool				operator!=(const BNetworkCookie& other);
 private:
@@ -88,6 +85,10 @@ private:
 									const BString& string, BString& name,
 									BString& value,	int32 index);
 			BString				_DefaultPathForUrl(const BUrl& url);
+
+			bool				_CanBeSetFromUrl(const BUrl& url) const;
+			bool				_CanBeSetFromDomain(const BString& path) const;
+			bool				_CanBeSetFromPath(const BString& path) const;
 
 private:
 	mutable	BString				fRawCookie;
@@ -102,9 +103,9 @@ private:
 			BString				fDomain;
 			BString				fPath;
 			BDateTime			fExpiration;
+			status_t			fInitStatus;
 			bool				fSecure;
 			bool				fHttpOnly;
-
 			bool				fHostOnly;
 			bool				fSessionCookie;
 };

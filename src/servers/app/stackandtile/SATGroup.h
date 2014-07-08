@@ -1,9 +1,10 @@
 /*
- * Copyright 2010, Haiku.
+ * Copyright 2010-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Clemens Zeidler <haiku@clemens-zeidler.de>
+ *		John Scipione, jscipione@gmail.com
+ *		Clemens Zeidler, haiku@clemens-zeidler.de
  */
 #ifndef SAT_GROUP_H
 #define SAT_GROUP_H
@@ -246,8 +247,8 @@ public:
 			LinearSpec*			GetLinearSpec() { return &fLinearSpec; }
 
 			/*! Create a new WindowArea from the crossing and add the window. */
-			bool				AddWindow(SATWindow* window, Tab* left, Tab* top,
-									Tab* right, Tab* bottom);
+			bool				AddWindow(SATWindow* window, Tab* left,
+									Tab* top, Tab* right, Tab* bottom);
 			/*! Add a window to an existing window area. */
 			bool				AddWindow(SATWindow* window, WindowArea* area,
 									SATWindow* after = NULL);
@@ -258,8 +259,11 @@ public:
 			int32				CountItems();
 			SATWindow*			WindowAt(int32 index);
 
+			SATWindow*			ActiveWindow() const;
+			void				SetActiveWindow(SATWindow* window);
+
 			const WindowAreaList&	GetAreaList() { return fWindowAreaList; }
-			
+
 			/*! \return a sorted tab list. */
 			const TabList*		HorizontalTabs();
 			const TabList*		VerticalTabs();
@@ -324,6 +328,8 @@ private:
 			bool				fHorizontalTabsSorted;
 			TabList				fVerticalTabs;
 			bool				fVerticalTabsSorted;
+
+			SATWindow*			fActiveWindow;
 };
 
 

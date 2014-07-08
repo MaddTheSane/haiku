@@ -20,7 +20,8 @@
 
 
 BStringItem::BStringItem(const char* text, uint32 level, bool expanded)
-	: BListItem(level, expanded),
+	:
+	BListItem(level, expanded),
 	fText(NULL),
 	fBaselineOffset(0)
 {
@@ -29,7 +30,8 @@ BStringItem::BStringItem(const char* text, uint32 level, bool expanded)
 
 
 BStringItem::BStringItem(BMessage* archive)
-	: BListItem(archive),
+	:
+	BListItem(archive),
 	fText(NULL),
 	fBaselineOffset(0)
 {
@@ -56,7 +58,7 @@ BStringItem::Instantiate(BMessage* archive)
 
 
 status_t
-BStringItem::Archive(BMessage *archive, bool deep) const
+BStringItem::Archive(BMessage* archive, bool deep) const
 {
 	status_t status = BListItem::Archive(archive);
 
@@ -68,7 +70,7 @@ BStringItem::Archive(BMessage *archive, bool deep) const
 
 
 void
-BStringItem::DrawItem(BView *owner, BRect frame, bool complete)
+BStringItem::DrawItem(BView* owner, BRect frame, bool complete)
 {
 	if (fText == NULL)
 		return;
@@ -77,14 +79,17 @@ BStringItem::DrawItem(BView *owner, BRect frame, bool complete)
 	rgb_color lowColor = owner->LowColor();
 
 	if (IsSelected() || complete) {
-		if (IsSelected()) {
-			owner->SetHighColor(ui_color(B_LIST_SELECTED_BACKGROUND_COLOR));
-			owner->SetLowColor(owner->HighColor());
-		} else
-			owner->SetHighColor(lowColor);
+		rgb_color color;
+		if (IsSelected())
+			color = ui_color(B_LIST_SELECTED_BACKGROUND_COLOR);
+		else
+			color = owner->ViewColor();
 
+		owner->SetLowColor(color);
+		owner->SetHighColor(color);
 		owner->FillRect(frame);
-	}
+	} else
+		owner->SetLowColor(owner->ViewColor());
 
 	owner->MovePenTo(frame.left + be_control_look->DefaultLabelSpacing(),
 		frame.top + fBaselineOffset);
@@ -110,7 +115,7 @@ BStringItem::DrawItem(BView *owner, BRect frame, bool complete)
 
 
 void
-BStringItem::SetText(const char *text)
+BStringItem::SetText(const char* text)
 {
 	free(fText);
 	fText = NULL;
@@ -128,9 +133,9 @@ BStringItem::Text() const
 
 
 void
-BStringItem::Update(BView *owner, const BFont *font)
+BStringItem::Update(BView* owner, const BFont* font)
 {
-	if (fText) {
+	if (fText != NULL) {
 		SetWidth(font->StringWidth(fText)
 			+ be_control_look->DefaultLabelSpacing());
 	}
@@ -146,7 +151,7 @@ BStringItem::Update(BView *owner, const BFont *font)
 
 
 status_t
-BStringItem::Perform(perform_code d, void *arg)
+BStringItem::Perform(perform_code d, void* arg)
 {
 	return BListItem::Perform(d, arg);
 }

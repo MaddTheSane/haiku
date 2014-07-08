@@ -181,7 +181,7 @@ pthread_self(void)
 int
 pthread_equal(pthread_t t1, pthread_t t2)
 {
-	return t1 != NULL && t2 != NULL && t1 == t2;
+	return t1 == t2;
 }
 
 
@@ -189,7 +189,11 @@ int
 pthread_join(pthread_t thread, void** _value)
 {
 	status_t dummy;
-	status_t error = wait_for_thread(thread->id, &dummy);
+	status_t error;
+	do {
+		error = wait_for_thread(thread->id, &dummy);
+	} while (error == B_INTERRUPTED);
+
 	if (error == B_BAD_THREAD_ID)
 		RETURN_AND_TEST_CANCEL(ESRCH);
 

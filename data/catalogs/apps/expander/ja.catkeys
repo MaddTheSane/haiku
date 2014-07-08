@@ -1,4 +1,4 @@
-1	japanese	x-vnd.Haiku-Expander	2603318510
+1	japanese	x-vnd.Haiku-Expander	2177073262
 Expand	ExpanderMenu		解凍
 Close window when done expanding	ExpanderPreferences		解凍終了後ウィンドウを閉じる
 Set destination…	ExpanderMenu		解凍先を指定…
@@ -20,20 +20,21 @@ Destination folder	ExpanderPreferences		解凍先フォルダー
 Other	ExpanderPreferences		その他
 Cancel	ExpanderPreferences		中止
 Expansion	ExpanderPreferences		解凍
-Are you sure you want to stop expanding this\narchive? The expanded items may not be complete.	ExpanderWindow		書庫ファイルの解凍はまだ完了していません。それでも中止しますか？
+Are you sure you want to stop expanding this\narchive? The expanded items may not be complete.	ExpanderWindow		書庫ファイルの解凍はまだ完了していません。それでも中止しますか? 解凍されたファイルは完全でない可能性があります。
 Select	DirectoryFilePanel		選択
 Destination folder doesn't exist. Would you like to create it?	ExpanderWindow		展開先のフォルダーがありません。作成してもよろしいですか?
 Same directory as source (archive) file	ExpanderPreferences		元ファイル (アーカイブ) と同じ
 Expanding '%s'	ExpanderWindow		'%s' を解凍中
 Settings	ExpanderMenu		設定
 Settings…	ExpanderMenu		設定…
-Expander: Choose destination	DirectoryFilePanel		ファイル解凍: 解凍先の選択
+Expander: Choose destination	DirectoryFilePanel		ファイル解凍: 解凍先を選択
 Select	ExpanderPreferences		選択
 Show contents	ExpanderWindow		内容を表示
 Automatically show contents listing	ExpanderPreferences		内容リストを自動的に表示
 OK	ExpanderPreferences		OK
 Leave destination folder path empty	ExpanderPreferences		パスを空にしておく
 Failed to create the destination folder.	ExpanderWindow		展開先のフォルダーを作成できませんでした:
+Select '%s'…	DirectoryFilePanel		'%s' を選択…
 Create	ExpanderWindow		作成
 The folder was either moved, renamed or not\nsupported.	ExpanderWindow		指定されたフォルダーが移動されたか、名前が変更されたか、\nサポートされていません。
 The file doesn't exist	ExpanderWindow		ファイルがありません
@@ -45,7 +46,6 @@ Close	ExpanderMenu		閉じる
 The destination is not a folder.	ExpanderWindow		解凍先はフォルダーではありません。
 Open destination folder after extraction	ExpanderPreferences		解凍後に解凍先フォルダーを開く
 Set source…	ExpanderMenu		書庫ファイルを指定…
-Select '%s'	DirectoryFilePanel		'%s' を選択
 Show contents	ExpanderMenu		内容を表示
 Stop	ExpanderWindow		中止
 Destination	ExpanderWindow		解凍先

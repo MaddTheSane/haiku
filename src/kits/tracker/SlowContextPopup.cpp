@@ -60,20 +60,26 @@ All rights reserved.
 #include "SlowContextPopup.h"
 #include "Thread.h"
 #include "Tracker.h"
+#include "VirtualDirectoryEntryList.h"
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "SlowContextPopup"
 
+
+//	#pragma mark - BSlowContextMenu
+
+
 BSlowContextMenu::BSlowContextMenu(const char* title)
-	:	BPopUpMenu(title, false, false),
-		fMenuBuilt(false),
-		fMessage(B_REFS_RECEIVED),
-		fParentWindow(NULL),
-		fItemList(NULL),
-		fContainer(NULL),
-		fTypesList(NULL),
-		fIsShowing(false)
+	:
+	BPopUpMenu(title, false, false),
+	fMenuBuilt(false),
+	fMessage(B_REFS_RECEIVED),
+	fParentWindow(NULL),
+	fItemList(NULL),
+	fContainer(NULL),
+	fTypesList(NULL),
+	fIsShowing(false)
 {
 	InitIconPreloader();
 
@@ -213,7 +219,8 @@ BSlowContextMenu::AddDynamicItem(add_state state)
 			break;
 	}
 
-	return true;	// call me again, got more to show
+	return true;
+		// call me again, got more to show
 }
 
 
@@ -247,6 +254,8 @@ BSlowContextMenu::StartBuildingItemList()
 
 		if (startModel.IsQuery())
 			fContainer = new QueryEntryListCollection(&startModel);
+		else if (startModel.IsVirtualDirectory())
+			fContainer = new VirtualDirectoryEntryList(&startModel);
 		else if (startModel.IsDesktop()) {
 			fIteratingDesktop = true;
 			fContainer = DesktopPoseView::InitDesktopDirentIterator(0,

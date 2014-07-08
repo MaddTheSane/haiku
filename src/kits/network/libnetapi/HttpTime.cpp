@@ -13,14 +13,12 @@
 #include <cstdio>
 
 
-#define PRINT(x) printf x
-
-
-static const char* 	kRfc1123Format			= "%a, %d %b %Y %H:%M:%S GMT";
-static const char* 	kCookieFormat			= "%a, %d-%b-%Y %H:%M:%S GMT";
-static const char* 	kRfc1036Format			= "%A, %d-%b-%y %H:%M:%S GMT";
-static const char* 	kAscTimeFormat			= "%a %d %b %H:%M:%S %Y";
-static const uint16	kTimetToStringMaxLength	= 128;
+static const char* kDateFormats[] = {
+	"%a, %d %b %Y %H:%M:%S",
+	"%a, %d-%b-%Y %H:%M:%S",
+	"%A, %d-%b-%y %H:%M:%S",
+	"%a %d %b %H:%M:%S %Y"
+};
 
 using namespace BPrivate;
 
@@ -33,7 +31,7 @@ BHttpTime::BHttpTime()
 }
 
 
-BHttpTime::BHttpTime(time_t date)
+BHttpTime::BHttpTime(BDateTime date)
 	:
 	fDate(date),
 	fDateFormat(B_HTTP_TIME_FORMAT_PREFERRED)
@@ -61,7 +59,7 @@ BHttpTime::SetString(const BString& string)
 
 
 void
-BHttpTime::SetDate(time_t date)
+BHttpTime::SetDate(BDateTime date)
 {
 	fDate = date;
 }
@@ -70,34 +68,47 @@ BHttpTime::SetDate(time_t date)
 // #pragma mark Date conversion
 
 
-time_t
+BDateTime
 BHttpTime::Parse()
 {
 	struct tm expireTime;
 	
 	if (fDateString.Length() < 4)
 		return 0;
-		
-	if (fDateString[3] == ',') {
-		if (strptime(fDateString.String(), kRfc1123Format, &expireTime)
-				== NULL) {
-			strptime(fDateString.String(), kCookieFormat, &expireTime);
-			fDateFormat = B_HTTP_TIME_FORMAT_COOKIE;
-		} else
-			fDateFormat = B_HTTP_TIME_FORMAT_RFC1123;
-	} else if (fDateString[3] == ' ') {
-		strptime(fDateString.String(), kRfc1036Format, &expireTime);
-		fDateFormat = B_HTTP_TIME_FORMAT_RFC1036;
-	} else {
-		strptime(fDateString.String(), kAscTimeFormat, &expireTime);
-		fDateFormat = B_HTTP_TIME_FORMAT_ASCTIME;
+
+	expireTime.tm_sec = 0;
+	expireTime.tm_min = 0;
+	expireTime.tm_hour = 0;
+	expireTime.tm_mday = 0;
+	expireTime.tm_mon = 0;
+	expireTime.tm_year = 0;
+	expireTime.tm_wday = 0;
+	expireTime.tm_yday = 0;
+	expireTime.tm_isdst = 0;
+	
+	fDateFormat = B_HTTP_TIME_FORMAT_PARSED;
+	unsigned int i;
+	for (i = 0; i < sizeof(kDateFormats) / sizeof(const char*);
+		i++) {
+		const char* result = strptime(fDateString.String(), kDateFormats[i],
+			&expireTime);
+
+		// Make sure we parsed enough of the date string, not just a small
+		// part of it.
+		if (result != NULL && result > fDateString.String() + 24) {
+			fDateFormat = i;
+			break;
+		}
 	}
 
-//	return timegm(&expireTime);
-// TODO: The above was used initially. See http://en.wikipedia.org/wiki/Time.h
-// stippi: I don't know how Christophe had this code compiling initially,
-// since Haiku does not appear to implement timegm().
-return mktime(&expireTime);
+	if (fDateFormat == B_HTTP_TIME_FORMAT_PARSED)
+		return 0;
+
+	BTime time(expireTime.tm_hour, expireTime.tm_min, expireTime.tm_sec);
+	BDate date(expireTime.tm_year + 1900, expireTime.tm_mon + 1,
+		expireTime.tm_mday);
+	BDateTime dateTime(date, time);
+	return dateTime;
 }
 
 
@@ -105,28 +116,29 @@ BString
 BHttpTime::ToString(int8 format)
 {
 	BString expirationFinal;
-	struct tm* expirationTm = localtime(&fDate);
-	char expirationString[kTimetToStringMaxLength + 1];
-	size_t strLength;
+	struct tm expirationTm;
+	expirationTm.tm_sec = fDate.Time().Second();
+	expirationTm.tm_min = fDate.Time().Minute();
+	expirationTm.tm_hour = fDate.Time().Hour();
+	expirationTm.tm_mday = fDate.Date().Day();
+	expirationTm.tm_mon = fDate.Date().Month() - 1;
+	expirationTm.tm_year = fDate.Date().Year() - 1900;
+	expirationTm.tm_wday = 0;
+	expirationTm.tm_yday = 0;
+	expirationTm.tm_isdst = 0;
+
+	if (format == B_HTTP_TIME_FORMAT_PARSED)
+		format = fDateFormat;
+
+	if (format != B_HTTP_TIME_FORMAT_PARSED) {
+		static const uint16 kTimetToStringMaxLength = 128;
+		char expirationString[kTimetToStringMaxLength + 1];
+		size_t strLength;
 	
-	switch ((format == B_HTTP_TIME_FORMAT_PARSED)?fDateFormat:format) {
-		default:
-		case B_HTTP_TIME_FORMAT_RFC1123:
-			strLength = strftime(expirationString, kTimetToStringMaxLength,
-				kRfc1123Format, expirationTm);
-			break;
-			
-		case B_HTTP_TIME_FORMAT_RFC1036:
-			strLength = strftime(expirationString, kTimetToStringMaxLength,
-				kRfc1036Format, expirationTm);
-			break;
-		
-		case B_HTTP_TIME_FORMAT_ASCTIME:
-			strLength = strftime(expirationString, kTimetToStringMaxLength,
-				kAscTimeFormat, expirationTm);
-			break;		
+		strLength = strftime(expirationString, kTimetToStringMaxLength,
+			kDateFormats[format], &expirationTm);
+	
+		expirationFinal.SetTo(expirationString, strLength);
 	}
-	
-	expirationFinal.SetTo(expirationString, strLength);	
 	return expirationFinal;
 }

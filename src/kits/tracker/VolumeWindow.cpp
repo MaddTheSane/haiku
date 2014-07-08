@@ -50,13 +50,17 @@ All rights reserved.
 #include "MountMenu.h"
 
 
-
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "VolumeWindow"
 
+
+//	#pragma mark - BVolumeWindow
+
+
 BVolumeWindow::BVolumeWindow(LockingList<BWindow>* windowList,
-		uint32 openFlags)
-	:	BContainerWindow(windowList, openFlags)
+	uint32 openFlags)
+	:
+	BContainerWindow(windowList, openFlags)
 {
 }
 
@@ -89,7 +93,7 @@ BVolumeWindow::MenusBeginning()
 	}
 
 	BMenuItem* item = fMenuBar->FindItem(kUnmountVolume);
-	if (item)
+	if (item != NULL)
 		item->SetEnabled(ejectableVolumeSelected);
 }
 
@@ -97,7 +101,7 @@ BVolumeWindow::MenusBeginning()
 void
 BVolumeWindow::AddFileMenu(BMenu* menu)
 {
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Find"B_UTF8_ELLIPSIS),
+	menu->AddItem(new BMenuItem(B_TRANSLATE("Find" B_UTF8_ELLIPSIS),
 		new BMessage(kFindButton), 'F'));
 	menu->AddSeparatorItem();
 
@@ -144,7 +148,7 @@ BVolumeWindow::AddWindowContextMenus(BMenu* menu)
 	menu->AddItem(resizeItem);
 	menu->AddItem(new BMenuItem(B_TRANSLATE("Clean up"),
 		new BMessage(kCleanup), 'K'));
-	menu->AddItem(new BMenuItem(B_TRANSLATE("Select"B_UTF8_ELLIPSIS),
+	menu->AddItem(new BMenuItem(B_TRANSLATE("Select" B_UTF8_ELLIPSIS),
 		new BMessage(kShowSelectionWindow), 'A', B_SHIFT_KEY));
 	menu->AddItem(new BMenuItem(B_TRANSLATE("Select all"),
 		new BMessage(B_SELECT_ALL), 'A'));

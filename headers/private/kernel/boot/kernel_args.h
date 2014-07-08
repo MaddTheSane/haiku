@@ -28,6 +28,8 @@
 #define BOOT_METHOD						"boot method"
 #define BOOT_VOLUME_USER_SELECTED		"user selected"
 #define BOOT_VOLUME_BOOTED_FROM_IMAGE	"booted from image"
+#define BOOT_VOLUME_PACKAGED			"packaged"
+#define BOOT_VOLUME_PACKAGES_STATE		"packages state"
 #define BOOT_VOLUME_PARTITION_OFFSET	"partition offset"
 #define BOOT_VOLUME_DISK_IDENTIFIER		"disk identifier"
 
@@ -58,7 +60,7 @@ typedef struct kernel_args {
 	uint64		ignored_physical_memory;
 
 	uint32		num_cpus;
-	addr_range	cpu_kstack[MAX_BOOT_CPUS];
+	addr_range	cpu_kstack[SMP_MAX_CPUS];
 
 	// boot volume KMessage data
 	FixedWidthPointer<void> boot_volume;
@@ -81,8 +83,21 @@ typedef struct kernel_args {
 	FixedWidthPointer<void> edid_info;
 
 	FixedWidthPointer<void> debug_output;
+		// If keep_debug_output_buffer, points to a ring_buffer, else to a
+		// simple flat buffer. In either case it stores the debug output from
+		// the boot loader.
+	FixedWidthPointer<void> previous_debug_output;
+		// A flat pointer to a buffer containing the debug output from the
+		// previous session. May be NULL.
 	uint32		debug_size;
+		// If keep_debug_output_buffer, the size of the ring buffer, otherwise
+		// the size of the flat buffer debug_output points to.
+	uint32		previous_debug_size;
+		// The size of the buffer previous_debug_output points to. Used as a
+		// boolean indicator whether to save the previous session's debug output
+		// until initialized for the kernel.
 	bool		keep_debug_output_buffer;
+		// If true, debug_output is a ring buffer, otherwise a flat buffer.
 
 	platform_kernel_args platform_args;
 	arch_kernel_args arch_args;

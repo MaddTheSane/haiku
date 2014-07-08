@@ -7,6 +7,7 @@
 #include <Window.h>
 
 
+class BFilePanel;
 class BMenu;
 class TermView;
 
@@ -23,7 +24,14 @@ class SerialWindow: public BWindow
 	private:
 		TermView* fTermView;
 		BMenu* fConnectionMenu;
+		BMenu* fDatabitsMenu;
+		BMenu* fStopbitsMenu;
+		BMenu* fParityMenu;
+		BMenu* fFlowcontrolMenu;
+		BMenu* fBaudrateMenu;
 		BFilePanel* fLogFilePanel;
 
+		static const int kBaudrates[];
+		static const int kBaudrateConstants[];
 		static const char* kWindowTitle;
 };

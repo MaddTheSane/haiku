@@ -18,6 +18,7 @@
 #include <boot/stage2.h>
 #include <arch/cpu.h>
 #include <platform_arch.h>
+#include <platform/openfirmware/openfirmware.h>
 
 #include <string.h>
 
@@ -104,6 +105,12 @@ platform_start_kernel(void)
 	addr_t stackTop
 		= gKernelArgs.cpu_kstack[0].start + gKernelArgs.cpu_kstack[0].size;
 
+	if (gFDT) {
+		// clone the Flattened Device Tree blob
+		gKernelArgs.platform_args.fdt = kernel_args_malloc(fdt_totalsize(gFDT));
+		memcpy(gKernelArgs.platform_args.fdt, gFDT, fdt_totalsize(gFDT));
+	}
+
 //	smp_init_other_cpus();
 	serial_cleanup();
 	mmu_init_for_kernel();
@@ -114,7 +121,7 @@ platform_start_kernel(void)
 	status_t error = arch_start_kernel(&gKernelArgs, kernelEntry,
 		stackTop);
 
-	panic("kernel returned!\n");
+	panic("kernel returned %lx!\n", error);
 }
 
 
@@ -130,7 +137,8 @@ start_netbsd(struct board_info *bd, struct image_header *image,
 {
 	const char *argv[] = { "haiku", cmdline };
 	int argc = 1;
-	if (cmdline)
+	// TODO: Ensure cmdline is mapped into memory by MMU before usage.
+	if (cmdline && *cmdline)
 		argc++;
 	gUImage = image;
 	return start_raw(argc, argv);
@@ -177,7 +185,14 @@ start_raw(int argc, const char **argv)
 	args.platform.fdt_data = NULL;
 	args.platform.fdt_size = 0;
 
-	// if we get passed a uimage, try to find the third blob only if we do not have FDT data yet
+	if (argv) {
+		// skip the kernel name
+		args.arguments = ++argv;
+		args.arguments_count = --argc;
+	}
+
+	// if we get passed a uimage, try to find the third blob
+	// only if we do not have FDT data yet
 	if (gUImage != NULL
 		&& !gFDT
 		&& image_multi_getimg(gUImage, 2,
@@ -190,6 +205,9 @@ start_raw(int argc, const char **argv)
 
 	serial_init(gFDT);
 	console_init();
+	// initialize the OpenFirmware wrapper
+	of_init(NULL);
+
 	cpu_init();
 
 	if (args.platform.fdt_data) {
@@ -201,7 +219,7 @@ start_raw(int argc, const char **argv)
 		args.platform.fdt_size = fdt_totalsize(gFDT);
 	}
 
-	// if we get passed an FDT, check /chosen for initrd
+	// if we get passed an FDT, check /chosen for initrd and bootargs
 	if (gFDT != NULL) {
 		int node = fdt_path_offset(gFDT, "/chosen");
 		const void *prop;
@@ -218,8 +236,16 @@ start_raw(int argc, const char **argv)
 			if (initrd_end > initrd_start) {
 				args.platform.boot_tgz_data = (void *)initrd_start;
 				args.platform.boot_tgz_size = initrd_end - initrd_start;
-		dprintf("Found boot tgz from FDT @ %p, %" B_PRIu32 " bytes\n",
-			args.platform.boot_tgz_data, args.platform.boot_tgz_size);
+				dprintf("Found boot tgz from FDT @ %p, %" B_PRIu32 " bytes\n",
+					args.platform.boot_tgz_data, args.platform.boot_tgz_size);
+			}
+			prop = fdt_getprop(gFDT, node, "bootargs", &len);
+			if (prop) {
+				dprintf("Found bootargs: %s\n", (const char *)prop);
+				static const char *sArgs[] = { NULL, NULL };
+				sArgs[0] = (const char *)prop;
+				args.arguments = sArgs;
+				args.arguments_count = 1;
 			}
 		}
 	}

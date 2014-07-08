@@ -171,7 +171,7 @@ TUNABLE_INT("hw.re.prefer_iomap", &prefer_iomap);
 /*
  * Various supported device vendors/types and their names.
  */
-static const struct rl_type const re_devs[] = {
+static const struct rl_type re_devs[] = {
 	{ DLINK_VENDORID, DLINK_DEVICEID_528T, 0,
 	    "D-Link DGE-528(T) Gigabit Ethernet Adapter" },
 	{ DLINK_VENDORID, DLINK_DEVICEID_530T_REVC, 0,
@@ -181,7 +181,7 @@ static const struct rl_type const re_devs[] = {
 	{ RT_VENDORID, RT_DEVICEID_8101E, 0,
 	    "RealTek 810xE PCIe 10/100baseTX" },
 	{ RT_VENDORID, RT_DEVICEID_8168, 0,
-	    "RealTek 8168/8111 B/C/CP/D/DP/E/F PCIe Gigabit Ethernet" },
+	    "RealTek 8168/8111 B/C/CP/D/DP/E/F/G PCIe Gigabit Ethernet" },
 	{ RT_VENDORID, RT_DEVICEID_8169, 0,
 	    "RealTek 8169/8169S/8169SB(L)/8110S/8110SB(L) Gigabit Ethernet" },
 	{ RT_VENDORID, RT_DEVICEID_8169SC, 0,
@@ -194,7 +194,7 @@ static const struct rl_type const re_devs[] = {
 	    "US Robotics 997902 (RTL8169S) Gigabit Ethernet" }
 };
 
-static const struct rl_hwrev const re_hwrevs[] = {
+static const struct rl_hwrev re_hwrevs[] = {
 	{ RL_HWREV_8139, RL_8139, "", RL_MTU },
 	{ RL_HWREV_8139A, RL_8139, "A", RL_MTU },
 	{ RL_HWREV_8139AG, RL_8139, "A-G", RL_MTU },
@@ -223,6 +223,7 @@ static const struct rl_hwrev const re_hwrevs[] = {
 	{ RL_HWREV_8402, RL_8169, "8402", RL_MTU },
 	{ RL_HWREV_8105E, RL_8169, "8105E", RL_MTU },
 	{ RL_HWREV_8105E_SPIN1, RL_8169, "8105E", RL_MTU },
+	{ RL_HWREV_8106E, RL_8169, "8106E", RL_MTU },
 	{ RL_HWREV_8168B_SPIN2, RL_8169, "8168", RL_JUMBO_MTU },
 	{ RL_HWREV_8168B_SPIN3, RL_8169, "8168", RL_JUMBO_MTU },
 	{ RL_HWREV_8168C, RL_8169, "8168C/8111C", RL_JUMBO_MTU_6K },
@@ -232,8 +233,12 @@ static const struct rl_hwrev const re_hwrevs[] = {
 	{ RL_HWREV_8168DP, RL_8169, "8168DP/8111DP", RL_JUMBO_MTU_9K },
 	{ RL_HWREV_8168E, RL_8169, "8168E/8111E", RL_JUMBO_MTU_9K},
 	{ RL_HWREV_8168E_VL, RL_8169, "8168E/8111E-VL", RL_JUMBO_MTU_6K},
+	{ RL_HWREV_8168EP, RL_8169, "8168EP/8111EP", RL_JUMBO_MTU_9K},
 	{ RL_HWREV_8168F, RL_8169, "8168F/8111F", RL_JUMBO_MTU_9K},
+	{ RL_HWREV_8168G, RL_8169, "8168G/8111G", RL_JUMBO_MTU_9K},
+	{ RL_HWREV_8168GU, RL_8169, "8168GU/8111GU", RL_JUMBO_MTU_9K},
 	{ RL_HWREV_8411, RL_8169, "8411", RL_JUMBO_MTU_9K},
+	{ RL_HWREV_8411B, RL_8169, "8411B", RL_JUMBO_MTU_9K},
 	{ 0, 0, NULL, 0 }
 };
 
@@ -758,7 +763,7 @@ re_diag(struct rl_softc *sc)
 	u_int8_t		src[] = { 0x00, 'w', 'o', 'r', 'l', 'd' };
 
 	/* Allocate a single mbuf */
-	MGETHDR(m0, M_DONTWAIT, MT_DATA);
+	MGETHDR(m0, M_NOWAIT, MT_DATA);
 	if (m0 == NULL)
 		return (ENOBUFS);
 
@@ -1321,7 +1326,7 @@ re_attach(device_t dev)
 			    SYS_RES_IRQ, &rid, RF_ACTIVE);
 			if (sc->rl_irq[i] == NULL) {
 				device_printf(dev,
-				    "couldn't llocate IRQ resources for "
+				    "couldn't allocate IRQ resources for "
 				    "message %d\n", rid);
 				error = ENXIO;
 				goto fail;
@@ -1343,14 +1348,14 @@ re_attach(device_t dev)
 	/* Disable ASPM L0S/L1. */
 	if (sc->rl_expcap != 0) {
 		cap = pci_read_config(dev, sc->rl_expcap +
-		    PCIR_EXPRESS_LINK_CAP, 2);
-		if ((cap & PCIM_LINK_CAP_ASPM) != 0) {
+		    PCIER_LINK_CAP, 2);
+		if ((cap & PCIEM_LINK_CAP_ASPM) != 0) {
 			ctl = pci_read_config(dev, sc->rl_expcap +
-			    PCIR_EXPRESS_LINK_CTL, 2);
-			if ((ctl & 0x0003) != 0) {
-				ctl &= ~0x0003;
+			    PCIER_LINK_CTL, 2);
+			if ((ctl & PCIEM_LINK_CTL_ASPMC) != 0) {
+				ctl &= ~PCIEM_LINK_CTL_ASPMC;
 				pci_write_config(dev, sc->rl_expcap +
-				    PCIR_EXPRESS_LINK_CTL, ctl, 2);
+				    PCIER_LINK_CTL, ctl, 2);
 				device_printf(dev, "ASPM disabled\n");
 			}
 		} else
@@ -1367,10 +1372,11 @@ re_attach(device_t dev)
 		break;
 	default:
 		device_printf(dev, "Chip rev. 0x%08x\n", hwrev & 0x7c800000);
+		sc->rl_macrev = hwrev & 0x00700000;
 		hwrev &= RL_TXCFG_HWREV;
 		break;
 	}
-	device_printf(dev, "MAC rev. 0x%08x\n", hwrev & 0x00700000);
+	device_printf(dev, "MAC rev. 0x%08x\n", sc->rl_macrev);
 	while (hw_rev->rl_desc != NULL) {
 		if (hw_rev->rl_rev == hwrev) {
 			sc->rl_type = hw_rev->rl_type;
@@ -1408,6 +1414,7 @@ re_attach(device_t dev)
 	case RL_HWREV_8401E:
 	case RL_HWREV_8105E:
 	case RL_HWREV_8105E_SPIN1:
+	case RL_HWREV_8106E:
 		sc->rl_flags |= RL_FLAG_PHYWAKE | RL_FLAG_PHYWAKE_PM |
 		    RL_FLAG_PAR | RL_FLAG_DESCV2 | RL_FLAG_MACSTAT |
 		    RL_FLAG_FASTETHER | RL_FLAG_CMDSTOP | RL_FLAG_AUTOPAD;
@@ -1429,7 +1436,7 @@ re_attach(device_t dev)
 		sc->rl_flags |= RL_FLAG_MACSLEEP;
 		/* FALLTHROUGH */
 	case RL_HWREV_8168C:
-		if ((hwrev & 0x00700000) == 0x00200000)
+		if (sc->rl_macrev == 0x00200000)
 			sc->rl_flags |= RL_FLAG_MACSLEEP;
 		/* FALLTHROUGH */
 	case RL_HWREV_8168CP:
@@ -1455,12 +1462,26 @@ re_attach(device_t dev)
 		    RL_FLAG_WOL_MANLINK;
 		break;
 	case RL_HWREV_8168E_VL:
+	case RL_HWREV_8168EP:
 	case RL_HWREV_8168F:
+	case RL_HWREV_8168G:
 	case RL_HWREV_8411:
+	case RL_HWREV_8411B:
 		sc->rl_flags |= RL_FLAG_PHYWAKE | RL_FLAG_PAR |
 		    RL_FLAG_DESCV2 | RL_FLAG_MACSTAT | RL_FLAG_CMDSTOP |
 		    RL_FLAG_AUTOPAD | RL_FLAG_JUMBOV2 |
 		    RL_FLAG_CMDSTOP_WAIT_TXQ | RL_FLAG_WOL_MANLINK;
+		break;
+	case RL_HWREV_8168GU:
+		if (pci_get_device(dev) == RT_DEVICEID_8101E) {
+			/* RTL8106EUS */
+			sc->rl_flags |= RL_FLAG_FASTETHER;
+		} else
+			sc->rl_flags |= RL_FLAG_JUMBOV2 | RL_FLAG_WOL_MANLINK;
+
+		sc->rl_flags |= RL_FLAG_PHYWAKE | RL_FLAG_PAR |
+		    RL_FLAG_DESCV2 | RL_FLAG_MACSTAT | RL_FLAG_CMDSTOP |
+		    RL_FLAG_AUTOPAD | RL_FLAG_CMDSTOP_WAIT_TXQ;
 		break;
 	case RL_HWREV_8169_8110SB:
 	case RL_HWREV_8169_8110SBL:
@@ -1587,7 +1608,8 @@ re_attach(device_t dev)
 	 * packet has IP options so disable TX IP checksum offloading.
 	 */
 	if (sc->rl_hwrev->rl_rev == RL_HWREV_8168C ||
-	    sc->rl_hwrev->rl_rev == RL_HWREV_8168C_SPIN2)
+	    sc->rl_hwrev->rl_rev == RL_HWREV_8168C_SPIN2 ||
+	    sc->rl_hwrev->rl_rev == RL_HWREV_8168CP)
 		ifp->if_hwassist = CSUM_TCP | CSUM_UDP;
 	else
 		ifp->if_hwassist = CSUM_IP | CSUM_TCP | CSUM_UDP;
@@ -1631,7 +1653,7 @@ re_attach(device_t dev)
 	/*
 	 * Don't enable TSO by default.  It is known to generate
 	 * corrupted TCP segments(bad TCP options) under certain
-	 * circumtances.
+	 * circumstances.
 	 */
 	ifp->if_hwassist &= ~CSUM_TSO;
 	ifp->if_capenable &= ~(IFCAP_TSO4 | IFCAP_VLAN_HWTSO);
@@ -1753,8 +1775,12 @@ re_detach(device_t dev)
 		bus_teardown_intr(dev, sc->rl_irq[0], sc->rl_intrhand[0]);
 		sc->rl_intrhand[0] = NULL;
 	}
-	if (ifp != NULL)
+	if (ifp != NULL) {
+#ifdef DEV_NETMAP
+		netmap_detach(ifp);
+#endif /* DEV_NETMAP */
 		if_free(ifp);
+	}
 	if ((sc->rl_flags & (RL_FLAG_MSI | RL_FLAG_MSIX)) == 0)
 		rid = 0;
 	else
@@ -1843,9 +1869,6 @@ re_detach(device_t dev)
 		bus_dma_tag_destroy(sc->rl_ldata.rl_stag);
 	}
 
-#ifdef DEV_NETMAP
-	netmap_detach(ifp);
-#endif /* DEV_NETMAP */
 	if (sc->rl_parent_tag)
 		bus_dma_tag_destroy(sc->rl_parent_tag);
 
@@ -1885,7 +1908,7 @@ re_newbuf(struct rl_softc *sc, int idx)
 	uint32_t		cmdstat;
 	int			error, nsegs;
 
-	m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
+	m = m_getcl(M_NOWAIT, MT_DATA, M_PKTHDR);
 	if (m == NULL)
 		return (ENOBUFS);
 
@@ -1949,7 +1972,7 @@ re_jumbo_newbuf(struct rl_softc *sc, int idx)
 	uint32_t		cmdstat;
 	int			error, nsegs;
 
-	m = m_getjcl(M_DONTWAIT, MT_DATA, M_PKTHDR, MJUM9BYTES);
+	m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, MJUM9BYTES);
 	if (m == NULL)
 		return (ENOBUFS);
 	m->m_len = m->m_pkthdr.len = MJUM9BYTES;
@@ -2110,11 +2133,9 @@ re_rxeof(struct rl_softc *sc, int *rx_npktsp)
 
 	ifp = sc->rl_ifp;
 #ifdef DEV_NETMAP
-	if (ifp->if_capenable & IFCAP_NETMAP) {
-		NA(ifp)->rx_rings->nr_kflags |= NKR_PENDINTR;
-		selwakeuppri(&NA(ifp)->rx_rings->si, PI_NET);
+	if (netmap_rx_irq(ifp, 0 | (NETMAP_LOCKED_ENTER|NETMAP_LOCKED_EXIT),
+	    &rx_npkts))
 		return 0;
-	}
 #endif /* DEV_NETMAP */
 	if (ifp->if_mtu > RL_MTU && (sc->rl_flags & RL_FLAG_JUMBOV2) != 0)
 		jumbo = 1;
@@ -2358,10 +2379,8 @@ re_txeof(struct rl_softc *sc)
 
 	ifp = sc->rl_ifp;
 #ifdef DEV_NETMAP
-	if (ifp->if_capenable & IFCAP_NETMAP) {
-		selwakeuppri(&NA(ifp)->tx_rings[0].si, PI_NET);
+	if (netmap_tx_irq(ifp, 0 | (NETMAP_LOCKED_ENTER|NETMAP_LOCKED_EXIT)))
 		return;
-	}
 #endif /* DEV_NETMAP */
 	/* Invalidate the TX descriptor list */
 	bus_dmamap_sync(sc->rl_ldata.rl_tx_list_tag,
@@ -2699,7 +2718,7 @@ re_encap(struct rl_softc *sc, struct mbuf **m_head)
 		padlen = RL_MIN_FRAMELEN - (*m_head)->m_pkthdr.len;
 		if (M_WRITABLE(*m_head) == 0) {
 			/* Get a writable copy. */
-			m_new = m_dup(*m_head, M_DONTWAIT);
+			m_new = m_dup(*m_head, M_NOWAIT);
 			m_freem(*m_head);
 			if (m_new == NULL) {
 				*m_head = NULL;
@@ -2709,7 +2728,7 @@ re_encap(struct rl_softc *sc, struct mbuf **m_head)
 		}
 		if ((*m_head)->m_next != NULL ||
 		    M_TRAILINGSPACE(*m_head) < padlen) {
-			m_new = m_defrag(*m_head, M_DONTWAIT);
+			m_new = m_defrag(*m_head, M_NOWAIT);
 			if (m_new == NULL) {
 				m_freem(*m_head);
 				*m_head = NULL;
@@ -2733,7 +2752,7 @@ re_encap(struct rl_softc *sc, struct mbuf **m_head)
 	error = bus_dmamap_load_mbuf_sg(sc->rl_ldata.rl_tx_mtag, txd->tx_dmamap,
 	    *m_head, segs, &nsegs, BUS_DMA_NOWAIT);
 	if (error == EFBIG) {
-		m_new = m_collapse(*m_head, M_DONTWAIT, RL_NTXSEGS);
+		m_new = m_collapse(*m_head, M_NOWAIT, RL_NTXSEGS);
 		if (m_new == NULL) {
 			m_freem(*m_head);
 			*m_head = NULL;
@@ -2786,7 +2805,7 @@ re_encap(struct rl_softc *sc, struct mbuf **m_head)
 		/*
 		 * Unconditionally enable IP checksum if TCP or UDP
 		 * checksum is required. Otherwise, TCP/UDP checksum
-		 * does't make effects.
+		 * doesn't make effects.
 		 */
 		if (((*m_head)->m_pkthdr.csum_flags & RE_CSUM_FEATURES) != 0) {
 			if ((sc->rl_flags & RL_FLAG_DESCV2) == 0) {
@@ -3249,7 +3268,7 @@ re_init_locked(struct rl_softc *sc)
 		if ((sc->rl_flags & RL_FLAG_JUMBOV2) != 0) {
 			/*
 			 * For controllers that use new jumbo frame scheme,
-			 * set maximum size of jumbo frame depedning on
+			 * set maximum size of jumbo frame depending on
 			 * controller revisions.
 			 */
 			if (ifp->if_mtu > RL_MTU)
@@ -3334,7 +3353,9 @@ re_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 	switch (command) {
 	case SIOCSIFMTU:
 		if (ifr->ifr_mtu < ETHERMIN ||
-		    ifr->ifr_mtu > sc->rl_hwrev->rl_max_mtu) {
+		    ifr->ifr_mtu > sc->rl_hwrev->rl_max_mtu ||
+		    ((sc->rl_flags & RL_FLAG_FASTETHER) != 0 &&
+		    ifr->ifr_mtu > RL_MTU)) {
 			error = EINVAL;
 			break;
 		}
@@ -3418,7 +3439,8 @@ re_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 			if ((ifp->if_capenable & IFCAP_TXCSUM) != 0) {
 				rev = sc->rl_hwrev->rl_rev;
 				if (rev == RL_HWREV_8168C ||
-				    rev == RL_HWREV_8168C_SPIN2)
+				    rev == RL_HWREV_8168C_SPIN2 ||
+				    rev == RL_HWREV_8168CP)
 					ifp->if_hwassist |= CSUM_TCP | CSUM_UDP;
 				else
 					ifp->if_hwassist |= RE_CSUM_FEATURES;
@@ -3949,7 +3971,7 @@ re_sysctl_stats(SYSCTL_HANDLER_ARGS)
 		RL_UNLOCK(sc);
 		if (i == 0) {
 			device_printf(sc->rl_dev,
-			    "DUMP statistics request timedout\n");
+			    "DUMP statistics request timed out\n");
 			return (ETIMEDOUT);
 		}
 done:

@@ -69,7 +69,6 @@ class RestartSyscall : public AbstractTraceEntry {
 
 // from arch_cpu.cpp
 extern bool gHasSSE;
-extern segment_descriptor* gGDT;
 
 static struct arch_thread sInitialState _ALIGNED(16);
 	// the fpu_state must be aligned on a 16 byte boundary, so that fxsave can use it
@@ -103,15 +102,28 @@ x86_restart_syscall(struct iframe* frame)
 void
 x86_set_tls_context(Thread *thread)
 {
-	int entry = smp_get_current_cpu() + TLS_BASE_SEGMENT;
+	segment_descriptor* gdt = get_gdt(smp_get_current_cpu());
+	set_segment_descriptor_base(&gdt[USER_TLS_SEGMENT],
+		thread->user_local_storage);
+	set_fs_register((USER_TLS_SEGMENT << 3) | DPL_USER);
+}
 
-	set_segment_descriptor_base(&gGDT[entry], thread->user_local_storage);
-	set_fs_register((entry << 3) | DPL_USER);
+
+static addr_t
+arch_randomize_stack_pointer(addr_t value)
+{
+	STATIC_ASSERT(MAX_RANDOM_VALUE >= B_PAGE_SIZE - 1);
+	value -= random_value() & (B_PAGE_SIZE - 1);
+	return (value & ~addr_t(0xf)) - 4;
+		// This means, result % 16 == 12, which is what esp should adhere to
+		// when a function is entered for the stack to be considered aligned to
+		// 16 byte.
 }
 
 
 static uint8*
-get_signal_stack(Thread* thread, struct iframe* frame, struct sigaction* action)
+get_signal_stack(Thread* thread, struct iframe* frame, struct sigaction* action,
+	size_t spaceNeeded)
 {
 	// use the alternate signal stack if we should and can
 	if (thread->signal_stack_enabled
@@ -119,10 +131,12 @@ get_signal_stack(Thread* thread, struct iframe* frame, struct sigaction* action)
 		&& (frame->user_sp < thread->signal_stack_base
 			|| frame->user_sp >= thread->signal_stack_base
 				+ thread->signal_stack_size)) {
-		return (uint8*)(thread->signal_stack_base + thread->signal_stack_size);
+		addr_t stackTop = thread->signal_stack_base + thread->signal_stack_size;
+		return (uint8*)arch_randomize_stack_pointer(stackTop - spaceNeeded);
 	}
 
-	return (uint8*)frame->user_sp;
+	return (uint8*)((frame->user_sp - spaceNeeded) & ~addr_t(0xf)) - 4;
+		// align stack pointer (cf. arch_randomize_stack_pointer())
 }
 
 
@@ -187,7 +201,7 @@ arch_thread_init_kthread_stack(Thread* thread, void* _stack, void* _stackTop,
 
 	// save the stack position
 	thread->arch_info.current_stack.esp = stackTop;
-	thread->arch_info.current_stack.ss = (addr_t*)KERNEL_DATA_SEG;
+	thread->arch_info.current_stack.ss = (addr_t*)KERNEL_DATA_SELECTOR;
 }
 
 
@@ -199,15 +213,6 @@ arch_thread_dump_info(void *info)
 	kprintf("\tesp: %p\n", at->current_stack.esp);
 	kprintf("\tss: %p\n", at->current_stack.ss);
 	kprintf("\tfpu_state at %p\n", at->fpu_state);
-}
-
-
-static addr_t
-arch_randomize_stack_pointer(addr_t value)
-{
-	STATIC_ASSERT(MAX_RANDOM_VALUE >= B_PAGE_SIZE - 1);
-	value -= random_value() & (B_PAGE_SIZE - 1);
-	return value & ~addr_t(0xf);
 }
 
 
@@ -223,7 +228,7 @@ arch_thread_enter_userspace(Thread* thread, addr_t entry, void* args1,
 	TRACE(("arch_thread_enter_userspace: entry 0x%lx, args %p %p, "
 		"ustack_top 0x%lx\n", entry, args1, args2, stackTop));
 
-	stackTop = arch_randomize_stack_pointer(stackTop);
+	stackTop = arch_randomize_stack_pointer(stackTop - sizeof(args));
 
 	// Copy the address of the stub that calls exit_thread() when the thread
 	// entry function returns to the top of the stack to act as the return
@@ -233,7 +238,6 @@ arch_thread_enter_userspace(Thread* thread, addr_t entry, void* args1,
 		+ commPageAddress;
 	args[1] = (uint32)args1;
 	args[2] = (uint32)args2;
-	stackTop -= sizeof(args);
 
 	if (user_memcpy((void *)stackTop, args, sizeof(args)) < B_OK)
 		return B_BAD_ADDRESS;
@@ -241,16 +245,16 @@ arch_thread_enter_userspace(Thread* thread, addr_t entry, void* args1,
 	// prepare the user iframe
 	iframe frame = {};
 	frame.type = IFRAME_TYPE_SYSCALL;
-	frame.gs = USER_DATA_SEG;
+	frame.gs = USER_DATA_SELECTOR;
 	// frame.fs not used, we call x86_set_tls_context() on context switch
-	frame.es = USER_DATA_SEG;
-	frame.ds = USER_DATA_SEG;
+	frame.es = USER_DATA_SELECTOR;
+	frame.ds = USER_DATA_SELECTOR;
 	frame.ip = entry;
-	frame.cs = USER_CODE_SEG;
+	frame.cs = USER_CODE_SELECTOR;
 	frame.flags = X86_EFLAGS_RESERVED1 | X86_EFLAGS_INTERRUPT
 		| (3 << X86_EFLAGS_IO_PRIVILEG_LEVEL_SHIFT);
 	frame.user_sp = stackTop;
-	frame.user_ss = USER_DATA_SEG;
+	frame.user_ss = USER_DATA_SELECTOR;
 
 	// return to userland
 	x86_initial_return_to_userland(thread, &frame);
@@ -325,11 +329,13 @@ arch_setup_signal_frame(Thread* thread, struct sigaction* action,
 
 	// get the stack to use -- that's either the current one or a special signal
 	// stack
-	uint8* userStack = get_signal_stack(thread, frame, action);
+	uint32 stackFrame[2];
+	uint8* userStack = get_signal_stack(thread, frame, action,
+		sizeof(*signalFrameData) + sizeof(stackFrame));
 
 	// copy the signal frame data onto the stack
-	userStack -= sizeof(*signalFrameData);
-	signal_frame_data* userSignalFrameData = (signal_frame_data*)userStack;
+	signal_frame_data* userSignalFrameData
+		= (signal_frame_data*)(userStack + sizeof(stackFrame));
 	if (user_memcpy(userSignalFrameData, signalFrameData,
 			sizeof(*signalFrameData)) != B_OK) {
 		return B_BAD_ADDRESS;
@@ -337,12 +343,10 @@ arch_setup_signal_frame(Thread* thread, struct sigaction* action,
 
 	// prepare the user stack frame for a function call to the signal handler
 	// wrapper function
-	uint32 stackFrame[2] = {
-		frame->ip,		// return address
-		(addr_t)userSignalFrameData, // parameter: pointer to signal frame data
-	};
+	stackFrame[0] = frame->ip;
+	stackFrame[1] = (addr_t)userSignalFrameData;
+		// parameter: pointer to signal frame data
 
-	userStack -= sizeof(stackFrame);
 	if (user_memcpy(userStack, stackFrame, sizeof(stackFrame)) != B_OK)
 		return B_BAD_ADDRESS;
 

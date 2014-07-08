@@ -276,7 +276,7 @@ Shell::GetActiveProcessInfo(ActiveProcessInfo& _info) const
 	// fetch the name and the current directory from the info
 	const char* name;
 	int32 cwdDevice;
-	int64 cwdDirectory;
+	int64 cwdDirectory = 0;
 	if (info.FindString("name", &name) != B_OK
 		|| info.FindInt32("cwd device", &cwdDevice) != B_OK
 		|| info.FindInt64("cwd directory", &cwdDirectory) != B_OK) {
@@ -400,8 +400,9 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 	char stringBuffer[256];
 
 	if (argv == NULL || argc == 0) {
-		if (!getpwuid_r(getuid(), &passwdStruct, stringBuffer,
-				sizeof(stringBuffer), &passwdResult)) {
+		if (getpwuid_r(getuid(), &passwdStruct, stringBuffer,
+				sizeof(stringBuffer), &passwdResult) == 0
+			&& passwdResult != NULL) {
 			defaultArgs[0] = passwdStruct.pw_shell;
 		}
 
@@ -614,11 +615,12 @@ Shell::_Spawn(int row, int col, const ShellParameters& parameters)
 		}
 	}
 
-	if (done <= 0)
+	if (done <= 0) {
+		close(master);
 		return B_ERROR;
+	}
 
 	fFd = master;
 
 	return B_OK;
 }
-

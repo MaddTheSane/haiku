@@ -17,7 +17,7 @@ NAME=
 TYPE= 
 
 # 	if you plan to use localization features 
-# 	specify the application MIME siganture
+# 	specify the application MIME signature
 APP_MIME_SIG= 
 
 #	add support for new Pe and Eddie features
@@ -140,4 +140,6 @@ APP_VERSION =
 DRIVER_PATH = 
 
 ## include the makefile-engine
-include $(BUILDHOME)/etc/makefile-engine
+DEVEL_DIRECTORY := \
+	$(shell findpaths -r "makefile_engine" B_FIND_PATH_DEVELOP_DIRECTORY)
+include $(DEVEL_DIRECTORY)/etc/makefile-engine

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2013 Haiku, Inc. All Rights Reserved.
+ * Copyright 2002-2013 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
@@ -188,15 +188,22 @@ BackgroundsView::BackgroundsView()
 	fPicker = new BColorControl(BPoint(0, 0), B_CELLS_32x8, 8.0, "Picker",
 		new BMessage(kMsgUpdateColor));
 
-	rightbox->AddChild(BLayoutBuilder::Group<>(B_VERTICAL, B_USE_DEFAULT_SPACING)
-		.AddGrid(B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING)
-			.Add(imageMenuField->CreateLabelLayoutItem(), 0, 0)
-			.Add(imageMenuField->CreateMenuBarLayoutItem(), 1, 0, 2, 1)
-			.Add(placementMenuField->CreateLabelLayoutItem(), 0, 1)
-			.Add(placementMenuField->CreateMenuBarLayoutItem(), 1, 1, 2, 1)
-			.Add(fIconLabelOutline, 1, 2)
-				// checkbox only spans one column so that it
-				// doesn't dictate the width of the menu bars.
+	rightbox->AddChild(BLayoutBuilder::Group<>(B_VERTICAL)
+		.AddGroup(B_HORIZONTAL, 0.0f)
+			.AddGrid(B_USE_DEFAULT_SPACING, B_USE_SMALL_SPACING)
+				.Add(imageMenuField->CreateLabelLayoutItem(), 0, 0)
+				.AddGroup(B_HORIZONTAL, 0.0f, 1, 0)
+					.Add(imageMenuField->CreateMenuBarLayoutItem(), 0.0f)
+					.AddGlue()
+					.End()
+				.Add(placementMenuField->CreateLabelLayoutItem(), 0, 1)
+				.AddGroup(B_HORIZONTAL, 0.0f, 1, 1)
+					.Add(placementMenuField->CreateMenuBarLayoutItem(), 0.0f)
+					.AddGlue()
+					.End()
+				.Add(fIconLabelOutline, 1, 2)
+				.End()
+			.AddGlue()
 			.End()
 		.AddGlue()
 		.Add(fPicker)
@@ -284,12 +291,12 @@ BackgroundsView::AllAttached()
 
 
 void
-BackgroundsView::MessageReceived(BMessage* msg)
+BackgroundsView::MessageReceived(BMessage* message)
 {
-	switch (msg->what) {
+	switch (message->what) {
 		case B_SIMPLE_DATA:
 		case B_REFS_RECEIVED:
-			RefsReceived(msg);
+			RefsReceived(message);
 			break;
 
 		case kMsgUpdatePreviewPlacement:
@@ -355,7 +362,7 @@ BackgroundsView::MessageReceived(BMessage* msg)
 		{
 			PRINT(("cancel received\n"));
 			void* pointer;
-			msg->FindPointer("source", &pointer);
+			message->FindPointer("source", &pointer);
 			if (pointer == fPanel) {
 				if (fLastImageIndex >= 0)
 					_FindImageItem(fLastImageIndex)->SetMarked(true);
@@ -404,7 +411,7 @@ BackgroundsView::MessageReceived(BMessage* msg)
 			break;
 
 		default:
-			BView::MessageReceived(msg);
+			BView::MessageReceived(message);
 			break;
 	}
 }
@@ -945,12 +952,12 @@ BackgroundsView::_UpdateButtons()
 
 
 void
-BackgroundsView::RefsReceived(BMessage* msg)
+BackgroundsView::RefsReceived(BMessage* message)
 {
-	if (!msg->HasRef("refs") && msg->HasRef("dir_ref")) {
+	if (!message->HasRef("refs") && message->HasRef("dir_ref")) {
 		entry_ref dirRef;
-		if (msg->FindRef("dir_ref", &dirRef) == B_OK)
-			msg->AddRef("refs", &dirRef);
+		if (message->FindRef("dir_ref", &dirRef) == B_OK)
+			message->AddRef("refs", &dirRef);
 	}
 
 	entry_ref ref;
@@ -959,7 +966,7 @@ BackgroundsView::RefsReceived(BMessage* msg)
 	BPath desktopPath;
 	find_directory(B_DESKTOP_DIRECTORY, &desktopPath);
 
-	while (msg->FindRef("refs", i++, &ref) == B_OK) {
+	while (message->FindRef("refs", i++, &ref) == B_OK) {
 		BPath path;
 		BEntry entry(&ref, true);
 		path.SetTo(&entry);
@@ -987,7 +994,7 @@ BackgroundsView::RefsReceived(BMessage* msg)
 
 			// An optional placement may have been sent
 			int32 placement = 0;
-			if (msg->FindInt32("placement", &placement) == B_OK) {
+			if (message->FindInt32("placement", &placement) == B_OK) {
 				BMenuItem* item = fPlacementMenu->FindItem(placement);
 				if (item)
 					item->SetMarked(true);

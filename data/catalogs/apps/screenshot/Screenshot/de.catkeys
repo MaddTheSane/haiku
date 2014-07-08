@@ -1,4 +1,4 @@
-1	german	x-vnd.haiku-screenshot	1721618877
+1	german	x-vnd.haiku-screenshot	1483476245
 seconds	ScreenshotWindow		Sekunden
 Desktop	ScreenshotWindow		Desktop
 Include window border	ScreenshotWindow		Inklusive Fensterrahmen
@@ -7,6 +7,7 @@ Select	ScreenshotWindow		Auswählen
 Capture active window	ScreenshotWindow		Nur aktives Fenster
 Cancel	ScreenshotWindow		Abbrechen
 Name:	ScreenshotWindow		Name:
+This file already exists.\n Are you sure you would like to overwrite it?	ScreenshotWindow		Diese Datei existiert bereits.\nSoll sie überschrieben werden?
 Choose folder	ScreenshotWindow		Ordner wählen
 Save	ScreenshotWindow		Speichern
 Overwrite	ScreenshotWindow		Überschreiben
@@ -19,7 +20,6 @@ screenshot	Screenshot	Base filename of screenshot files	Screenshot
 New screenshot	ScreenshotWindow		Neue Aufnahme
 Artwork folder	ScreenshotWindow		Artwork-Ordner
 Home folder	ScreenshotWindow		Home-Ordner
-This file already exists.\n Are you sure would you like to overwrite it?	ScreenshotWindow		Diese Datei existiert bereits.\nSoll sie überschreiben werden?
 Settings…	ScreenshotWindow		Einstellungen…
 overwrite	ScreenshotWindow		überschreiben
 Delay:	ScreenshotWindow		Verzögerung:

@@ -1,25 +1,25 @@
-1	hungarian	x-vnd.Haiku-PackageInstaller	1396489627
+1	hungarian	x-vnd.Haiku-PackageInstaller	2033288398
 Install to:	PackageView		Telepítés ide:
 OK	PackageView		Rendben
 Accept	PackageTextViewer		Elfogadás
 Continue	PackageInstall		Folytatás
 The requested package failed to install on your system. This might be a problem with the target package file. Please consult this issue with the package distributor.	PackageView		A kért csomag telepítése a rendszerre sikertelen volt. Lehet, hogy ez a cél csomagfájl hibája miatt következett be. Kérjük, vegye fel a kapcsolatot a csomag terjesztőjével.
 Image not loaded correctly	PackageImageViewer		A lemezkép betöltése sikertelen
-Install 	PackageView		Telepítés
 No package selected.	PackageInfo		Nincs csomag kiválasztva.
-Install	PackageView		Telepítés
 The given package seems to be already installed on your system. Would you like to uninstall the existing one and continue the installation?	PackageInstall		A megadott csomag már fel van telepítve a rendszerre. Eltávolítsuk a már telepítettet, és folytassuk a telepítést?
 Do you want to remember this decision for the rest of this installation?\n	PackageView		Megjegyezzük ezt a választást ennek a telepítésnek az idejére?\n
 There seems to be a file size mismatch in the package file. The package might be corrupted or have been modified after its creation. Do you still wish to continue?	PackageInfo		A fájlméretek a csomagfájlban nem egyeznek. A csomag korrupt lehet, vagy lehet, hogy az elkészítése után módosították. Biztos folytatni kívánja?
 Error while installing the package\n	PackageView		Hiba történt a csomag telepítése közben\n
 Disclaimer	PackageTextViewer		Jogi nyilatkozat
 %.1f GiB	PackageView		%.1f GiB
+%name% (%size% free)	PackageView		%name% (%size% szabad)
 The installation of the package has been aborted.	PackageView		A csomag telepítése meg lett szakítva
 Done	PackageInstall		Kész
 All existing files will be replaced?	PackageView		Minden létező fájl felül legyen írva?
 Preparing package	PackageInstall		Csomag előkészítése
 No package available.	PackageInfo		Nincs elérhető csomag.
 none	PackageView		nincs
+Install %name%	PackageView		%name% telepítése
 Stop	PackageStatus		Leállítás
 Other…	PackageView		Egyéb…
 No installation type selected	PackageView		Nincs másféle telepítéstípus kiválasztva
@@ -47,12 +47,14 @@ Decline	PackageTextViewer		Visszautasítás
 The file named '%s' already exits in the given path.\nReplace the file with the one from this package or skip it?	PackageView		A(z) '%s' nevű fájl már létezik a megadott útvonalon.\nLegyen felülírva, vagy ugorjuk át?
 All existing files will be skipped?	PackageView		Minden létező fájl átugrása?
 Continue	PackageInfo		Folytatás
+%index% of %total%	PackageInstall		%index% / %total%
 %.1f KiB	PackageView		%.1f KiB
-(%s free)	PackageView		(%s szabad)
 Abort	PackageInfo		Megszakítás
 PackageInstaller	System name		Csomagtelepítő
 Abort	PackageInstall		Megszakítás
+%name% (%size%)	PackageView		%name% (%size%)
 Continue	PackageTextViewer		Folytatás
+Begin	PackageView		Kezdés
 Replace	PackageView		Csere
 Installation progress	PackageView		Telepítés állapota
 The package file is not readable.\nOne of the possible reasons for this might be that the requested file is not a valid BeOS .pkg package.	PackageView		A csomagfájl nem olvasható.\nLehet, hogy nem érvényes BeOS .pkg csomagformátumban van.

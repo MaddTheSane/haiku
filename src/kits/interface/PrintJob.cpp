@@ -32,6 +32,7 @@
 #include <SystemCatalog.h>
 #include <View.h>
 
+#include <AutoDeleter.h>
 #include <pr_server.h>
 #include <ViewPrivate.h>
 
@@ -239,9 +240,9 @@ BPrintJob::BeginJob()
 	char *printer = _GetCurrentPrinterName();
 	if (printer == NULL)
 		return;
+	MemoryDeleter _(printer);
 
 	path.Append(printer);
-	free(printer);
 
 	char mangledName[B_FILE_NAME_LENGTH];
 	_GetMangledName(mangledName, B_FILE_NAME_LENGTH);

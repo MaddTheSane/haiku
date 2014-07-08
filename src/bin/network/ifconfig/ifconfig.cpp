@@ -105,6 +105,7 @@ static const media_type kMediaTypes[] = {
 			{ IFM_100_TX, "100baseTX", "100 MBit, 100BASE-TX" },
 			{ IFM_1000_T, "1000baseT", "1 GBit, 1000BASE-T" },
 			{ IFM_1000_SX, "1000baseSX", "1 GBit, 1000BASE-SX" },
+			{ IFM_10G_T, "10GbaseT", "10 GBit, 10GBASE-T" },
 			{ -1, NULL, NULL }
 		},
 		{
@@ -508,6 +509,11 @@ list_interface(const char* name)
 	// get link level interface for this interface
 
 	BNetworkInterface interface(name);
+	if (!interface.Exists()) {
+		printf("Interface not found!\n");
+		return false;
+	}
+
 	BNetworkAddress linkAddress;
 	status_t status = interface.GetHardwareAddress(linkAddress);
 	if (status == B_OK) {
@@ -814,7 +820,7 @@ configure_interface(const char* name, char* const* args, int32 argCount)
 			i++;
 		} else if (!strcmp(args[i], "metric")) {
 			if (i + 1 >= argCount) {
-				fprintf(stderr, "%s: Option 'metric' exptected parameter\n",
+				fprintf(stderr, "%s: Option 'metric' expected parameter\n",
 					kProgramName);
 				exit(1);
 			}
@@ -828,7 +834,7 @@ configure_interface(const char* name, char* const* args, int32 argCount)
 				exit(1);
 			}
 			if (i + 1 >= argCount) {
-				fprintf(stderr, "%s: Option 'media' exptected parameter\n",
+				fprintf(stderr, "%s: Option 'media' expected parameter\n",
 					kProgramName);
 				exit(1);
 			}
@@ -1012,4 +1018,3 @@ main(int argc, char** argv)
 	list_interfaces(name);
 	return 0;
 }
-

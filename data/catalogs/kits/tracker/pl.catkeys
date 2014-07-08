@@ -1,5 +1,4 @@
-1	polish	x-vnd.Haiku-libtracker	4236144717
-common	B_COMMON_DIRECTORY		wspólny
+1	polish	x-vnd.Haiku-libtracker	2212190051
 OK	WidgetAttributeText		OK
 Icon view	VolumeWindow		Widok ikon
 Add-ons	FilePanelPriv		Wtyczki
@@ -21,7 +20,8 @@ Invert selection	VolumeWindow		Odwróć zaznaczenie
 Recent documents	FavoritesMenu		Ostatnio otwierane dokumenty
 Modified	QueryPoseView		Zmodyfikowano
 Created	ContainerWindow		Utworzono
-Error %error loading add-On %name.	ContainerWindow		Błąd %error przy ładowaniu Wtyczki %name.
+Error %error loading add-On %name.	ContainerWindow		Błąd %error przy ładowaniu wtyczki %name.
+If you %ifYouDoAction the settings folder, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Jeśli wykonasz %ifYouDoAction na folderze ustawień, %osName może przestać działać poprawnie!\n\nNa pewno chcesz to zrobić?
 contains	SelectionWindow		zawiera
 Sorry, you can't save things at the root of your system.	FilePanelPriv		Przepraszamy, nie możesz zapisywać w katalogu głównym systemu.
 Show shared volumes on Desktop	SettingsView		Pokaż wspólne woluminy na Pulpicie
@@ -48,7 +48,7 @@ greater than	FindPanel		większy niż
 Delete	PoseView		Skasuj
 Select all	ContainerWindow		Zaznacz wszystko
 Sorry, the 'Character' attribute cannot store a multi-byte glyph.	WidgetAttributeText		Przepraszamy, atrybut 'Character' nie może przechowywać wielobajtowych znaków.
-Clean up	DeskWindow		Wyczyść
+Clean up	DeskWindow		Uprzątnij
 You cannot copy or move the root directory.	FSUtils		Nie możesz kopiować ani przenosić katalogu głównego.
 %SizeProcessed of %TotalSize, %BytesPerSecond/s	StatusWindow		%SizeProcessed z %TotalSize, %BytesPerSecond/s
 Invert selection	FilePanelPriv		Odwróć zaznaczenie
@@ -65,7 +65,7 @@ Size	QueryPoseView		Rozmiar
 Emptying Trash… 	StatusWindow		Opróżnianie Kosza… 
 Tracker New Templates	B_USER_SETTINGS_DIRECTORY/Tracker/Tracker New Templates		Tracker New Templates
 Close all in workspace	ContainerWindow		Zamknij wszystko w przestrzeni roboczej
-Empty Trash	ContainerWindow		Wyczyść Kosz
+Empty Trash	ContainerWindow		Opróżnij kosz
 Name = %name	FindPanel	FindResultTitle	Nazwa = %name
 Are you sure you want to move or copy the selected item(s) to this folder?	PoseView		Jesteś pewien, że chcesz przenieść lub skopiować pliki do tego folderu?
 Does not handle file	OpenWithWindow		Nie podtrzymuje pliku
@@ -76,7 +76,6 @@ Preparing to empty Trash…	StatusWindow		Przygotowanie do opróżnienia Kosza�
 You cannot put the selected item(s) into the trash.	FSUtils		Nie możesz umieścić wybranych elementów w Koszu.
 Disks	Model		Dyski
 Create link	ContainerWindow		Utwórz link
-develop	B_COMMON_DEVELOP_DIRECTORY		develop
 Decrease size	DeskWindow		Zmniejsz rozmiar
 Size	ContainerWindow		Rozmiar
 All disks	AutoMounterSettings		Wszystkie dyski
@@ -93,7 +92,7 @@ Cut	FilePanelPriv		Wytnij
 Replace	FilePanelPriv		Zastąp
 Select all	VolumeWindow		Zaznacz wszystko
 Opens with:	InfoWindow		Otwórz za pomocą:
-If you %ifYouDoAction the mime settings, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Jeśli wykonasz '%ifYouDoAction' wobec ustawień MIME, %osName może się nie zachowywać właściwie!\n\nCzy jesteś pewien, że chcesz wykonać operację %ifYouDoAction?
+If you %ifYouDoAction the mime settings, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Jeśli wykonasz '%ifYouDoAction' wobec ustawień MIME, %osName może się nie zachowywać właściwie!\n\nCzy jesteś pewien, że chcesz wykonać tę operację?
 Open	ContainerWindow		Otwórz
 96 x 96	DeskWindow		96 x 96
 Error calculating folder size.	InfoWindow		Błąd przy obliczaniu rozmiaru folderu.
@@ -101,6 +100,7 @@ New folder	FilePanelPriv		Nowy folder
 %name info	InfoWindow	InfoWindow Title	%name informacje
 Favorites	FavoritesMenu		Ulubione
 Add-ons	VolumeWindow		Wtyczki
+\"%name\" is an unsupported executable.	FSUtils		\"%name\" jest niewspieranym plikiem wykonywalnym.
 Sorry, you can't copy items to the Trash.	PoseView		Przepraszamy, nie możesz skopiować elementu do kosza.
 List view	VolumeWindow		Widok listy
 matches wildcard expression	SelectionWindow		Odpowiada wieloznacznikowemu wyrażeniu
@@ -248,7 +248,6 @@ Mount settings…	SettingsView		Ustawienia montowania…
 Edit name	InfoWindow		Zmień nazwę
 Could not open \"%name\" (%error). 	FSUtils		Nie można otworzyć \"%name\" (%error). 
 Paste	ContainerWindow		Wklej
-optional	/boot/optional		optional
 Modified:	InfoWindow		Zmodyfikowano:
 Error moving \"%name\".	FSUtils		Błąd przy przenoszeniu \"%name\".
 TiB	WidgetAttributeText		TiB
@@ -256,7 +255,7 @@ TiB	WidgetAttributeText		TiB
 The file \"%name\" already exists in the specified folder. Do you want to replace it?	FilePanelPriv		Plik o nazwie \"%name\" już istnieje w tej lokalizacji. Czy chcesz go zamienić?
 Cancel	ContainerWindow		Anuluj
 Only the boot disk	AutoMounterSettings		Tylko dysk bootujący
-If you %ifYouDoAction the config folder, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Jeśli wykonasz '%ifYouDoAction' wobec katalogu konfiguracji, %osName może się nie zachowywać właściwie!\n\nCzy jesteś pewien, że chcesz wykonać operację '%ifYouDoAction'?
+If you %ifYouDoAction the config folder, %osName may not behave properly!\n\nAre you sure you want to do this?	FSUtils		Jeśli wykonasz '%ifYouDoAction' wobec katalogu konfiguracji, %osName może się nie zachowywać właściwie!\n\nCzy jesteś pewien, że chcesz wykonać tę operację?
 Unmount	ContainerWindow		Odmontuj
 Copy layout	ContainerWindow		Kopiuj motyw
 label too long	PoseView		opis zbyt długi
@@ -410,6 +409,7 @@ Paste layout	ContainerWindow		Wklej motyw
 Select	InfoWindow		Wybierz
 Could not update permissions of file \"%name\". %error	FSUtils		Nie można zauktualizować uprawnień dla pliku \"%name\". %error
 Select…	FilePanelPriv		Wybierz…
+\"%name\" is a legacy executable. Please obtain an updated version or recompile the application.	FSUtils		\"%name\" jest plikiem wykonywalnym w starym formacie. Zdobądź zaktualizowaną wersję lub skompiluj aplikację jeszcze raz.
 There was an error resolving the link.	Tracker		Pojawił się problem przy przetwarzaniu skrótu.
 %BytesPerSecond/s	StatusWindow		%BytesPerSecond/s
 You can't move or copy the trash.	FSUtils		nie możesz przenieść ani skopiować kosza.
@@ -429,6 +429,7 @@ New	ContainerWindow		Nowy
 Name matches wildcard expression:###	SelectionWindow		Nazwa odpowiada wieloznacznikowemu wyrażeniu: ###
 less than	FindPanel		mniej niż
 64 x 64	DeskWindow		64 x 64
+develop	B_SYSTEM_DEVELOP_DIRECTORY		develop
 Modified	ContainerWindow		Zmodyfikowane
 Edit Query template	FindPanel		Edytuj szablon Zapytania
 Prompt	FSUtils		Ostrzegaj

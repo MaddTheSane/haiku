@@ -1,4 +1,4 @@
-1	hungarian	x-vnd.haiku-icon_o_matic	3933520036
+1	hungarian	x-vnd.haiku-icon_o_matic	28048799
 Select All	Icon-O-Matic-PathManipulator		Mind kijelölése
 Add Style	Icon-O-Matic-AddStylesCmd		Stílus hozzáadása
 Color (#%02x%02x%02x)	Style name after dropping a color		Szín (#%02x%02x%02x)
@@ -12,7 +12,6 @@ New	Icon-O-Matic-Menu-File		Új
 Icon-O-Matic might not have interpreted all data from the SVG when it was loaded. By overwriting the original file, this information would now be lost.	Icon-O-Matic-SVGExport		Az Icon-O-Matic nem biztos hogy az SVG fájl betöltésekor annak minden részét értelmezte. Az eredeti fájl felülírásával ezeket az adatok elvésznek.
 Paste Properties	Icon-O-Matic-Properties		Tulajdonságok beillesztése
 Stroke	Transformation		Kihúzás
-Save Icon	Dialog title		Ikon mentése
 Closed	Icon-O-Matic-PropertyNames		Zárt
 Remove Path	Icon-O-Matic-RemovePathsCmd		Útvonal eltávolítása
 Add shape with path	Icon-O-Matic-Menu-Shape		Hozzáadás útvonallal
@@ -79,6 +78,7 @@ Perspective	Transformation		Perspektíva
 Move Transformer	Icon-O-Matic-MoveTransformersCmd		Átalakító áthelyezése
 Opacity	Icon-O-Matic-PropertyNames		Átlátszóság
 Add with path	Icon-O-Matic-ShapesList		Hozzáadás útvonallal együtt
+Export icon	Dialog title		Ikon exprotálása
 Gradient type	Icon-O-Matic-StyleTypes		Színátmenet típusa
 Icon-O-Matic	System name		Icon-O-Matic
 Cancel	Icon-O-Matic-Menu-Settings		Mégse
@@ -108,7 +108,6 @@ Move Shapes	Icon-O-Matic-MoveShapesCommand		Alakzatok áthelyezése
 Remove Styles	Icon-O-Matic-RemoveStylesCmd		Stílusok eltávolítása
 The text you are trying to import is quite long,are you sure?	Icon-O-Matic-StyledTextImport		A szöveg, amit importálni kíván, nagyon hosszú. Biztos importálja?
 Add	Icon-O-Matic-TransformersList		Hozzáadás
-Export Icon	Dialog title		Ikon exprotálása
 Color	Icon-O-Matic-StyleTypes		Szín
 Settings…	Icon-O-Matic-SavePanel		Beállítások…
 Remove	Icon-O-Matic-PathManipulator		Eltávolítás
@@ -160,7 +159,6 @@ Snap to grid	Icon-O-Matic-Menu-Settings		Rácshoz illesztés
 Remove	Icon-O-Matic-ShapesList		Eltávolítás
 Yes	Icon-O-Matic-StyledTextImport		Igen
 Transformation	Icon-O-Matic-TransformersList		Átalakítás
-Save image	Icon-O-Matic-SavePanel		Kép mentése
 Add Styles	Icon-O-Matic-AddStylesCmd		Stílusok hozzáadása
 Remove Control Points	Icon-O-Matic-RemovePointsCmd		Vezérlőpontok eltávolítása
 Format	Icon-O-Matic-SavePanel		Formátum
@@ -193,6 +191,7 @@ Overwrite	Icon-O-Matic-SVGExport		Felülírás
 Freeze Shapes	Icon-O-Matic-FreezeTransformationCmd		Alakzatok rögzítése
 Split Control Point	Icon-O-Matic-SplitPointsCmd		Vezérlőpont felbontása
 Open…	Icon-O-Matic-Menu-File		Megnyitás…
+Save icon	Dialog title		Ikon mentése
 Color (#%02x%02x%02x)	Icon-O-Matic-StyledTextImport		Szín (#%02x%02x%02x)
 Edit Gradient	Icon-O-Matic-SetGradientCmd		Színátmenet szerkesztése
 Clean Up Path	Icon-O-Matic-CleanUpPathCmd		Útvonal törlése

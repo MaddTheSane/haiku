@@ -11,6 +11,7 @@
 
 #include <OS.h>
 #include <lock.h>
+#include <arch_config.h>
 
 
 extern "C" bool
@@ -34,14 +35,27 @@ kgetc()
 
 
 extern "C" status_t
-_mutex_lock(mutex*, bool)
+_mutex_lock(mutex*, void*)
 {
-	return true;
+	return B_OK;
 }
 
 
 extern "C" void
-_mutex_unlock(mutex*, bool)
+_mutex_unlock(mutex*)
 {
 }
 
+
+#ifdef ATOMIC_FUNCS_ARE_SYSCALLS
+
+/* needed by packagefs */
+extern "C" int32
+atomic_add(vint32 *value, int32 addValue)
+{
+	int32 old = *value;
+	*value += addValue;
+	return old;
+}
+
+#endif /*ATOMIC_FUNCS_ARE_SYSCALLS*/

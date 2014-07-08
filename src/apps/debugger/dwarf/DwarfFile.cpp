@@ -1,6 +1,6 @@
 /*
  * Copyright 2009-2012, Ingo Weinhold, ingo_weinhold@gmx.de.
- * Copyright 2012-2013, Rene Gollent, rene@gollent.com.
+ * Copyright 2012-2014, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 
@@ -14,6 +14,7 @@
 #include <Entry.h>
 #include <FindDirectory.h>
 #include <Path.h>
+#include <PathFinder.h>
 
 #include "AttributeClasses.h"
 #include "AttributeValue.h"
@@ -503,7 +504,7 @@ DwarfFile::~DwarfFile()
 
 
 status_t
-DwarfFile::Load(const char* fileName)
+DwarfFile::StartLoading(const char* fileName, BString& _requiredExternalFile)
 {
 	fName = strdup(fileName);
 	if (fName == NULL)
@@ -522,9 +523,21 @@ DwarfFile::Load(const char* fileName)
 	if (error != B_OK)
 		return error;
 
-	error = _LocateDebugInfo();
-	if (error != B_OK)
-		return error;
+	return _LocateDebugInfo(_requiredExternalFile);
+}
+
+
+status_t
+DwarfFile::Load(const BString& externalInfoFilePath)
+{
+	status_t error = B_OK;
+	if (fDebugInfoSection == NULL) {
+		BString path;
+		error = _LocateDebugInfo(path, externalInfoFilePath.IsEmpty()
+				? NULL : externalInfoFilePath.String());
+		if (error != B_OK)
+			return error;
+	}
 
 	ElfFile* debugInfoFile = fAlternateElfFile != NULL
 		? fAlternateElfFile : fElfFile;
@@ -1040,10 +1053,8 @@ DwarfFile::_ParseTypesSection()
 			unitHeaderOffset, unitContentOffset,
 			unitLength + (unitLengthOffset - unitHeaderOffset),
 			abbrevOffset, typeOffset, addressSize, signature, dwarf64);
-		if (unit == NULL) {
-			delete unit;
+		if (unit == NULL)
 			return B_NO_MEMORY;
-		}
 
 		// parse the debug info for the unit
 		status_t error = _ParseTypeUnit(unit);
@@ -1484,6 +1495,7 @@ DwarfFile::_ParseEntryAttributes(DataReader& dataReader,
 				B_PRIx32 ") %s (%#" B_PRIx32 ")\n",
 				get_attribute_name_name(attributeName), attributeName,
 				get_attribute_form_name(attributeForm), attributeForm);
+			continue;
 		}
 
 		// set the attribute value according to the attribute's class
@@ -2686,7 +2698,8 @@ DwarfFile::_FindLocationExpression(CompilationUnit* unit, uint64 offset,
 
 
 status_t
-DwarfFile::_LocateDebugInfo()
+DwarfFile::_LocateDebugInfo(BString& _requiredExternalFileName,
+	const char* locatedFilePath)
 {
 	ElfFile* debugInfoFile = fElfFile;
 	ElfSection* debugLinkSection = fElfFile->GetSection(".gnu_debuglink");
@@ -2700,10 +2713,19 @@ DwarfFile::_LocateDebugInfo()
 		// by a 32-bit CRC
 
 		BString debugPath;
-		status_t result = _GetDebugInfoPath(
-			(const char*)debugLinkSection->Data(), debugPath);
-		if (result != B_OK)
-			return result;
+		if (locatedFilePath)
+			debugPath = locatedFilePath;
+		else {
+			status_t result = _GetDebugInfoPath(
+				(const char*)debugLinkSection->Data(),
+				_requiredExternalFileName);
+			if (result != B_OK)
+				return result;
+			debugPath = _requiredExternalFileName;
+		}
+
+		if (fAlternateName != NULL)
+			free(fAlternateName);
 
 		fAlternateName = strdup(debugPath.String());
 
@@ -2715,11 +2737,13 @@ DwarfFile::_LocateDebugInfo()
 		int32 debugCRC = *(int32*)((char*)debugLinkSection->Data()
 			+ debugLinkSection->Size() - sizeof(int32));
 */
-		fAlternateElfFile = new(std::nothrow) ElfFile;
-		if (fAlternateElfFile == NULL)
-			return B_NO_MEMORY;
+		if (fAlternateElfFile == NULL) {
+			fAlternateElfFile = new(std::nothrow) ElfFile;
+			if (fAlternateElfFile == NULL)
+				return B_NO_MEMORY;
+		}
 
-		result = fAlternateElfFile->Init(fAlternateName);
+		status_t result = fAlternateElfFile->Init(fAlternateName);
 		if (result != B_OK)
 			return result;
 
@@ -2748,9 +2772,6 @@ status_t
 DwarfFile::_GetDebugInfoPath(const char* debugFileName,
 	BString& _infoPath) const
 {
-	const directory_which dirLocations[] = { B_USER_CONFIG_DIRECTORY,
-		B_COMMON_DIRECTORY, B_SYSTEM_DIRECTORY };
-
 	// first, see if we have a relative match to our local directory
 	BPath basePath;
 	status_t result = basePath.SetTo(fName);
@@ -2771,23 +2792,23 @@ DwarfFile::_GetDebugInfoPath(const char* debugFileName,
 	if (entry.Exists())
 		return B_OK;
 
-	// See if our image is in any of the system locations.
-	// if so, look for its debug info in the corresponding location.
-	for (uint16 i = 0; i < sizeof(dirLocations) / sizeof(directory_which);
-		i++) {
-		result = find_directory(dirLocations[i], &basePath);
-		if (result != B_OK)
-			return result;
+	// If the above search failed, check if our image is located in any
+	// of the system installation paths, and attempt to locate the debug info
+	// file in the corresponding well-known location
+	BString pathSuffix;
+	pathSuffix.SetToFormat("debug/%s", debugFileName);
 
-		if (strncmp(fName, basePath.Path(), strlen(basePath.Path())) == 0) {
-			_infoPath.SetToFormat("%s/develop/debug/%s", basePath.Path(),
-				debugFileName);
-			entry.SetTo(_infoPath.String());
-			result = entry.InitCheck();
-			if (result != B_OK && result != B_ENTRY_NOT_FOUND)
-				return result;
-			return entry.Exists() ? B_OK : B_ENTRY_NOT_FOUND;
-		}
+	BPathFinder finder(fName);
+	result = finder.FindPath(B_FIND_PATH_DEVELOP_DIRECTORY,
+		pathSuffix.String(), B_FIND_PATH_EXISTING_ONLY, basePath);
+	if (result == B_OK) {
+		_infoPath = basePath.Path();
+		return B_OK;
+	} else {
+		// if we failed to find a match, then it's up to the user to
+		// locate it. As such, return the external info file name
+		// for user interface purposes.
+		_infoPath.SetTo(debugFileName);
 	}
 
 	return B_ENTRY_NOT_FOUND;

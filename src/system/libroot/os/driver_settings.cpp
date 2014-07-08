@@ -45,6 +45,8 @@
 #ifdef _BOOT_MODE
 #	include <boot/kernel_args.h>
 #	include <boot/stage2.h>
+#else
+#	include <find_directory_private.h>
 #endif
 
 #include <stdlib.h>
@@ -407,8 +409,10 @@ new_settings(char *buffer, const char *driverName)
 	handle->text = buffer;
 
 #ifdef _KERNEL_MODE
-	handle->ref_count = 1;
-	strlcpy(handle->name, driverName, sizeof(handle->name));
+	if (driverName != NULL) {
+		handle->ref_count = 1;
+		strlcpy(handle->name, driverName, sizeof(handle->name));
+	}
 #endif
 
 	if (parse_settings(handle) == B_OK)
@@ -766,8 +770,8 @@ load_driver_settings(const char *driverName)
 #ifdef _BOOT_MODE
 		strcpy(path, kUserSettingsDirectory);
 #else
-		// TODO: use B_COMMON_SETTINGS_DIRECTORY instead!
-		if (find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, path,
+		// TODO: use B_SYSTEM_SETTINGS_DIRECTORY instead!
+		if (__find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, path,
 				sizeof(path)) == B_OK)
 #endif
 		{
@@ -799,36 +803,11 @@ load_driver_settings(const char *driverName)
 }
 
 
-/** Loads a driver settings file using the full path, instead of
- *	only defining the leaf name (as load_driver_settings() does).
- *	I am not sure if this function is really necessary - I would
- *	probably prefer something like a search order (if it's not
- *	an absolute path):
- *		~/config/settings/kernel/driver
- *		current directory
- *	That would render this function useless.
- */
-
-#if 0
-void *
-load_driver_settings_from_path(const char *path)
+void*
+load_driver_settings_file(int fd)
 {
-	settings_handle *handle;
-	int file;
-
-	if (path == NULL)
-		return NULL;
-
-	file = open(path, O_RDONLY);
-	if (file < B_OK)
-		return NULL;
-
-	handle = load_driver_settings_from_file(file);
-
-	close(file);
-	return (void *)handle;
+	return load_driver_settings_from_file(fd, NULL);
 }
-#endif
 
 
 /*!
@@ -974,8 +953,8 @@ get_driver_settings(void *handle)
 }
 
 
-// this creates an alias of the above function
-// unload_driver_settings() is the same as delete_driver_settings()
-extern "C" __typeof(unload_driver_settings) delete_driver_settings
-	__attribute__((weak, alias ("unload_driver_settings")));
-
+status_t
+delete_driver_settings(void *_handle)
+{
+	return unload_driver_settings(_handle);
+}

@@ -9,20 +9,29 @@
 
 #include "runtime_loader_private.h"
 
-#include <syscalls.h>
-#include <user_runtime.h>
-
-#include <directories.h>
-
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 
 #include <algorithm>
 
+#include <ByteOrder.h>
+
+#include <directories.h>
+#include <image_defs.h>
+#include <syscalls.h>
+#include <user_runtime.h>
+#include <vm_defs.h>
+
+#include "elf_symbol_lookup.h"
+#include "pe.h"
+
 
 struct user_space_program_args *gProgramArgs;
 void *__gCommPageAddress;
+void *__dso_handle;
+
+int32 __gCPUCount = 1;
 
 
 static const char *
@@ -30,6 +39,9 @@ search_path_for_type(image_type type)
 {
 	const char *path = NULL;
 
+	// TODO: The *PATH variables should not include the standard system paths.
+	// Instead those paths should always be used after the directories specified
+	// via the variables.
 	switch (type) {
 		case B_APP_IMAGE:
 			path = getenv("PATH");
@@ -53,29 +65,31 @@ search_path_for_type(image_type type)
 	// Since the kernel does not set any variables, this is also needed
 	// to start the root shell.
 
+	// TODO: The user specific paths should not be used by default.
 	switch (type) {
 		case B_APP_IMAGE:
-			return kUserBinDirectory
+			return kUserNonpackagedBinDirectory
+				":" kUserBinDirectory
 						// TODO: Remove!
-				":" kCommonBinDirectory
+				":" kSystemNonpackagedBinDirectory
 				":" kGlobalBinDirectory
-				":" kAppsDirectory
-				":" kPreferencesDirectory
 				":" kSystemAppsDirectory
-				":" kSystemPreferencesDirectory
-				":" kCommonDevelopToolsBinDirectory;
+				":" kSystemPreferencesDirectory;
 
 		case B_LIBRARY_IMAGE:
 			return kAppLocalLibDirectory
+				":" kUserNonpackagedLibDirectory
 				":" kUserLibDirectory
 					// TODO: Remove!
-				":" kCommonLibDirectory
+				":" kSystemNonpackagedLibDirectory
 				":" kSystemLibDirectory;
 
 		case B_ADD_ON_IMAGE:
 			return kAppLocalAddonsDirectory
+				":" kUserNonpackagedAddonsDirectory
 				":" kUserAddonsDirectory
 					// TODO: Remove!
+				":" kSystemNonpackagedAddonsDirectory
 				":" kSystemAddonsDirectory;
 
 		default:
@@ -84,10 +98,59 @@ search_path_for_type(image_type type)
 }
 
 
+static bool
+replace_executable_path_placeholder(const char*& dir, int& dirLength,
+	const char* placeholder, size_t placeholderLength,
+	const char* replacementSubPath, char*& buffer, size_t& bufferSize,
+	status_t& _error)
+{
+	if (dirLength < (int)placeholderLength
+		|| strncmp(dir, placeholder, placeholderLength) != 0) {
+		return false;
+	}
+
+	if (replacementSubPath == NULL) {
+		_error = B_ENTRY_NOT_FOUND;
+		return true;
+	}
+
+	char* lastSlash = strrchr(replacementSubPath, '/');
+
+	// Copy replacementSubPath without the last component (the application file
+	// name, respectively the requesting executable file name).
+	size_t toCopy;
+	if (lastSlash != NULL) {
+		toCopy = lastSlash - replacementSubPath;
+		strlcpy(buffer, replacementSubPath,
+			std::min((ssize_t)bufferSize, lastSlash + 1 - replacementSubPath));
+	} else {
+		replacementSubPath = ".";
+		toCopy = 1;
+		strlcpy(buffer, ".", bufferSize);
+	}
+
+	if (toCopy >= bufferSize) {
+		_error = B_NAME_TOO_LONG;
+		return true;
+	}
+
+	memcpy(buffer, replacementSubPath, toCopy);
+	buffer[toCopy] = '\0';
+
+	buffer += toCopy;
+	bufferSize -= toCopy;
+	dir += placeholderLength;
+	dirLength -= placeholderLength;
+
+	_error = B_OK;
+	return true;
+}
+
+
 static int
 try_open_executable(const char *dir, int dirLength, const char *name,
-	const char *programPath, const char *compatibilitySubDir, char *path,
-	size_t pathLength)
+	const char *programPath, const char *requestingObjectPath,
+	const char *abiSpecificSubDir, char *path, size_t pathLength)
 {
 	size_t nameLength = strlen(name);
 	struct stat stat;
@@ -101,29 +164,18 @@ try_open_executable(const char *dir, int dirLength, const char *name,
 		if (programPath == NULL)
 			programPath = gProgramArgs->program_path;
 
-		if (dirLength >= 2 && strncmp(dir, "%A", 2) == 0) {
-			// Replace %A with current app folder path (of course,
-			// this must be the first part of the path)
-			char *lastSlash = strrchr(programPath, '/');
-			int bytesCopied;
-
-			// copy what's left (when the application name is removed)
-			if (lastSlash != NULL) {
-				strlcpy(buffer, programPath,
-					std::min((long)pathLength, lastSlash + 1 - programPath));
-			} else
-				strlcpy(buffer, ".", pathLength);
-
-			bytesCopied = strlen(buffer);
-			buffer += bytesCopied;
-			pathLength -= bytesCopied;
-			dir += 2;
-			dirLength -= 2;
-		} else if (compatibilitySubDir != NULL) {
+		if (replace_executable_path_placeholder(dir, dirLength, "%A", 2,
+				programPath, buffer, pathLength, status)
+			|| replace_executable_path_placeholder(dir, dirLength, "$ORIGIN", 7,
+				requestingObjectPath, buffer, pathLength, status)) {
+			if (status != B_OK)
+				return status;
+		} else if (abiSpecificSubDir != NULL) {
 			// We're looking for a library or an add-on and the executable has
-			// not been compiled with a compiler compatible with the one the
-			// OS has been built with. Thus we only look in specific subdirs.
-			subDirLen = strlen(compatibilitySubDir) + 1;
+			// not been compiled with a compiler using the same ABI as the one
+			// the OS has been built with. Thus we only look in subdirs
+			// specific to that ABI.
+			subDirLen = strlen(abiSpecificSubDir) + 1;
 		}
 
 		if (dirLength + 1 + subDirLen + nameLength >= pathLength)
@@ -132,7 +184,7 @@ try_open_executable(const char *dir, int dirLength, const char *name,
 		memcpy(buffer, dir, dirLength);
 		buffer[dirLength] = '/';
 		if (subDirLen > 0) {
-			memcpy(buffer + dirLength + 1, compatibilitySubDir, subDirLen - 1);
+			memcpy(buffer + dirLength + 1, abiSpecificSubDir, subDirLen - 1);
 			buffer[dirLength + subDirLen] = '/';
 		}
 		strcpy(buffer + dirLength + 1 + subDirLen, name);
@@ -176,8 +228,8 @@ try_open_executable(const char *dir, int dirLength, const char *name,
 
 static int
 search_executable_in_path_list(const char *name, const char *pathList,
-	int pathListLen, const char *programPath, const char *compatibilitySubDir,
-	char *pathBuffer, size_t pathBufferLength)
+	int pathListLen, const char *programPath, const char *requestingObjectPath,
+	const char *abiSpecificSubDir, char *pathBuffer, size_t pathBufferLength)
 {
 	const char *pathListEnd = pathList + pathListLen;
 	status_t status = B_ENTRY_NOT_FOUND;
@@ -194,7 +246,8 @@ search_executable_in_path_list(const char *name, const char *pathList,
 			pathEnd++;
 
 		fd = try_open_executable(pathList, pathEnd - pathList, name,
-			programPath, compatibilitySubDir, pathBuffer, pathBufferLength);
+			programPath, requestingObjectPath, abiSpecificSubDir, pathBuffer,
+			pathBufferLength);
 		if (fd >= 0) {
 			// see if it's a dir
 			struct stat stat;
@@ -217,7 +270,8 @@ search_executable_in_path_list(const char *name, const char *pathList,
 
 int
 open_executable(char *name, image_type type, const char *rpath,
-	const char *programPath, const char *compatibilitySubDir)
+	const char *programPath, const char *requestingObjectPath,
+	const char *abiSpecificSubDir)
 {
 	char buffer[PATH_MAX];
 	int fd = B_ENTRY_NOT_FOUND;
@@ -255,12 +309,13 @@ open_executable(char *name, image_type type, const char *rpath,
 			// If there is no ';', we set only secondList to simplify things.
 		if (firstList) {
 			fd = search_executable_in_path_list(name, firstList,
-				semicolon - firstList, programPath, NULL, buffer,
-				sizeof(buffer));
+				semicolon - firstList, programPath, requestingObjectPath, NULL,
+				buffer, sizeof(buffer));
 		}
 		if (fd < 0) {
 			fd = search_executable_in_path_list(name, secondList,
-				strlen(secondList), programPath, NULL, buffer, sizeof(buffer));
+				strlen(secondList), programPath, requestingObjectPath, NULL,
+				buffer, sizeof(buffer));
 		}
 	}
 
@@ -269,14 +324,7 @@ open_executable(char *name, image_type type, const char *rpath,
 	if (fd < 0) {
 		if (const char *paths = search_path_for_type(type)) {
 			fd = search_executable_in_path_list(name, paths, strlen(paths),
-				programPath, compatibilitySubDir, buffer, sizeof(buffer));
-
-			// If not found and a compatibility sub directory has been
-			// specified, look again in the standard search paths.
-			if (fd == B_ENTRY_NOT_FOUND && compatibilitySubDir != NULL) {
-				fd = search_executable_in_path_list(name, paths, strlen(paths),
-					programPath, NULL, buffer, sizeof(buffer));
-			}
+				programPath, NULL, abiSpecificSubDir, buffer, sizeof(buffer));
 		}
 	}
 
@@ -287,6 +335,28 @@ open_executable(char *name, image_type type, const char *rpath,
 	}
 
 	return fd;
+}
+
+
+/*!
+	Applies haiku-specific fixes to a shebang line.
+*/
+static void
+fixup_shebang(char *invoker)
+{
+	char *current = invoker;
+	while (*current == ' ' || *current == '\t') {
+		++current;
+	}
+
+	char *commandStart = current;
+	while (*current != ' ' && *current != '\t' && *current != '\0') {
+		++current;
+	}
+
+	// replace /usr/bin/env with /bin/env
+	if (memcmp(commandStart, "/usr/bin/env", current - commandStart) == 0)
+		memmove(commandStart, commandStart + 4, strlen(commandStart + 4) + 1);
 }
 
 
@@ -310,7 +380,7 @@ test_executable(const char *name, char *invoker)
 
 	strlcpy(path, name, sizeof(path));
 
-	fd = open_executable(path, B_APP_IMAGE, NULL, NULL, NULL);
+	fd = open_executable(path, B_APP_IMAGE, NULL, NULL, NULL, NULL);
 	if (fd < B_OK)
 		return fd;
 
@@ -322,8 +392,8 @@ test_executable(const char *name, char *invoker)
 	// verify the (Fat)ELF headers
 	status = elf_verify_header(fd, name, (elf_ehdr *)buffer);
 	if (status == B_NOT_AN_EXECUTABLE) {
-		// test for shell scripts
 		if (!strncmp(buffer, "#!", 2)) {
+			// test for shell scripts
 			char *end;
 			buffer[min_c(sizeof(elf_ehdr), sizeof(buffer) - 1)] = '\0';
 
@@ -334,10 +404,20 @@ test_executable(const char *name, char *invoker)
 			} else
 				end[0] = '\0';
 
-			if (invoker)
+			if (invoker) {
 				strcpy(invoker, buffer + 2);
+				fixup_shebang(invoker);
+			}
 
 			status = B_OK;
+		} else {
+			// Something odd like a PE?
+			status = pe_verify_header(buffer, length);
+
+			// It is a PE, throw B_UNKNOWN_EXECUTABLE
+			// likely win32 at this point
+			if (status == B_OK)
+				status = B_UNKNOWN_EXECUTABLE;
 		}
 	} else if (status == B_OK) {
 		elf_ehdr *elfHeader = (elf_ehdr *)buffer;
@@ -351,6 +431,232 @@ test_executable(const char *name, char *invoker)
 out:
 	_kern_close(fd);
 	return status;
+}
+
+
+static bool
+determine_x86_abi(int fd, const Elf32_Ehdr& elfHeader, bool& _isGcc2)
+{
+	// Unless we're a little-endian CPU, don't bother. We're not x86, so it
+	// doesn't matter all that much whether we can determine the correct gcc
+	// ABI. This saves the code below from having to deal with endianess
+	// conversion.
+#if B_HOST_IS_LENDIAN
+
+	// Since we don't want to load the complete image, we can't use the
+	// functions that normally determine the Haiku version and ABI. Instead
+	// we'll load the symbol and string tables and resolve the ABI symbol
+	// manually.
+
+	// map the file into memory
+	struct stat st;
+	if (_kern_read_stat(fd, NULL, true, &st, sizeof(st)) != B_OK)
+		return false;
+
+	void* fileBaseAddress;
+	area_id area = _kern_map_file("mapped file", &fileBaseAddress,
+		B_ANY_ADDRESS, st.st_size, B_READ_AREA, REGION_NO_PRIVATE_MAP, false,
+		fd, 0);
+	if (area < 0)
+		return false;
+
+	struct AreaDeleter {
+		AreaDeleter(area_id area)
+			:
+			fArea(area)
+		{
+		}
+
+		~AreaDeleter()
+		{
+			_kern_delete_area(fArea);
+		}
+
+	private:
+		area_id	fArea;
+	} areaDeleter(area);
+
+	// get the section headers
+	if (elfHeader.e_shoff == 0 || elfHeader.e_shentsize < sizeof(Elf32_Shdr))
+		return false;
+
+	size_t sectionHeadersSize = elfHeader.e_shentsize * elfHeader.e_shnum;
+	if (elfHeader.e_shoff + (off_t)sectionHeadersSize > st.st_size)
+		return false;
+
+	void* sectionHeaders = (uint8*)fileBaseAddress + elfHeader.e_shoff;
+
+	// find the sections we need
+	uint32* symbolHash = NULL;
+	uint32 symbolHashSize = 0;
+	uint32 symbolHashChainSize = 0;
+	Elf32_Sym* symbolTable = NULL;
+	uint32 symbolTableSize = 0;
+	const char* stringTable = NULL;
+	off_t stringTableSize = 0;
+
+	for (int32 i = 0; i < elfHeader.e_shnum; i++) {
+		Elf32_Shdr* sectionHeader
+			= (Elf32_Shdr*)((uint8*)sectionHeaders + i * elfHeader.e_shentsize);
+		if ((off_t)sectionHeader->sh_offset + (off_t)sectionHeader->sh_size
+				> st.st_size) {
+			continue;
+		}
+
+		void* sectionAddress = (uint8*)fileBaseAddress
+			+ sectionHeader->sh_offset;
+
+		switch (sectionHeader->sh_type) {
+			case SHT_HASH:
+				symbolHash = (uint32*)sectionAddress;
+				if (sectionHeader->sh_size < (off_t)sizeof(symbolHash[0]))
+					return false;
+				symbolHashSize = symbolHash[0];
+				symbolHashChainSize
+					= sectionHeader->sh_size / sizeof(symbolHash[0]);
+				if (symbolHashChainSize < symbolHashSize + 2)
+					return false;
+				symbolHashChainSize -= symbolHashSize + 2;
+				break;
+			case SHT_DYNSYM:
+				symbolTable = (Elf32_Sym*)sectionAddress;
+				symbolTableSize = sectionHeader->sh_size;
+				break;
+			case SHT_STRTAB:
+				// .shstrtab has the same type as .dynstr, but it isn't loaded
+				// into memory.
+				if (sectionHeader->sh_addr == 0)
+					continue;
+				stringTable = (const char*)sectionAddress;
+				stringTableSize = (off_t)sectionHeader->sh_size;
+				break;
+			default:
+				continue;
+		}
+	}
+
+	if (symbolHash == NULL || symbolTable == NULL || stringTable == NULL)
+		return false;
+	uint32 symbolCount
+		= std::min(symbolTableSize / (uint32)sizeof(Elf32_Sym),
+			symbolHashChainSize);
+	if (symbolCount < symbolHashSize)
+		return false;
+
+	// look up the ABI symbol
+	const char* name = B_SHARED_OBJECT_HAIKU_ABI_VARIABLE_NAME;
+	size_t nameLength = strlen(name);
+	uint32 bucket = elf_hash(name) % symbolHashSize;
+
+	for (uint32 i = symbolHash[bucket + 2]; i < symbolCount && i != STN_UNDEF;
+		i = symbolHash[2 + symbolHashSize + i]) {
+		Elf32_Sym* symbol = symbolTable + i;
+		if (symbol->st_shndx != SHN_UNDEF
+			&& ((symbol->Bind() == STB_GLOBAL) || (symbol->Bind() == STB_WEAK))
+			&& symbol->Type() == STT_OBJECT
+			&& (off_t)symbol->st_name + (off_t)nameLength < stringTableSize
+			&& strcmp(stringTable + symbol->st_name, name) == 0) {
+			if (symbol->st_value > 0 && symbol->st_size >= sizeof(uint32)
+				&& symbol->st_shndx < elfHeader.e_shnum) {
+				Elf32_Shdr* sectionHeader = (Elf32_Shdr*)((uint8*)sectionHeaders
+					+ symbol->st_shndx * elfHeader.e_shentsize);
+				if (symbol->st_value >= sectionHeader->sh_addr
+					&& symbol->st_value
+						<= sectionHeader->sh_addr + sectionHeader->sh_size) {
+					off_t fileOffset = symbol->st_value - sectionHeader->sh_addr
+						+ sectionHeader->sh_offset;
+					if (fileOffset + (off_t)sizeof(uint32) <= st.st_size) {
+						uint32 abi
+							= *(uint32*)((uint8*)fileBaseAddress + fileOffset);
+						_isGcc2 = (abi & B_HAIKU_ABI_MAJOR)
+							== B_HAIKU_ABI_GCC_2;
+						return true;
+					}
+				}
+			}
+
+			return false;
+		}
+	}
+
+	// ABI symbol not found. That means the object pre-dates its introduction
+	// in Haiku. So this is most likely gcc 2. We don't fall back to reading
+	// the comment sections to verify.
+	_isGcc2 = true;
+	return true;
+#else	// not little endian
+	return false;
+#endif
+}
+
+
+static status_t
+get_executable_architecture(int fd, const char** _architecture)
+{
+	// Read the ELF header. We read the 32 bit header. Generally the e_machine
+	// field is the last one that interests us and the 64 bit header is still
+	// identical at that point.
+	Elf32_Ehdr elfHeader;
+	ssize_t bytesRead = _kern_read(fd, 0, &elfHeader, sizeof(elfHeader));
+	if (bytesRead < 0)
+		return bytesRead;
+	if ((size_t)bytesRead != sizeof(elfHeader))
+		return B_NOT_AN_EXECUTABLE;
+
+	// check whether this is indeed an ELF file
+	if (memcmp(elfHeader.e_ident, ELF_MAGIC, 4) != 0)
+		return B_NOT_AN_EXECUTABLE;
+
+	// check the architecture
+	uint16 machine = elfHeader.e_machine;
+	if ((elfHeader.e_ident[EI_DATA] == ELFDATA2LSB) != (B_HOST_IS_LENDIAN != 0))
+		machine = (machine >> 8) | (machine << 8);
+
+	const char* architecture = NULL;
+	switch (machine) {
+		case EM_386:
+		case EM_486:
+		{
+			bool isGcc2;
+			if (determine_x86_abi(fd, elfHeader, isGcc2) && isGcc2)
+				architecture = "x86_gcc2";
+			else
+				architecture = "x86";
+			break;
+		}
+		case EM_68K:
+			architecture = "m68k";
+			break;
+		case EM_PPC:
+			architecture = "ppc";
+			break;
+		case EM_ARM:
+			architecture = "arm";
+			break;
+		case EM_X86_64:
+			architecture = "x86_64";
+			break;
+	}
+
+	if (architecture == NULL)
+		return B_NOT_SUPPORTED;
+
+	*_architecture = architecture;
+	return B_OK;
+}
+
+
+status_t
+get_executable_architecture(const char* path, const char** _architecture)
+{
+	int fd = _kern_open(-1, path, O_RDONLY, 0);
+	if (fd < 0)
+		return fd;
+
+	status_t error = get_executable_architecture(fd, _architecture);
+
+	_kern_close(fd);
+	return error;
 }
 
 

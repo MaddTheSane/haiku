@@ -1,5 +1,5 @@
 /*
- * Copyright 2010, Haiku, Inc. All Rights Reserved.
+ * Copyright 2010-2013, Haiku, Inc. All Rights Reserved.
  * Copyright 2009, Pier Luigi Fiorini.
  * Distributed under the terms of the MIT License.
  *
@@ -39,36 +39,16 @@
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "GeneralView"
-const int32 kServer = '_TSR';
-
-const char* kStartServer = B_TRANSLATE("Enable notifications");
-const char* kStopServer = B_TRANSLATE("Disable notifications");
-const char* kStarted = B_TRANSLATE("Events are notified");
-const char* kStopped = B_TRANSLATE("Events are not notified");
-
+const int32 kToggleNotifications = '_TSR';
 
 GeneralView::GeneralView(SettingsHost* host)
 	:
 	SettingsPane("general", host)
 {
-	BFont statusFont;
-
-	// Set a smaller font for the status label
-	statusFont.SetSize(be_plain_font->Size() * 0.8);
-
-	// Status button and label
-	fServerButton = new BButton("server", kStartServer, new BMessage(kServer));
-	fStatusLabel = new BStringView("status", kStopped);
-	fStatusLabel->SetFont(&statusFont);
-
-	// Update status label and server button
-	if (_IsServerRunning()) {
-		fServerButton->SetLabel(kStopServer);
-		fStatusLabel->SetText(kStarted);
-	} else {
-		fServerButton->SetLabel(kStartServer);
-		fStatusLabel->SetText(kStopped);
-	}
+	// Notifications
+	fNotificationBox = new BCheckBox("server",
+		B_TRANSLATE("Enable notifications"),
+		new BMessage(kToggleNotifications));
 
 	// Autostart
 	fAutoStart = new BCheckBox("autostart",
@@ -82,7 +62,8 @@ GeneralView::GeneralView(SettingsHost* host)
 		B_TRANSLATE("seconds of inactivity"));
 
 	// Default position
-	// TODO: Here will come a screen representation with the four corners clickable
+	// TODO: Here will come a screen representation with the four corners 
+	// clickable
 
 	// Load settings
 	Load();
@@ -93,8 +74,7 @@ GeneralView::GeneralView(SettingsHost* host)
 	SetLayout(new BGroupLayout(B_VERTICAL));
 	AddChild(BGroupLayoutBuilder(B_VERTICAL, inset)
 		.AddGroup(B_HORIZONTAL, inset)
-			.Add(fServerButton)
-			.Add(fStatusLabel)
+			.Add(fNotificationBox)
 			.AddGlue()
 		.End()
 
@@ -116,7 +96,7 @@ GeneralView::GeneralView(SettingsHost* host)
 void
 GeneralView::AttachedToWindow()
 {
-	fServerButton->SetTarget(this);
+	fNotificationBox->SetTarget(this);
 	fAutoStart->SetTarget(this);
 	fTimeout->SetTarget(this);
 }
@@ -126,73 +106,69 @@ void
 GeneralView::MessageReceived(BMessage* msg)
 {
 	switch (msg->what) {
-		case kServer: {
-				entry_ref ref;
+		case kToggleNotifications:
+		{
+			entry_ref ref;
 
-				// Check if server is available
-				if (!_CanFindServer(&ref)) {
-					BAlert* alert = new BAlert(B_TRANSLATE("Notifications"),
-						B_TRANSLATE("The notifications server cannot be"
-						" found, this means your InfoPopper installation was"
-						" not successfully completed."), B_TRANSLATE("OK"),
-						NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
+			// Check if server is available
+			if (!_CanFindServer(&ref)) {
+				BAlert* alert = new BAlert(B_TRANSLATE("Notifications"),
+					B_TRANSLATE("The notifications server cannot be"
+					" found, this means your InfoPopper installation was"
+					" not successfully completed."), B_TRANSLATE("OK"),
+					NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
+				alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+				(void)alert->Go();
+				return;
+			}
+
+			if (fNotificationBox->Value() == B_CONTROL_OFF) {
+				// Server team
+				team_id team = be_roster->TeamFor(kNotificationServerSignature);
+
+				// Establish a connection to infopopper_server
+				status_t ret = B_ERROR;
+				BMessenger messenger(kNotificationServerSignature, team, &ret);
+				if (ret != B_OK) {
+					BAlert* alert = new BAlert(B_TRANSLATE(
+						"Notifications"), B_TRANSLATE("Notifications "
+						"cannot be stopped, because the server can't be"
+						" reached."), B_TRANSLATE("OK"), NULL, NULL,
+						B_WIDTH_AS_USUAL, B_STOP_ALERT);
 					alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
 					(void)alert->Go();
 					return;
 				}
 
-				if (_IsServerRunning()) {
-					// Server team
-					team_id team = be_roster->TeamFor(kNotificationServerSignature);
-
-					// Establish a connection to infopopper_server
-					status_t ret = B_ERROR;
-					BMessenger messenger(kNotificationServerSignature, team, &ret);
-					if (ret != B_OK) {
-						BAlert* alert = new BAlert(B_TRANSLATE(
-							"Notifications"), B_TRANSLATE("Notifications "
-							"cannot be stopped, because the server can't be"
-							" reached."), B_TRANSLATE("OK"), NULL, NULL,
-							B_WIDTH_AS_USUAL, B_STOP_ALERT);
-						alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-						(void)alert->Go();
-						return;
-					}
-
-					// Send quit message
-					if (messenger.SendMessage(new BMessage(B_QUIT_REQUESTED)) != B_OK) {
-						BAlert* alert = new BAlert(B_TRANSLATE(
-							"Notifications"), B_TRANSLATE("Cannot disable"
-							" notifications because the server can't be "
-							"reached."), B_TRANSLATE("OK"),
-							NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
-						alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-						(void)alert->Go();
-						return;
-					}
-
-					fServerButton->SetLabel(kStartServer);
-					fStatusLabel->SetText(kStopped);
-				} else {
-					// Start server
-					status_t err = be_roster->Launch(kNotificationServerSignature);
-					if (err != B_OK) {
-						BAlert* alert = new BAlert(B_TRANSLATE(
-							"Notifications"), B_TRANSLATE("Cannot enable"
-							" notifications because the server cannot be "
-							"found.\nThis means your InfoPopper installation"
-							" was not successfully completed."),
-							B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL,
-							B_STOP_ALERT);
-						alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
-						(void)alert->Go();
-						return;
-					}
-
-					fServerButton->SetLabel(kStopServer);
-					fStatusLabel->SetText(kStarted);
+				// Send quit message
+				if (messenger.SendMessage(B_QUIT_REQUESTED) != B_OK) {
+					BAlert* alert = new BAlert(B_TRANSLATE(
+						"Notifications"), B_TRANSLATE("Cannot disable"
+						" notifications because the server can't be "
+						"reached."), B_TRANSLATE("OK"),
+						NULL, NULL, B_WIDTH_AS_USUAL, B_STOP_ALERT);
+					alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+					(void)alert->Go();
+					return;
 				}
-			} break;
+			} else if (!_IsServerRunning()) {
+				// Start server
+				status_t err = be_roster->Launch(kNotificationServerSignature);
+				if (err != B_OK) {
+					BAlert* alert = new BAlert(B_TRANSLATE(
+						"Notifications"), B_TRANSLATE("Cannot enable"
+						" notifications because the server cannot be "
+						"found.\nThis means your InfoPopper installation"
+						" was not successfully completed."),
+						B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL,
+						B_STOP_ALERT);
+					alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
+					(void)alert->Go();
+					return;
+				}
+			}
+			break;
+		} 
 		case kSettingChanged:
 			SettingsPane::MessageReceived(msg);
 			break;
@@ -230,6 +206,8 @@ GeneralView::Load()
 	settings.Unflatten(&file);
 
 	char buffer[255];
+
+	fNotificationBox->SetValue(_IsServerRunning() ? B_CONTROL_ON : B_CONTROL_OFF);
 
 	bool autoStart;
 	if (settings.FindBool(kAutoStartName, &autoStart) != B_OK)
@@ -295,11 +273,11 @@ GeneralView::Save()
 	BPath serverPath(&ref);
 
 	// Start server at boot time
-	ret = find_directory(B_USER_BOOT_DIRECTORY, &path, true);
+	ret = find_directory(B_USER_SETTINGS_DIRECTORY, &path, true);
 	if (ret != B_OK) {
 		BAlert* alert = new BAlert("",
 			B_TRANSLATE("Can't save preferences, you probably don't have "
-			"write access to the boot settings directory."), B_TRANSLATE("OK"),
+			"write access to the settings directory."), B_TRANSLATE("OK"),
 			NULL, NULL,
 			B_WIDTH_AS_USUAL, B_STOP_ALERT);
 		alert->SetFlags(alert->Flags() | B_CLOSE_ON_ESCAPE);
@@ -307,7 +285,7 @@ GeneralView::Save()
 		return ret;
 	}
 
-	path.Append("launch");
+	path.Append("boot/launch");
 	BDirectory directory(path.Path());
 	BEntry entry(&directory, serverPath.Leaf());
 

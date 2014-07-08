@@ -1,14 +1,8 @@
 SubDir HAIKU_TOP src libs glut ;
-SubDirSysHdrs $(HAIKU_GLU_HEADERS) ;
-SubDirSysHdrs $(HAIKU_MESA_HEADERS) ;
+
+UseLibraryHeaders glut ;
 
 SetSubDirSupportedPlatformsBeOSCompatible ;
-
-if $(TARGET_PLATFORM) != haiku {
-	UseHeaders [ FDirName $(HAIKU_TOP) headers os opengl ] : true ;
-		# We need our public GL headers also when not compiling for Haiku.
-}
-
 
 local sourcesCc =
 	# C sources
@@ -50,19 +44,32 @@ local sourcesCpp =
 ;
 
 
-# For GCC2
-if $(HAIKU_GCC_VERSION[1]) < 3 {
-	SubDirC++Flags --no-warnings ;
+local architectureObject ;
+for architectureObject in [ MultiArchSubDirSetup ] {
+	on $(architectureObject) {
+		local architecture = $(TARGET_PACKAGING_ARCH) ;
+
+		UseBuildFeatureHeaders glu ;
+		UseBuildFeatureHeaders mesa ;
+
+		# For GCC2
+		if $(architecture) = x86_gcc2 {
+			SubDirC++Flags --no-warnings ;
+		}
+
+		# Ensure Mesa dependency is met
+		Includes [ FGristFiles $(sourcesCc) $(sourcesCpp) ] :
+			[ BuildFeatureAttribute glu : headers ]
+			[ BuildFeatureAttribute mesa : headers ]
+			;
+
+		SharedLibrary [ MultiArchDefaultGristFiles libglut.so ] :
+			$(sourcesCpp)
+			$(sourcesCc)
+			:
+			game be $(TARGET_LIBSTDC++)
+			[ BuildFeatureAttribute mesa : library ]
+			[ BuildFeatureAttribute glu : library ]
+			;
+	}
 }
-
-
-# Ensure Mesa dependency is met
-Includes [ FGristFiles $(sourcesCc) $(sourcesCpp) ]
-	: $(HAIKU_MESA_HEADERS_DEPENDENCY) ;
-
-SharedLibrary libglut.so :
-	$(sourcesCpp)
-	$(sourcesCc)
-	:
-	GL game be $(TARGET_LIBSTDC++)
-;

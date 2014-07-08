@@ -122,18 +122,10 @@ random_select(void *cookie, uint8 event, selectsync *sync)
 
 	if (event == B_SELECT_READ) {
 		/* tell there is already data to read */
-#ifndef HAIKU_TARGET_PLATFORM_HAIKU
-		notify_select_event(sync, ref);
-#else
 		notify_select_event(sync, event);
-#endif
 	} else if (event == B_SELECT_WRITE) {
 		/* we're now writable */
-#ifndef HAIKU_TARGET_PLATFORM_HAIKU
-		notify_select_event(sync, ref);
-#else
 		notify_select_event(sync, event);
-#endif
 	}
 	return B_OK;
 }
@@ -236,8 +228,6 @@ random_register_child_devices(void* _cookie)
 	device_node* node;
 	return gDeviceManager->register_node(info->node,
 		YARROW_RNG_SIM_MODULE_NAME, attrs, NULL, &node);
-
-	return status;
 }
 
 

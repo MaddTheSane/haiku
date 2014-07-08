@@ -67,8 +67,8 @@ apply_boot_settings(void* kernelSettings, void* safemodeSettings)
 {
 #if B_HAIKU_PHYSICAL_BITS > 32
 	if ((kernelSettings != NULL
-			&& get_driver_boolean_parameter(kernelSettings, "4gb_memory_limit",
-				false, false))
+			&& get_driver_boolean_parameter(kernelSettings,
+				B_SAFEMODE_4_GB_MEMORY_LIMIT, false, false))
 		|| (safemodeSettings != NULL
 			&& get_driver_boolean_parameter(safemodeSettings,
 				B_SAFEMODE_4_GB_MEMORY_LIMIT, false, false))) {
@@ -116,7 +116,7 @@ add_stage2_driver_settings(stage2_args* args)
 {
 	// TODO: split more intelligently
 	for (const char** arg = args->arguments;
-			arg != NULL && arg[0] != NULL; arg++) {
+			arg != NULL && args->arguments_count-- && arg[0] != NULL; arg++) {
 		dprintf("adding args: '%s'\n", arg[0]);
 		add_safe_mode_settings((char*)arg[0]);
 	}
@@ -125,7 +125,7 @@ add_stage2_driver_settings(stage2_args* args)
 
 
 status_t
-add_safe_mode_settings(char* settings)
+add_safe_mode_settings(const char* settings)
 {
 	if (settings == NULL || settings[0] == '\0')
 		return B_OK;

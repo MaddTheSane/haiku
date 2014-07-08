@@ -10,6 +10,8 @@
 #include "RegionTestcase.h"
 #include <Region.h>
 #include <Rect.h>
+
+#include <assert.h>
 #include <math.h>
 
 
@@ -106,7 +108,7 @@ RegionTestcase::RegionTestcase(std::string name) :
 RegionTestcase::~RegionTestcase()
 {
 	while(!listOfRegions.IsEmpty()) {
-		delete static_cast<BRegion *>(listOfRegions.RemoveItem((long int)0));
+		delete static_cast<BRegion *>(listOfRegions.RemoveItem(int32(0)));
 	}
 }
 

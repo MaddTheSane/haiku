@@ -1,4 +1,4 @@
-1	polish	x-vnd.Haiku-WebPositive	3577331897
+1	polish	x-vnd.Haiku-WebPositive	951661576
 Show home button	Settings Window		Pokaż przycisk domowy
 Username:	Authentication Panel		Nazwa użytkownika:
 Copy URL to clipboard	Download Window		Kopiuj adres URL do schowka
@@ -16,6 +16,7 @@ Start page:	Settings Window		Strona startowa:
 History	WebPositive Window		Historia
 Error opening downloads folder	Download Window		Błąd podczas otwierania folderu pobierania
 Paste	WebPositive Window		Wklej
+Double-click or middle-click to open new tab.	Tab Manager		Dwuklik lub przyciśnięcie  środkowego przycisku myszy spowoduje otworzenie nowej karty.
 Proxy username:	Settings Window		Nazwa użytkownika serwera proxy:
 Settings	Settings Window		Ustawienia
 %seconds seconds left	Download Window		Pozostało %seconds sekund 
@@ -24,6 +25,7 @@ Window	WebPositive Window		Okno
 Decrease size	WebPositive Window		Zmniejsz wielkość
 Serif font:	Settings Window		Czcionka szeryfowa:
 Loading %url	WebPositive Window		Ładowanie %url
+Download aborted	Download Window		Pobieranie przerwane
 Page source	WebPositive Window		Źródło strony
 Next	WebPositive Window		Następna
 Find next	WebPositive Window		Znajdź następne
@@ -84,14 +86,17 @@ Open blank page	Settings Window		Otwórz pustą stronę
 New tabs:	Settings Window		Nowa karta:
 Cancel	WebPositive Window		Anuluj
 Open all	WebPositive Window		Otwórz wszystko
+Hide bookmark bar	WebPositive Window		Ukryj pasek zakładek
 Proxy server requires authentication	Settings Window		Serwer proxy wymaga uwierzytelnienia
 Clear	URL Bar		Wyczyść
 Cut	URL Bar		Wytnij
 Clear	WebPositive Window		Wyczyść
+Script console	Console Window		Konsola skryptów
 Remove	Download Window		Usuń
 Find	WebPositive Window		Znajdź
 Find previous	WebPositive Window		Znajdź poprzednie
 Settings	WebPositive Window		Ustawienia
+Script console	WebPositive Window		Konsola skryptów
 Proxy server address:	Settings Window		Adres serwera proxy:
 Proxy server port:	Settings Window		Port serwera proxy:
 Bookmarks	WebPositive Window		Zakładki
@@ -105,6 +110,7 @@ Open start page	Settings Window		Otwórz stronę startową
 Continue downloads	WebPositive		Kontynuowanie pobierania
 Cancel	Download Window		Anuluj
 Open search page	Settings Window		Otwórz stronę wyszukiwania
+Clear	Console Window		Wyczyść
 Password:	Authentication Panel		Hasło:
 Back	WebPositive Window		Wstecz
 New browser window	Download Window		Nowe okno
@@ -133,6 +139,8 @@ Clone current page	Settings Window		Sklonuj bieżącą stronę
 Do you want to open %addedCount bookmarks all at once?	WebPositive Window	Don't translate variable %addedCount.	Czy naprawdę chcesz otworzyć wszystkie zakładki %addedCount na raz?
 OK	Authentication Panel		OK
 Copy	URL Bar		Kopiuj
+Download finished	Download Window		Pobieranie zakończone
+Show bookmark bar	WebPositive Window		Pokaż pasek zakładek
 OK	WebPositive Window		OK
 Manage bookmarks	WebPositive Window		Zarządzanie zakładkami
 A bookmark for this page (%bookmarkName) already exists.	WebPositive Window	Don't translate variable %bookmarkName	Zakładka dla tej strony (%bookmarkName) już istnieje.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2009-2011, Ingo Weinhold, ingo_weinhold@gmx.de.
+ * Copyright 2009-2014, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Copyright 2011, Oliver Tappe <zooey@hirschkaefer.de>
  * Distributed under the terms of the MIT License.
  */
@@ -11,17 +11,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <new>
 
 #include <ByteOrder.h>
+#include <DataIO.h>
+
+#include <ZlibCompressionAlgorithm.h>
 
 #include <package/hpkg/HPKGDefsPrivate.h>
-
-#include <package/hpkg/DataOutput.h>
-#include <package/hpkg/ErrorOutput.h>
-#include <package/hpkg/ZlibDecompressor.h>
+#include <package/hpkg/PackageFileHeapReader.h>
 
 
 namespace BPackageKit {
@@ -33,17 +34,24 @@ namespace BPrivate {
 
 static const size_t kScratchBufferSize = 64 * 1024;
 
+static const uint16 kAttributeTypes[B_HPKG_ATTRIBUTE_ID_ENUM_COUNT] = {
+	#define B_DEFINE_HPKG_ATTRIBUTE(id, type, name, constant)	\
+		B_HPKG_ATTRIBUTE_TYPE_##type,
+	#include <package/hpkg/PackageAttributes.h>
+	#undef B_DEFINE_HPKG_ATTRIBUTE
+};
 
 // #pragma mark - AttributeHandlerContext
 
 
 ReaderImplBase::AttributeHandlerContext::AttributeHandlerContext(
 	BErrorOutput* errorOutput, BPackageContentHandler* packageContentHandler,
-	BHPKGPackageSectionID section)
+	BHPKGPackageSectionID section, bool ignoreUnknownAttributes)
 	:
 	errorOutput(errorOutput),
 	packageContentHandler(packageContentHandler),
 	hasLowLevelHandler(false),
+	ignoreUnknownAttributes(ignoreUnknownAttributes),
 	section(section)
 {
 }
@@ -51,11 +59,12 @@ ReaderImplBase::AttributeHandlerContext::AttributeHandlerContext(
 
 ReaderImplBase::AttributeHandlerContext::AttributeHandlerContext(
 	BErrorOutput* errorOutput, BLowLevelPackageContentHandler* lowLevelHandler,
-	BHPKGPackageSectionID section)
+	BHPKGPackageSectionID section, bool ignoreUnknownAttributes)
 	:
 	errorOutput(errorOutput),
 	lowLevelHandler(lowLevelHandler),
 	hasLowLevelHandler(true),
+	ignoreUnknownAttributes(ignoreUnknownAttributes),
 	section(section)
 {
 }
@@ -96,10 +105,41 @@ ReaderImplBase::AttributeHandler::HandleAttribute(
 
 
 status_t
+ReaderImplBase::AttributeHandler::NotifyDone(
+	AttributeHandlerContext* context)
+{
+	return B_OK;
+}
+
+
+status_t
 ReaderImplBase::AttributeHandler::Delete(AttributeHandlerContext* context)
 {
 	delete this;
 	return B_OK;
+}
+
+
+// #pragma mark - PackageInfoAttributeHandlerBase
+
+
+ReaderImplBase::PackageInfoAttributeHandlerBase
+	::PackageInfoAttributeHandlerBase(
+		BPackageInfoAttributeValue& packageInfoValue)
+	:
+	fPackageInfoValue(packageInfoValue)
+{
+}
+
+
+status_t
+ReaderImplBase::PackageInfoAttributeHandlerBase::NotifyDone(
+	AttributeHandlerContext* context)
+{
+	status_t error = context->packageContentHandler->HandlePackageAttribute(
+		fPackageInfoValue);
+	fPackageInfoValue.Clear();
+	return error;
 }
 
 
@@ -110,7 +150,7 @@ ReaderImplBase::PackageVersionAttributeHandler::PackageVersionAttributeHandler(
 	BPackageInfoAttributeValue& packageInfoValue,
 	BPackageVersionData& versionData, bool notify)
 	:
-	fPackageInfoValue(packageInfoValue),
+	super(packageInfoValue),
 	fPackageVersionData(versionData),
 	fNotify(notify)
 {
@@ -135,11 +175,14 @@ ReaderImplBase::PackageVersionAttributeHandler::HandleAttribute(
 			fPackageVersionData.preRelease = value.string;
 			break;
 
-		case B_HPKG_ATTRIBUTE_ID_PACKAGE_VERSION_RELEASE:
-			fPackageVersionData.release = value.unsignedInt;
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_VERSION_REVISION:
+			fPackageVersionData.revision = value.unsignedInt;
 			break;
 
 		default:
+			if (context->ignoreUnknownAttributes)
+				break;
+
 			context->errorOutput->PrintError("Error: Invalid package "
 				"attribute section: unexpected package attribute id %d "
 				"encountered when parsing package version\n", id);
@@ -151,19 +194,14 @@ ReaderImplBase::PackageVersionAttributeHandler::HandleAttribute(
 
 
 status_t
-ReaderImplBase::PackageVersionAttributeHandler::Delete(
+ReaderImplBase::PackageVersionAttributeHandler::NotifyDone(
 	AttributeHandlerContext* context)
 {
-	status_t error = B_OK;
-	if (fNotify) {
-		fPackageInfoValue.attributeID = B_PACKAGE_INFO_VERSION;
-		error = context->packageContentHandler->HandlePackageAttribute(
-			fPackageInfoValue);
-		fPackageInfoValue.Clear();
-	}
+	if (!fNotify)
+		return B_OK;
 
-	delete this;
-	return error;
+	fPackageInfoValue.attributeID = B_PACKAGE_INFO_VERSION;
+	return super::NotifyDone(context);
 }
 
 
@@ -174,7 +212,7 @@ ReaderImplBase::PackageResolvableAttributeHandler
 	::PackageResolvableAttributeHandler(
 		BPackageInfoAttributeValue& packageInfoValue)
 	:
-	fPackageInfoValue(packageInfoValue)
+	super(packageInfoValue)
 {
 }
 
@@ -185,11 +223,6 @@ ReaderImplBase::PackageResolvableAttributeHandler::HandleAttribute(
 	AttributeHandler** _handler)
 {
 	switch (id) {
-		case B_HPKG_ATTRIBUTE_ID_PACKAGE_PROVIDES_TYPE:
-			fPackageInfoValue.resolvable.type
-				= (BPackageResolvableType)value.unsignedInt;
-			break;
-
 		case B_HPKG_ATTRIBUTE_ID_PACKAGE_VERSION_MAJOR:
 			fPackageInfoValue.resolvable.haveVersion = true;
 			fPackageInfoValue.resolvable.version.major = value.string;
@@ -217,6 +250,9 @@ ReaderImplBase::PackageResolvableAttributeHandler::HandleAttribute(
 			break;
 
 		default:
+			if (context->ignoreUnknownAttributes)
+				break;
+
 			context->errorOutput->PrintError("Error: Invalid package "
 				"attribute section: unexpected package attribute id %d "
 				"encountered when parsing package resolvable\n", id);
@@ -227,19 +263,6 @@ ReaderImplBase::PackageResolvableAttributeHandler::HandleAttribute(
 }
 
 
-status_t
-ReaderImplBase::PackageResolvableAttributeHandler::Delete(
-	AttributeHandlerContext* context)
-{
-	status_t error = context->packageContentHandler->HandlePackageAttribute(
-		fPackageInfoValue);
-	fPackageInfoValue.Clear();
-
-	delete this;
-	return error;
-}
-
-
 // #pragma mark - PackageResolvableExpressionAttributeHandler
 
 
@@ -247,7 +270,7 @@ ReaderImplBase::PackageResolvableExpressionAttributeHandler
 	::PackageResolvableExpressionAttributeHandler(
 		BPackageInfoAttributeValue& packageInfoValue)
 	:
-	fPackageInfoValue(packageInfoValue)
+	super(packageInfoValue)
 {
 }
 
@@ -286,6 +309,9 @@ ReaderImplBase::PackageResolvableExpressionAttributeHandler::HandleAttribute(
 			return B_OK;
 
 		default:
+			if (context->ignoreUnknownAttributes)
+				break;
+
 			context->errorOutput->PrintError("Error: Invalid package "
 				"attribute section: unexpected package attribute id %d "
 				"encountered when parsing package resolvable-expression\n",
@@ -297,16 +323,158 @@ ReaderImplBase::PackageResolvableExpressionAttributeHandler::HandleAttribute(
 }
 
 
+// #pragma mark - GlobalWritableFileInfoAttributeHandler
+
+
+ReaderImplBase::GlobalWritableFileInfoAttributeHandler
+	::GlobalWritableFileInfoAttributeHandler(
+		BPackageInfoAttributeValue& packageInfoValue)
+	:
+	super(packageInfoValue)
+{
+}
+
+
 status_t
-ReaderImplBase::PackageResolvableExpressionAttributeHandler::Delete(
+ReaderImplBase::GlobalWritableFileInfoAttributeHandler::HandleAttribute(
+	AttributeHandlerContext* context, uint8 id, const AttributeValue& value,
+	AttributeHandler** _handler)
+{
+	switch (id) {
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_WRITABLE_FILE_UPDATE_TYPE:
+			if (value.unsignedInt >= B_WRITABLE_FILE_UPDATE_TYPE_ENUM_COUNT) {
+				context->errorOutput->PrintError(
+					"Error: Invalid package attribute section: invalid "
+					"global settings file update type %" B_PRIu64
+					" encountered\n", value.unsignedInt);
+				return B_BAD_DATA;
+			}
+			fPackageInfoValue.globalWritableFileInfo.updateType
+				= (BWritableFileUpdateType)value.unsignedInt;
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_IS_WRITABLE_DIRECTORY:
+			fPackageInfoValue.globalWritableFileInfo.isDirectory
+				= value.unsignedInt != 0;
+			break;
+
+		default:
+			if (context->ignoreUnknownAttributes)
+				break;
+
+			context->errorOutput->PrintError("Error: Invalid package "
+				"attribute section: unexpected package attribute id %d "
+				"encountered when parsing global settings file info\n",
+				id);
+			return B_BAD_DATA;
+	}
+
+	return B_OK;
+}
+
+
+// #pragma mark - UserSettingsFileInfoAttributeHandler
+
+
+ReaderImplBase::UserSettingsFileInfoAttributeHandler
+	::UserSettingsFileInfoAttributeHandler(
+		BPackageInfoAttributeValue& packageInfoValue)
+	:
+	super(packageInfoValue)
+{
+}
+
+
+status_t
+ReaderImplBase::UserSettingsFileInfoAttributeHandler::HandleAttribute(
+	AttributeHandlerContext* context, uint8 id, const AttributeValue& value,
+	AttributeHandler** _handler)
+{
+	switch (id) {
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_SETTINGS_FILE_TEMPLATE:
+			fPackageInfoValue.userSettingsFileInfo.templatePath = value.string;
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_IS_WRITABLE_DIRECTORY:
+			fPackageInfoValue.userSettingsFileInfo.isDirectory
+				= value.unsignedInt != 0;
+			break;
+
+		default:
+			if (context->ignoreUnknownAttributes)
+				break;
+
+			context->errorOutput->PrintError("Error: Invalid package "
+				"attribute section: unexpected package attribute id %d "
+				"encountered when parsing user settings file info\n",
+				id);
+			return B_BAD_DATA;
+	}
+
+	return B_OK;
+}
+
+
+// #pragma mark - UserAttributeHandler
+
+
+ReaderImplBase::UserAttributeHandler::UserAttributeHandler(
+		BPackageInfoAttributeValue& packageInfoValue)
+	:
+	super(packageInfoValue),
+	fGroups()
+{
+}
+
+
+status_t
+ReaderImplBase::UserAttributeHandler::HandleAttribute(
+	AttributeHandlerContext* context, uint8 id, const AttributeValue& value,
+	AttributeHandler** _handler)
+{
+	switch (id) {
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_USER_REAL_NAME:
+			fPackageInfoValue.user.realName = value.string;
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_USER_HOME:
+			fPackageInfoValue.user.home = value.string;
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_USER_SHELL:
+			fPackageInfoValue.user.shell = value.string;
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_USER_GROUP:
+			if (!fGroups.Add(value.string))
+				return B_NO_MEMORY;
+			break;
+
+		default:
+			if (context->ignoreUnknownAttributes)
+				break;
+
+			context->errorOutput->PrintError("Error: Invalid package "
+				"attribute section: unexpected package attribute id %d "
+				"encountered when parsing user settings file info\n",
+				id);
+			return B_BAD_DATA;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+ReaderImplBase::UserAttributeHandler::NotifyDone(
 	AttributeHandlerContext* context)
 {
-	status_t error = context->packageContentHandler->HandlePackageAttribute(
-		fPackageInfoValue);
-	fPackageInfoValue.Clear();
+	if (!fGroups.IsEmpty()) {
+		fPackageInfoValue.user.groups = fGroups.Elements();
+		fPackageInfoValue.user.groupCount = fGroups.Count();
+	}
 
-	delete this;
-	return error;
+	return super::NotifyDone(context);
 }
 
 
@@ -338,6 +506,10 @@ ReaderImplBase::PackageAttributeHandler::HandleAttribute(
 
 		case B_HPKG_ATTRIBUTE_ID_PACKAGE_PACKAGER:
 			fPackageInfoValue.SetTo(B_PACKAGE_INFO_PACKAGER, value.string);
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_BASE_PACKAGE:
+			fPackageInfoValue.SetTo(B_PACKAGE_INFO_BASE_PACKAGE, value.string);
 			break;
 
 		case B_HPKG_ATTRIBUTE_ID_PACKAGE_FLAGS:
@@ -445,7 +617,58 @@ ReaderImplBase::PackageAttributeHandler::HandleAttribute(
 			fPackageInfoValue.SetTo(B_PACKAGE_INFO_INSTALL_PATH, value.string);
 			break;
 
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_GLOBAL_WRITABLE_FILE:
+			fPackageInfoValue.globalWritableFileInfo.path = value.string;
+			fPackageInfoValue.globalWritableFileInfo.updateType
+				= B_WRITABLE_FILE_UPDATE_TYPE_ENUM_COUNT;
+			fPackageInfoValue.attributeID
+				= B_PACKAGE_INFO_GLOBAL_WRITABLE_FILES;
+			if (_handler != NULL) {
+				*_handler
+					= new(std::nothrow) GlobalWritableFileInfoAttributeHandler(
+						fPackageInfoValue);
+				if (*_handler == NULL)
+					return B_NO_MEMORY;
+			}
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_USER_SETTINGS_FILE:
+			fPackageInfoValue.userSettingsFileInfo.path = value.string;
+			fPackageInfoValue.attributeID
+				= B_PACKAGE_INFO_USER_SETTINGS_FILES;
+			if (_handler != NULL) {
+				*_handler
+					= new(std::nothrow) UserSettingsFileInfoAttributeHandler(
+						fPackageInfoValue);
+				if (*_handler == NULL)
+					return B_NO_MEMORY;
+			}
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_USER:
+			fPackageInfoValue.user.name = value.string;
+			fPackageInfoValue.attributeID = B_PACKAGE_INFO_USERS;
+			if (_handler != NULL) {
+				*_handler = new(std::nothrow) UserAttributeHandler(
+					fPackageInfoValue);
+				if (*_handler == NULL)
+					return B_NO_MEMORY;
+			}
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_GROUP:
+			fPackageInfoValue.SetTo(B_PACKAGE_INFO_GROUPS, value.string);
+			break;
+
+		case B_HPKG_ATTRIBUTE_ID_PACKAGE_POST_INSTALL_SCRIPT:
+			fPackageInfoValue.SetTo(B_PACKAGE_INFO_POST_INSTALL_SCRIPTS,
+				value.string);
+			break;
+
 		default:
+			if (context->ignoreUnknownAttributes)
+				break;
+
 			context->errorOutput->PrintError(
 				"Error: Invalid package attribute section: unexpected "
 				"package attribute id %d encountered\n", id);
@@ -520,84 +743,182 @@ ReaderImplBase::LowLevelAttributeHandler::HandleAttribute(
 
 
 status_t
-ReaderImplBase::LowLevelAttributeHandler::Delete(
+ReaderImplBase::LowLevelAttributeHandler::NotifyDone(
 	AttributeHandlerContext* context)
 {
-	status_t error = B_OK;
 	if (fID != B_HPKG_ATTRIBUTE_ID_ENUM_COUNT) {
-		error = context->lowLevelHandler->HandleAttributeDone(
+		status_t error = context->lowLevelHandler->HandleAttributeDone(
 			(BHPKGAttributeID)fID, fValue, fParentToken, fToken);
+		if (error != B_OK)
+			return error;
 	}
-
-	delete this;
-	return error;
+	return super::NotifyDone(context);
 }
 
 
 // #pragma mark - ReaderImplBase
 
 
-ReaderImplBase::ReaderImplBase(BErrorOutput* errorOutput)
+ReaderImplBase::ReaderImplBase(const char* fileType, BErrorOutput* errorOutput)
 	:
 	fPackageAttributesSection("package attributes"),
+	fFileType(fileType),
 	fErrorOutput(errorOutput),
 	fFD(-1),
 	fOwnsFD(false),
-	fCurrentSection(NULL),
-	fScratchBuffer(NULL),
-	fScratchBufferSize(0)
+	fRawHeapReader(NULL),
+	fHeapReader(NULL),
+	fCurrentSection(NULL)
 {
 }
 
 
 ReaderImplBase::~ReaderImplBase()
 {
+	delete fHeapReader;
+	if (fRawHeapReader != fHeapReader)
+		delete fRawHeapReader;
+
 	if (fOwnsFD && fFD >= 0)
 		close(fFD);
+}
 
-	delete[] fScratchBuffer;
+
+uint64
+ReaderImplBase::UncompressedHeapSize() const
+{
+	return fRawHeapReader->UncompressedHeapSize();
+}
+
+
+BAbstractBufferedDataReader*
+ReaderImplBase::DetachHeapReader(PackageFileHeapReader** _rawHeapReader)
+{
+	BAbstractBufferedDataReader* heapReader = fHeapReader;
+	fHeapReader = NULL;
+
+	if (_rawHeapReader != NULL)
+		*_rawHeapReader = fRawHeapReader;
+	fRawHeapReader = NULL;
+
+	return heapReader;
 }
 
 
 status_t
-ReaderImplBase::Init(int fd, bool keepFD)
+ReaderImplBase::InitHeapReader(uint32 compression, uint32 chunkSize,
+	off_t offset, uint64 compressedSize, uint64 uncompressedSize)
 {
-	fFD = fd;
-	fOwnsFD = keepFD;
+	if (compression != B_HPKG_COMPRESSION_ZLIB) {
+		fErrorOutput->PrintError("Error: Invalid heap compression\n");
+		return B_BAD_DATA;
+	}
 
-	// allocate a scratch buffer
-	fScratchBuffer = new(std::nothrow) uint8[kScratchBufferSize];
-	if (fScratchBuffer == NULL) {
-		fErrorOutput->PrintError("Error: Out of memory!\n");
+	DecompressionAlgorithmOwner* decompressionAlgorithm
+		= DecompressionAlgorithmOwner::Create(
+			new(std::nothrow) BZlibCompressionAlgorithm,
+			new(std::nothrow) BZlibDecompressionParameters);
+	BReference<DecompressionAlgorithmOwner> decompressionAlgorithmReference(
+		decompressionAlgorithm, true);
+
+	if (decompressionAlgorithm == NULL
+		|| decompressionAlgorithm->algorithm == NULL
+		|| decompressionAlgorithm->parameters == NULL) {
 		return B_NO_MEMORY;
 	}
-	fScratchBufferSize = kScratchBufferSize;
+
+	fRawHeapReader = new(std::nothrow) PackageFileHeapReader(fErrorOutput, fFD,
+		offset, compressedSize, uncompressedSize, decompressionAlgorithm);
+	if (fRawHeapReader == NULL)
+		return B_NO_MEMORY;
+
+	status_t error = fRawHeapReader->Init();
+	if (error != B_OK)
+		return error;
+
+	error = CreateCachedHeapReader(fRawHeapReader, fHeapReader);
+	if (error != B_OK) {
+		if (error != B_NOT_SUPPORTED)
+			return error;
+
+		fHeapReader = fRawHeapReader;
+	}
 
 	return B_OK;
 }
 
 
-const char*
-ReaderImplBase::CheckCompression(const SectionInfo& section) const
+status_t
+ReaderImplBase::CreateCachedHeapReader(PackageFileHeapReader* heapReader,
+	BAbstractBufferedDataReader*& _cachedReader)
 {
-	switch (section.compression) {
-		case B_HPKG_COMPRESSION_NONE:
-			if (section.compressedLength != section.uncompressedLength) {
-				return "Uncompressed, but compressed and uncompressed length "
-					"don't match";
-			}
-			return NULL;
+	return B_NOT_SUPPORTED;
+}
 
-		case B_HPKG_COMPRESSION_ZLIB:
-			if (section.compressedLength >= section.uncompressedLength) {
-				return "Compressed, but compressed length is not less than "
-					"uncompressed length";
-			}
-			return NULL;
 
-		default:
-			return "Invalid compression algorithm ID";
+status_t
+ReaderImplBase::InitSection(PackageFileSection& section, uint64 endOffset,
+	uint64 length, uint64 maxSaneLength, uint64 stringsLength,
+	uint64 stringsCount)
+{
+	// check length vs. endOffset
+	if (length > endOffset) {
+		ErrorOutput()->PrintError("Error: %s file %s section size is %"
+			B_PRIu64 " bytes. This is greater than the available space\n",
+			fFileType, section.name, length);
+		return B_BAD_DATA;
 	}
+
+	// check sanity length
+	if (maxSaneLength > 0 && length > maxSaneLength) {
+		ErrorOutput()->PrintError("Error: %s file %s section size is %"
+			B_PRIu64 " bytes. This is beyond the reader's sanity limit\n",
+			fFileType, section.name, length);
+		return B_NOT_SUPPORTED;
+	}
+
+	// check strings subsection size/count
+	if ((stringsLength <= 1) != (stringsCount == 0) || stringsLength > length) {
+		ErrorOutput()->PrintError("Error: strings subsection description of %s "
+			"file %s section is invalid (%" B_PRIu64 " strings, length: %"
+			B_PRIu64 ", section length: %" B_PRIu64 ")\n",
+			fFileType, section.name, stringsCount, stringsLength, length);
+		return B_BAD_DATA;
+	}
+
+	section.uncompressedLength = length;
+	section.offset = endOffset - length;
+	section.currentOffset = 0;
+	section.stringsLength = stringsLength;
+	section.stringsCount = stringsCount;
+
+	return B_OK;
+}
+
+
+status_t
+ReaderImplBase::PrepareSection(PackageFileSection& section)
+{
+	// allocate memory for the section data and read it in
+	section.data = new(std::nothrow) uint8[section.uncompressedLength];
+	if (section.data == NULL) {
+		ErrorOutput()->PrintError("Error: Out of memory!\n");
+		return B_NO_MEMORY;
+	}
+
+	status_t error = ReadSection(section);
+	if (error != B_OK)
+		return error;
+
+	// parse the section strings
+	section.currentOffset = 0;
+	SetCurrentSection(&section);
+
+	error = ParseStrings();
+	if (error != B_OK)
+		return error;
+
+	return B_OK;
 }
 
 
@@ -738,6 +1059,16 @@ ReaderImplBase::ParseAttributeTree(AttributeHandlerContext* context,
 
 
 status_t
+ReaderImplBase::_Init(int fd, bool keepFD)
+{
+	fFD = fd;
+	fOwnsFD = keepFD;
+
+	return B_OK;
+}
+
+
+status_t
 ReaderImplBase::_ParseAttributeTree(AttributeHandlerContext* context)
 {
 	int level = 0;
@@ -754,6 +1085,9 @@ ReaderImplBase::_ParseAttributeTree(AttributeHandlerContext* context)
 
 		if (tag == 0) {
 			AttributeHandler* handler = PopAttributeHandler();
+			error = handler->NotifyDone(context);
+			if (error != B_OK)
+				return error;
 			if (level-- == 0)
 				return B_OK;
 
@@ -799,29 +1133,37 @@ ReaderImplBase::_ReadAttribute(uint8& _id, AttributeValue& _value,
 
 	if (tag != 0) {
 		// get the type
-		uint16 type = HPKG_ATTRIBUTE_TAG_TYPE(tag);
+		uint16 type = attribute_tag_type(tag);
 		if (type >= B_HPKG_ATTRIBUTE_TYPE_ENUM_COUNT) {
 			fErrorOutput->PrintError("Error: Invalid %s section: attribute "
 				"type %d not supported!\n", fCurrentSection->name, type);
 			return B_BAD_DATA;
 		}
 
-		// get the value
-		error = ReadAttributeValue(type, HPKG_ATTRIBUTE_TAG_ENCODING(tag),
-			_value);
-		if (error != B_OK)
-			return error;
-
-		_id = HPKG_ATTRIBUTE_TAG_ID(tag);
-		if (_id >= B_HPKG_ATTRIBUTE_ID_ENUM_COUNT) {
+		// get the ID
+		_id = attribute_tag_id(tag);
+		if (_id < B_HPKG_ATTRIBUTE_ID_ENUM_COUNT) {
+			if (type != kAttributeTypes[_id]) {
+				fErrorOutput->PrintError("Error: Invalid %s section: "
+					"unexpected type %d for attribute id %d (expected %d)!\n",
+					fCurrentSection->name, type, _id, kAttributeTypes[_id]);
+				return B_BAD_DATA;
+			}
+		} else if (fMinorFormatVersion <= fCurrentMinorFormatVersion) {
 			fErrorOutput->PrintError("Error: Invalid %s section: "
 				"attribute id %d not supported!\n", fCurrentSection->name, _id);
 			return B_BAD_DATA;
 		}
+
+		// get the value
+		error = ReadAttributeValue(type, attribute_tag_encoding(tag),
+			_value);
+		if (error != B_OK)
+			return error;
 	}
 
 	if (_hasChildren != NULL)
-		*_hasChildren = HPKG_ATTRIBUTE_TAG_HAS_CHILDREN(tag);
+		*_hasChildren = attribute_tag_has_children(tag);
 	if (_tag != NULL)
 		*_tag = tag;
 
@@ -983,8 +1325,9 @@ ReaderImplBase::_ReadSectionBuffer(void* buffer, size_t size)
 {
 	if (size > fCurrentSection->uncompressedLength
 			- fCurrentSection->currentOffset) {
-		fErrorOutput->PrintError("_ReadBuffer(%lu): read beyond %s end\n",
-			size, fCurrentSection->name);
+		fErrorOutput->PrintError(
+			"_ReadSectionBuffer(%lu): read beyond %s end\n", size,
+			fCurrentSection->name);
 		return B_BAD_DATA;
 	}
 
@@ -1015,63 +1358,10 @@ ReaderImplBase::ReadBuffer(off_t offset, void* buffer, size_t size)
 
 
 status_t
-ReaderImplBase::ReadCompressedBuffer(const SectionInfo& section)
+ReaderImplBase::ReadSection(const PackageFileSection& section)
 {
-	uint32 compressedSize = section.compressedLength;
-	uint64 offset = section.offset;
-
-	switch (section.compression) {
-		case B_HPKG_COMPRESSION_NONE:
-			return ReadBuffer(offset, section.data, compressedSize);
-
-		case B_HPKG_COMPRESSION_ZLIB:
-		{
-			// init the decompressor
-			BBufferDataOutput bufferOutput(section.data,
-				section.uncompressedLength);
-			ZlibDecompressor decompressor(&bufferOutput);
-			status_t error = decompressor.Init();
-			if (error != B_OK)
-				return error;
-
-			while (compressedSize > 0) {
-				// read compressed buffer
-				size_t toRead = std::min((size_t)compressedSize,
-					fScratchBufferSize);
-				error = ReadBuffer(offset, fScratchBuffer, toRead);
-				if (error != B_OK)
-					return error;
-
-				// uncompress
-				error = decompressor.DecompressNext(fScratchBuffer, toRead);
-				if (error != B_OK)
-					return error;
-
-				compressedSize -= toRead;
-				offset += toRead;
-			}
-
-			error = decompressor.Finish();
-			if (error != B_OK)
-				return error;
-
-			// verify that all data have been read
-			if (bufferOutput.BytesWritten() != section.uncompressedLength) {
-				fErrorOutput->PrintError("Error: Missing bytes in uncompressed "
-					"buffer!\n");
-				return B_BAD_DATA;
-			}
-
-			return B_OK;
-		}
-
-		default:
-		{
-			fErrorOutput->PrintError("Error: Invalid compression type: %u\n",
-				section.compression);
-			return B_BAD_DATA;
-		}
-	}
+	return fHeapReader->ReadData(section.offset,
+		section.data, section.uncompressedLength);
 }
 
 

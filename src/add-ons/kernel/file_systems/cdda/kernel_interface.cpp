@@ -1,12 +1,15 @@
 /*
- * Copyright 2007-2011, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2007-2013, Axel Dörfler, axeld@pinc-software.de.
  * Distributed under the terms of the MIT License.
  */
 
 
-#include "cdda.h"
-#include "cddb.h"
-#include "Lock.h"
+#include <dirent.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
 
 #include <FindDirectory.h>
 #include <fs_info.h>
@@ -16,15 +19,12 @@
 #include <NodeMonitor.h>
 #include <TypeConstants.h>
 
-#include <util/kernel_cpp.h>
+#include <AutoDeleter.h>
 #include <util/DoublyLinkedList.h>
 
-#include <dirent.h>
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
+#include "cdda.h"
+#include "cddb.h"
+#include "Lock.h"
 
 
 //#define TRACE_CDDA
@@ -432,7 +432,10 @@ read_attributes(int fd, Inode* inode)
 		size = B_BENDIAN_TO_HOST_INT32(size);
 		name[length] = '\0';
 
-		Attribute* attribute = new Attribute(name, type);
+		Attribute* attribute = new(std::nothrow) Attribute(name, type);
+		if (attribute == NULL)
+			return false;
+
 		if (attribute->IsProtectedNamespace()) {
 			// Attributes in the protected namespace are handled internally
 			// so we do not load them even if they are present in the
@@ -459,11 +462,11 @@ open_attributes(uint32 cddbID, int deviceFD, int mode,
 	if (path == NULL)
 		return -1;
 
+	MemoryDeleter deleter(path);
 	bool create = (mode & O_WRONLY) != 0;
 
 	if (find_directory(B_USER_SETTINGS_DIRECTORY, -1, create, path,
 			B_PATH_NAME_LENGTH) != B_OK) {
-		free(path);
 		return -1;
 	}
 
@@ -480,7 +483,6 @@ open_attributes(uint32 cddbID, int deviceFD, int mode,
 		char* deviceName = path + length;
 		if (ioctl(deviceFD, B_GET_PATH_FOR_DEVICE, deviceName,
 				B_PATH_NAME_LENGTH - length) < B_OK) {
-			free(path);
 			return B_ERROR;
 		}
 
@@ -496,10 +498,7 @@ open_attributes(uint32 cddbID, int deviceFD, int mode,
 	} else
 		strlcat(path, "/shared", B_PATH_NAME_LENGTH);
 
-	int fd = open(path, mode | (create ? O_CREAT | O_TRUNC : 0), 0644);
-
-	free(path);
-	return fd;
+	return open(path, mode | (create ? O_CREAT | O_TRUNC : 0), 0644);
 }
 
 
@@ -624,15 +623,15 @@ Volume::Mount(const char* device)
 	if (toc == NULL)
 		return B_NO_MEMORY;
 
+	MemoryDeleter deleter(toc);
+
 	status_t status = read_table_of_contents(fDevice, toc, 1024);
 	// there has to be at least one audio track
 	if (status == B_OK && count_audio_tracks(toc) == 0)
 		status = B_BAD_TYPE;
 
-	if (status != B_OK) {
-		free(toc);
+	if (status != B_OK)
 		return status;
-	}
 
 	fDiscID = compute_cddb_disc_id(*toc);
 
@@ -644,10 +643,8 @@ Volume::Mount(const char* device)
 		status = publish_vnode(FSVolume(), fRootNode->ID(), fRootNode,
 			&gCDDAVnodeOps, fRootNode->Type(), 0);
 	}
-	if (status != B_OK) {
-		free(toc);
+	if (status != B_OK)
 		return status;
-	}
 
 	bool doLookup = true;
 	cdtext text;
@@ -743,8 +740,6 @@ Volume::Mount(const char* device)
 	_RestoreSharedAttributes();
 	if (fd >= 0)
 		_RestoreAttributes(fd);
-
-	free(toc);
 
 	// determine volume title
 	DetermineName(fDiscID, fDevice, title, sizeof(title));
@@ -853,7 +848,8 @@ Inode*
 Volume::_CreateNode(Inode* parent, const char* name, uint64 start,
 	uint64 frames, int32 type)
 {
-	Inode* inode = new Inode(this, parent, name, start, frames, type);
+	Inode* inode = new(std::nothrow) Inode(this, parent, name, start, frames,
+		type);
 	if (inode == NULL)
 		return NULL;
 
@@ -1276,7 +1272,7 @@ status_t
 Inode::AddAttribute(const char* name, type_code type, bool overwrite,
 	const uint8* data, size_t length)
 {
-	Attribute* attribute = new Attribute(name, type);
+	Attribute* attribute = new(std::nothrow) Attribute(name, type);
 	if (attribute == NULL)
 		return B_NO_MEMORY;
 
@@ -1476,7 +1472,7 @@ cdda_mount(fs_volume* fsVolume, const char* device, uint32 flags,
 {
 	TRACE(("cdda_mount: entry\n"));
 
-	Volume* volume = new Volume(fsVolume);
+	Volume* volume = new(std::nothrow) Volume(fsVolume);
 	if (volume == NULL)
 		return B_NO_MEMORY;
 

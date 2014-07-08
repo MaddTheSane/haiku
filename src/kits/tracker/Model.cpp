@@ -38,6 +38,9 @@ All rights reserved.
 // Consider moving iconFrom logic to BPose
 // use a more efficient way of storing file type and preferred app strings
 
+
+#include "Model.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -60,8 +63,6 @@ All rights reserved.
 #include <Volume.h>
 #include <VolumeRoster.h>
 
-#include "Model.h"
-
 #include "Attributes.h"
 #include "Bitmaps.h"
 #include "FindPanel.h"
@@ -71,10 +72,12 @@ All rights reserved.
 #include "Tracker.h"
 #include "Utilities.h"
 
+
 #ifdef CHECK_OPEN_MODEL_LEAKS
 BObjectList<Model>* writableOpenModelList = NULL;
 BObjectList<Model>* readOnlyOpenModelList = NULL;
 #endif
+
 
 namespace BPrivate {
 extern
@@ -82,11 +85,15 @@ extern
 _IMPEXP_BE
 #endif
 bool CheckNodeIconHintPrivate(const BNode*, bool);
-}
+}	// namespace BPrivate
+
+
+//	#pragma mark - Model()
 
 
 #undef B_TRANSLATION_CONTEXT
 #define B_TRANSLATION_CONTEXT "Model"
+
 
 Model::Model()
 	:
@@ -325,16 +332,16 @@ Model::CompareFolderNamesFirst(const Model* compareModel) const
 	const Model* resolvedCompareModel = compareModel->ResolveIfLink();
 	const Model* resolvedMe = ResolveIfLink();
 
-	if (resolvedMe->IsVolume()) {
-		if (!resolvedCompareModel->IsVolume())
-			return -1;
-	} else if (resolvedCompareModel->IsVolume())
-		return 1;
+	bool meIsDirOrVolume = resolvedMe->IsDirectory() || resolvedMe->IsVolume()
+		|| resolvedMe->IsVirtualDirectory();
+	bool otherIsDirOrVolume = resolvedCompareModel->IsDirectory()
+		|| resolvedCompareModel->IsVolume()
+		|| resolvedCompareModel->IsVirtualDirectory();
 
-	if (resolvedMe->IsDirectory()) {
-		if (!resolvedCompareModel->IsDirectory())
+	if (meIsDirOrVolume) {
+		if (!otherIsDirOrVolume)
 			return -1;
-	} else if (resolvedCompareModel->IsDirectory())
+	} else if (otherIsDirOrVolume)
 		return 1;
 
 	return NaturalCompare(Name(), compareModel->Name());
@@ -344,18 +351,19 @@ Model::CompareFolderNamesFirst(const Model* compareModel) const
 const char*
 Model::Name() const
 {
-	static const char* kRootNodeName = B_TRANSLATE_MARK("Disks");
-	static const char* kTrashNodeName = B_TRANSLATE_MARK("Trash");
-	static const char* kDesktopNodeName = B_TRANSLATE_MARK("Desktop");
+	static const char* kRootNodeName = B_TRANSLATE_MARK(B_DISKS_DIR_NAME);
+	static const char* kTrashNodeName = B_TRANSLATE_MARK(B_TRASH_DIR_NAME);
+	static const char* kDesktopNodeName = B_TRANSLATE_MARK(B_DESKTOP_DIR_NAME);
 
 	switch (fBaseType) {
 		case kRootNode:
 			return B_TRANSLATE_NOCOLLECT(kRootNodeName);
 
 		case kVolumeNode:
-			if (fVolumeName)
+			if (fVolumeName != NULL)
 				return fVolumeName;
 			break;
+
 		case kTrashNode:
 			return B_TRANSLATE_NOCOLLECT(kTrashNodeName);
 
@@ -364,7 +372,6 @@ Model::Name() const
 
 		default:
 			break;
-
 	}
 
 	if (fHasLocalizedName && gLocalizedNamePreferred)
@@ -381,6 +388,7 @@ Model::OpenNode(bool writable)
 		return B_OK;
 
 	OpenNodeCommon(writable);
+
 	return fStatus;
 }
 
@@ -402,6 +410,7 @@ Model::UpdateStatAndOpenNode(bool writable)
 		return fStatus;
 
 	OpenNodeCommon(writable);
+
 	return fStatus;
 }
 
@@ -428,6 +437,7 @@ Model::OpenNodeCommon(bool writable)
 		case kExecutableNode:
 		case kQueryNode:
 		case kQueryTemplateNode:
+		case kVirtualDirectoryNode:
 			// open or reopen
 			delete fNode;
 			fNode = new BFile(&fEntryRef,
@@ -516,6 +526,7 @@ Model::CloseNode()
 #ifdef CHECK_OPEN_MODEL_LEAKS
 	if (writableOpenModelList)
 		writableOpenModelList->RemoveItem(this);
+
 	if (readOnlyOpenModelList)
 		readOnlyOpenModelList->RemoveItem(this);
 #endif
@@ -606,7 +617,8 @@ Model::FinishSettingUpType()
 	// disk again for models that do not have an icon defined by the node
 	if (IsNodeOpen()
 		&& fBaseType != kLinkNode
-		&& !CheckNodeIconHintPrivate(fNode, dynamic_cast<TTracker*>(be_app) == NULL)
+		&& !CheckNodeIconHintPrivate(fNode,
+			dynamic_cast<TTracker*>(be_app) == NULL)
 		&& !HasVectorIconHint(fNode)) {
 			// when checking for the node icon hint, if we are libtracker,
 			// only check for small icons - checking for the large icons
@@ -631,6 +643,8 @@ Model::FinishSettingUpType()
 				fBaseType = kQueryNode;
 			else if (strcmp(mimeString, B_QUERY_TEMPLATE_MIMETYPE) == 0)
 				fBaseType = kQueryTemplateNode;
+			else if (strcmp(mimeString, kVirtualDirectoryMimeType) == 0)
+				fBaseType = kVirtualDirectoryNode;
 
 			if (info.GetPreferredApp(mimeString) == B_OK) {
 				if (fPreferredAppName)
@@ -652,7 +666,8 @@ Model::FinishSettingUpType()
 					fBaseType = kDesktopNode;
 			}
 
-			fMimeType = B_DIR_MIMETYPE;	// should use a shared string here
+			fMimeType = B_DIR_MIMETYPE;
+				// should use a shared string here
 			if (IsNodeOpen()) {
 				BNodeInfo info(fNode);
 				if (info.GetType(mimeString) == B_OK)
@@ -687,9 +702,9 @@ Model::FinishSettingUpType()
 			}
 
 			char name[B_FILE_NAME_LENGTH];
-			BVolume	volume(NodeRef()->device);
+			BVolume volume(NodeRef()->device);
 			if (volume.InitCheck() == B_OK && volume.GetName(name) == B_OK) {
-				if (fVolumeName)
+				if (fVolumeName != NULL)
 					DeletePreferredAppVolumeNameLinkTo();
 
 				fVolumeName = strdup(name);
@@ -702,7 +717,8 @@ Model::FinishSettingUpType()
 		}
 
 		case kLinkNode:
-			fMimeType = B_LINK_MIMETYPE;	// should use a shared string here
+			fMimeType = B_LINK_MIMETYPE;
+				// should use a shared string here
 			break;
 
 		case kExecutableNode:
@@ -831,13 +847,15 @@ Model::GetPreferredAppForBrokenSymLink(BString &result)
 		= info.GetPreferredApp(result.LockBuffer(B_MIME_TYPE_LENGTH));
 	result.UnlockBuffer();
 
-	if (error != B_OK)
+	if (error != B_OK) {
 		// Tracker will have to do
 		result = kTrackerSignature;
+	}
 }
 
 
-// Node monitor updating stuff
+//	#pragma mark - Node monitor updating methods
+
 
 void
 Model::UpdateEntryRef(const node_ref* dirNode, const char* name)
@@ -946,7 +964,9 @@ Model::StatChanged()
 	return false;
 }
 
-// Mime handling stuff
+
+// 	#pragma mark - Mime handling methods
+
 
 bool
 Model::IsDropTarget(const Model* forDocument, bool traverse) const
@@ -961,7 +981,8 @@ Model::IsDropTarget(const Model* forDocument, bool traverse) const
 		default:
 			break;
 	}
-	if (!forDocument)
+
+	if (forDocument == NULL)
 		return true;
 
 	if (traverse) {
@@ -980,9 +1001,10 @@ Model::IsDropTarget(const Model* forDocument, bool traverse) const
 
 		return SupportsMimeType(mimeType, 0) != kDoesNotSupportType;
 	}
+
 	// do some mime-based matching
 	const char* documentMimeType = forDocument->MimeType();
-	if (!documentMimeType)
+	if (documentMimeType == NULL)
 		return false;
 
 	return SupportsMimeType(documentMimeType, 0) != kDoesNotSupportType;
@@ -992,11 +1014,11 @@ Model::IsDropTarget(const Model* forDocument, bool traverse) const
 Model::CanHandleResult
 Model::CanHandleDrops() const
 {
-	if (IsDirectory())
+	if (IsDirectory()) {
 		// directories take anything
 		// resolve permissions here
 		return kCanHandle;
-
+	}
 
 	if (IsSymLink()) {
 		// descend into symlink and try again on it's target
@@ -1036,6 +1058,7 @@ enum {
 	kMatch
 };
 
+
 static int32
 MatchMimeTypeString(/*const */BString* documentType, const char* handlerType)
 {
@@ -1047,9 +1070,10 @@ MatchMimeTypeString(/*const */BString* documentType, const char* handlerType)
 	int32 supertypeOnlyLength = 0;
 	const char* tmp = strstr(handlerType, "/");
 
-	if (!tmp)
+	if (tmp == NULL) {
 		// no subtype - supertype string only
 		supertypeOnlyLength = (int32)strlen(handlerType);
+	}
 
 	if (supertypeOnlyLength) {
 		// compare just the supertype
@@ -1086,8 +1110,8 @@ Model::SupportsMimeType(const char* type, const BObjectList<BString>* list,
 		return kDoesNotSupportType;
 
 	for (int32 index = 0; ; index++) {
-
 		// check if this model lists the type of dropped document as supported
+
 		const char* mimeSignature;
 		ssize_t bufferLength;
 
@@ -1106,7 +1130,7 @@ Model::SupportsMimeType(const char* type, const BObjectList<BString>* list,
 
 		int32 match;
 
-		if (type || (list != NULL && list->IsEmpty())) {
+		if (type != NULL || (list != NULL && list->IsEmpty())) {
 			BString typeString(type);
 			match = MatchMimeTypeString(&typeString, mimeSignature);
 		} else {
@@ -1145,6 +1169,7 @@ Model::IsDropTargetForList(const BObjectList<BString>* list) const
 		default:
 			break;
 	}
+
 	return SupportsMimeType(0, list) != kDoesNotSupportType;
 }
 
@@ -1281,6 +1306,7 @@ Model::GetVersionString(BString &result, version_kind kind)
 	sprintf(vstr, "%" B_PRId32 ".%" B_PRId32 ".%" B_PRId32, version.major,
 		version.middle, version.minor);
 	result = vstr;
+
 	return B_OK;
 }
 
@@ -1334,6 +1360,10 @@ Model::PrintToStream(int32 level, bool deep)
 			PRINT(("volume, name %s\n", fVolumeName ? fVolumeName : ""));
 			break;
 
+		case kVirtualDirectoryNode:
+			PRINT(("virtual directory\n"));
+			break;
+
 		default:
 			PRINT(("unknown\n"));
 			break;
@@ -1352,29 +1382,40 @@ Model::PrintToStream(int32 level, bool deep)
 		case kUnknownSource:
 			PRINT(("unknown\n"));
 			break;
+
 		case kUnknownNotFromNode:
 			PRINT(("unknown but not from a node\n"));
 			break;
+
 		case kTrackerDefault:
 			PRINT(("tracker default\n"));
 			break;
+
 		case kTrackerSupplied:
 			PRINT(("tracker supplied\n"));
 			break;
+
 		case kMetaMime:
 			PRINT(("metamime\n"));
 			break;
+
 		case kPreferredAppForType:
 			PRINT(("preferred app for type\n"));
 			break;
+
 		case kPreferredAppForNode:
 			PRINT(("preferred app for node\n"));
 			break;
+
 		case kNode:
 			PRINT(("node\n"));
 			break;
+
 		case kVolume:
 			PRINT(("volume\n"));
+			break;
+
+		default:
 			break;
 	}
 
@@ -1490,6 +1531,7 @@ Model::TrackIconSource(icon_size size)
 #ifdef CHECK_OPEN_MODEL_LEAKS
 
 namespace BPrivate {
+
 #include <stdio.h>
 
 void
@@ -1507,6 +1549,7 @@ DumpOpenModels(bool extensive)
 				printf("%s\n", readOnlyOpenModelList->ItemAt(index)->Name());
 		}
 	}
+
 	if (writableOpenModelList) {
 		int32 count = writableOpenModelList->CountItems();
 		printf("%ld models open writable:\n", count);

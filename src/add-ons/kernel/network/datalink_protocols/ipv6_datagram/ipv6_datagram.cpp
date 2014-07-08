@@ -92,7 +92,7 @@ struct router_advertisement_header {
 	uint16		router_lifetime;
 	uint32		reachable_time;
 	uint32		retransmit_timer;
-	uint8		options[];
+	uint8		options[0];
 } _PACKED;
 
 
@@ -251,7 +251,7 @@ put_request_buffer(ndp_entry* entry, net_buffer* buffer)
 static void
 delete_request_buffer(ndp_entry* entry)
 {
-	net_buffer* buffer = atomic_pointer_set(&entry->request_buffer,
+	net_buffer* buffer = atomic_pointer_get_and_set(&entry->request_buffer,
 		kDeletedBuffer);
 	if (buffer != NULL && buffer != kDeletedBuffer)
 		gBufferModule->free(buffer);

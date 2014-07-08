@@ -66,7 +66,7 @@ extern void __length_error (const char *);
 #endif
 
 #ifdef __HAIKU__
-extern "C" __haiku_int32 atomic_add(volatile __haiku_int32* value,
+extern "C" __haiku_int32 atomic_add(__haiku_int32* value,
 	__haiku_int32 addvalue);
 #endif	/* __HAIKU__ */
 
@@ -82,7 +82,7 @@ private:
     charT* data () { return reinterpret_cast<charT *>(this + 1); }
     charT& operator[] (size_t s) { return data () [s]; }
 #ifdef __HAIKU__
-    charT* grab () { if (selfish) return clone (); atomic_add((volatile __haiku_int32*) &ref, 1); return data (); }
+    charT* grab () { if (selfish) return clone (); atomic_add((__haiku_int32*) &ref, 1); return data (); }
     void release() { if (atomic_add((__haiku_int32*) &ref, -1) == 1) delete this; }
 #else
     charT* grab () { if (selfish) return clone (); ++ref; return data (); }
@@ -408,13 +408,15 @@ public:
   basic_string substr (size_type pos = 0, size_type n = npos) const
     { return basic_string (*this, pos, n); }
 
+
+  // BeOS bogus versions
+  int compare (const charT* s, size_type pos, size_type n) const;
   int compare (const basic_string& str, size_type pos = 0, size_type n = npos) const;
   // There is no 'strncmp' equivalent for charT pointers.
 
-  // BeOS bogus version
-  int compare (const charT* s, size_type pos, size_type n) const;
-
-  // Correct std C++ prototype
+  // Correct std C++ prototypes
+  int compare (size_type pos, size_type n, const basic_string& str) const
+	{ return compare(str, pos, n); }
   int compare (size_type pos, size_type n, const charT* s) const
     { return compare(s, pos, n); }
   int compare (const charT* s, size_type pos = 0) const

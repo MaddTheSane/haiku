@@ -342,16 +342,19 @@ TMailWindow::TMailWindow(BRect rect, const char* title, TMailApp* app,
 		new BMessage(M_FIND_AGAIN), 'G'));
 	if (!fIncoming) {
 		menu->AddSeparatorItem();
-		menu->AddItem(fQuote =new BMenuItem(B_TRANSLATE("Quote"),
-			new BMessage(M_QUOTE), B_RIGHT_ARROW));
-		menu->AddItem(fRemoveQuote = new BMenuItem(B_TRANSLATE("Remove quote"),
-			new BMessage(M_REMOVE_QUOTE), B_LEFT_ARROW));
+		fQuote = new BMenuItem(B_TRANSLATE("Quote"),
+			new BMessage(M_QUOTE), '\'');
+		menu->AddItem(fQuote);
+		fRemoveQuote = new BMenuItem(B_TRANSLATE("Remove quote"),
+			new BMessage(M_REMOVE_QUOTE), '\'', B_SHIFT_KEY);
+		menu->AddItem(fRemoveQuote);
+
 		menu->AddSeparatorItem();
 		fSpelling = new BMenuItem(B_TRANSLATE("Check spelling"),
 			new BMessage(M_CHECK_SPELLING), ';');
 		menu->AddItem(fSpelling);
 		if (fApp->StartWithSpellCheckOn())
-			PostMessage (M_CHECK_SPELLING);
+			PostMessage(M_CHECK_SPELLING);
 	}
 	menu->AddSeparatorItem();
 	menu->AddItem(item = new BMenuItem(
@@ -2693,7 +2696,7 @@ TMailWindow::TrainMessageAs(const char *CommandWord)
 				BPath path;
 				entry_ref ref;
 				directory_which places[]
-					= {B_COMMON_BIN_DIRECTORY, B_BEOS_BIN_DIRECTORY};
+					= {B_SYSTEM_NONPACKAGED_BIN_DIRECTORY, B_SYSTEM_BIN_DIRECTORY};
 				for (int32 i = 0; i < 2; i++) {
 					find_directory(places[i],&path);
 					path.Append("spamdbm");

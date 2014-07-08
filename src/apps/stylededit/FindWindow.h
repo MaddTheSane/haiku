@@ -6,8 +6,8 @@
  *		Mattias Sundblad
  *		Andrew Bachmann
  */
-#ifndef FIND_WINDOW_H 
-#define FIND_WINDOW_H 
+#ifndef FIND_WINDOW_H
+#define FIND_WINDOW_H
 
 
 #include <Window.h>
@@ -26,6 +26,8 @@ class FindWindow : public BWindow {
 
 		virtual void	MessageReceived(BMessage* message);
 		virtual void	DispatchMessage(BMessage* message, BHandler* handler);
+		virtual	bool	QuitRequested();
+		virtual void	Show();
 
 	private:
 		void			_SendMessage();

@@ -316,7 +316,7 @@ PPCVMTranslationMap::~PPCVMTranslationMap()
 
 	// mark the vsid base not in use
 	int baseBit = fVSIDBase >> VSID_BASE_SHIFT;
-	atomic_and((vint32 *)&sVSIDBaseBitmap[baseBit / 32],
+	atomic_and((int32 *)&sVSIDBaseBitmap[baseBit / 32],
 			~(1 << (baseBit % 32)));
 }
 
@@ -793,7 +793,7 @@ status_t
 arch_vm_translation_map_early_query(addr_t va, phys_addr_t *out_physical)
 {
 	//PANIC_UNIMPLEMENTED();
-	panic("vm_translation_map_quick_query(): not yet implemented\n");
+	panic("vm_translation_map_early_query(): not yet implemented\n");
 	return B_OK;
 }
 

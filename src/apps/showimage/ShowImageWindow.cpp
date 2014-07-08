@@ -1,5 +1,5 @@
 /*
- * Copyright 2003-2011, Haiku, Inc. All Rights Reserved.
+ * Copyright 2003-2014, Haiku, Inc. All Rights Reserved.
  * Copyright 2004-2005 yellowTAB GmbH. All Rights Reserverd.
  * Copyright 2006 Bernd Korz. All Rights Reserved
  * Distributed under the terms of the MIT License.
@@ -25,6 +25,7 @@
 #include <Application.h>
 #include <Bitmap.h>
 #include <BitmapStream.h>
+#include <Button.h>
 #include <Catalog.h>
 #include <Clipboard.h>
 #include <Entry.h>
@@ -174,31 +175,33 @@ ShowImageWindow::ShowImageWindow(BRect frame, const entry_ref& ref,
 	// Add the tool icons.
 
 //	fToolBarView->AddAction(MSG_FILE_OPEN, be_app,
-//		tool_bar_icon(kIconDocumentOpen), B_TRANSLATE("Open"B_UTF8_ELLIPSIS));
+//		tool_bar_icon(kIconDocumentOpen), B_TRANSLATE("Open" B_UTF8_ELLIPSIS));
 	fToolBarView->AddAction(MSG_FILE_PREV, this,
-		tool_bar_icon(kIconGoPrevious), B_TRANSLATE("Previous file"));
+		tool_bar_icon(kIconGoPrevious), B_TRANSLATE("Previous file"), false);
 	fToolBarView->AddAction(MSG_FILE_NEXT, this, tool_bar_icon(kIconGoNext),
-		B_TRANSLATE("Next file"));
+		B_TRANSLATE("Next file"), false);
 	BMessage* fullScreenSlideShow = new BMessage(MSG_SLIDE_SHOW);
 	fullScreenSlideShow->AddBool("full screen", true);
 	fToolBarView->AddAction(fullScreenSlideShow, this,
-		tool_bar_icon(kIconMediaMovieLibrary), B_TRANSLATE("Slide show"));
+		tool_bar_icon(kIconMediaMovieLibrary), B_TRANSLATE("Slide show"),
+		false);
 	fToolBarView->AddSeparator();
 	fToolBarView->AddAction(MSG_SELECTION_MODE, this,
 		tool_bar_icon(kIconDrawRectangularSelection),
-		B_TRANSLATE("Selection mode"));
+		B_TRANSLATE("Selection mode"), false);
 	fToolBarView->AddSeparator();
 	fToolBarView->AddAction(kMsgOriginalSize, this,
-		tool_bar_icon(kIconZoomOriginal), B_TRANSLATE("Original size"));
+		tool_bar_icon(kIconZoomOriginal), B_TRANSLATE("Original size"), true);
 	fToolBarView->AddAction(kMsgFitToWindow, this,
-		tool_bar_icon(kIconZoomFitBest), B_TRANSLATE("Fit to window"));
+		tool_bar_icon(kIconZoomFitBest), B_TRANSLATE("Fit to window"), false);
 	fToolBarView->AddAction(MSG_ZOOM_IN, this, tool_bar_icon(kIconZoomIn),
-		B_TRANSLATE("Zoom in"));
+		B_TRANSLATE("Zoom in"), false);
 	fToolBarView->AddAction(MSG_ZOOM_OUT, this, tool_bar_icon(kIconZoomOut),
-		B_TRANSLATE("Zoom out"));
+		B_TRANSLATE("Zoom out"), false);
 	fToolBarView->AddGlue();
 	fToolBarView->AddAction(MSG_FULL_SCREEN, this,
-		tool_bar_icon(kIconViewWindowed), B_TRANSLATE("Leave full screen"));
+		tool_bar_icon(kIconViewWindowed), B_TRANSLATE("Leave full screen"),
+		false);
 	fToolBarView->SetActionVisible(MSG_FULL_SCREEN, false);
 
 	fToolBarView->ResizeTo(viewFrame.Width(), fToolBarView->MinSize().height);
@@ -357,7 +360,7 @@ ShowImageWindow::_BuildViewMenu(BMenu* menu, bool popupMenu)
 
 	if (!popupMenu) {
 		_AddItemMenu(menu, B_TRANSLATE("Show tool bar"), kMsgToggleToolBar,
-			'T', 0, this);
+			'B', 0, this);
 		_MarkMenuItem(menu, kMsgToggleToolBar,
 			!fToolBarView->IsHidden(fToolBarView));
 	}
@@ -394,7 +397,7 @@ ShowImageWindow::_AddMenus(BMenuBar* bar)
 
 	// Add recent files to "Open File" entry as sub-menu.
 	BMenuItem* item = new BMenuItem(BRecentFilesList::NewFileListMenu(
-		B_TRANSLATE("Open"B_UTF8_ELLIPSIS), NULL, NULL, be_app, 10, true,
+		B_TRANSLATE("Open" B_UTF8_ELLIPSIS), NULL, NULL, be_app, 10, true,
 		NULL, kApplicationSignature), new BMessage(MSG_FILE_OPEN));
 	item->SetShortcut('O', 0);
 	item->SetTarget(be_app);
@@ -408,6 +411,7 @@ ShowImageWindow::_AddMenus(BMenuBar* bar)
 		// to from the Be bitmap image format
 	menu->AddItem(menuSaveAs);
 	_AddItemMenu(menu, B_TRANSLATE("Close"), B_QUIT_REQUESTED, 'W', 0, this);
+	_AddItemMenu(menu, B_TRANSLATE("Move to Trash"), kMsgDeleteCurrentFile, 'T', 0, this);
 	menu->AddSeparatorItem();
 	_AddItemMenu(menu, B_TRANSLATE("Page setup" B_UTF8_ELLIPSIS),
 		MSG_PAGE_SETUP, 0, 0, this);
@@ -965,6 +969,12 @@ ShowImageWindow::MessageReceived(BMessage* message)
 			break;
 
 		case kMsgOriginalSize:
+			if (message->FindInt32("behavior") == BButton::B_TOGGLE_BEHAVIOR) {
+				bool force = (message->FindInt32("be:value") == B_CONTROL_ON);
+				fImageView->ForceOriginalSize(force);
+				if (!force)
+					break;
+			}
 			fImageView->SetZoom(1.0);
 			break;
 

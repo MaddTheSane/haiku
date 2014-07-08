@@ -223,7 +223,7 @@ DWindow::DWindow(BRect frame, DWindowHWInterface* interface,
 		DWindowBuffer* buffer)
 	:
 	BWindow(frame, "Haiku App Server", B_TITLED_WINDOW_LOOK,
-		B_FLOATING_ALL_WINDOW_FEEL,
+		B_NORMAL_WINDOW_FEEL,
 		B_NOT_ZOOMABLE | B_NOT_RESIZABLE | B_NOT_MOVABLE),
 	fHWInterface(interface),
 	fBuffer(buffer)
@@ -465,8 +465,9 @@ DWindowHWInterface::_OpenAccelerant(int device)
 
 	struct stat accelerant_stat;
 	const static directory_which dirs[] = {
+		B_USER_NONPACKAGED_ADDONS_DIRECTORY,
 		B_USER_ADDONS_DIRECTORY,
-		B_COMMON_ADDONS_DIRECTORY,
+		B_SYSTEM_NONPACKAGED_ADDONS_DIRECTORY,
 		B_SYSTEM_ADDONS_DIRECTORY
 	};
 

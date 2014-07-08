@@ -1,4 +1,5 @@
 /*
+ * Copyright 2014, Paweł Dziepak, pdziepak@quarnos.org.
  * Copyright 2011, Ingo Weinhold, ingo_weinhold@gmx.de.
  * Distributed under the terms of the MIT License.
  */
@@ -21,17 +22,19 @@ struct Team;
 struct Thread;
 
 
-struct UserEvent {
+struct UserEvent : public BReferenceable {
 	virtual						~UserEvent();
 
 	virtual	status_t			Fire() = 0;
 };
 
 
-struct SignalEvent : UserEvent {
+struct SignalEvent : UserEvent, private DPCCallback {
 	virtual						~SignalEvent();
 
 			void				SetUserValue(union sigval userValue);
+
+	virtual	status_t			Fire();
 
 protected:
 			struct EventSignal;
@@ -41,6 +44,7 @@ protected:
 
 protected:
 			EventSignal*		fSignal;
+			int32				fPendingDPC;
 };
 
 
@@ -48,7 +52,8 @@ struct TeamSignalEvent : SignalEvent {
 	static	TeamSignalEvent*	Create(Team* team, uint32 signalNumber,
 									int32 signalCode, int32 errorCode);
 
-	virtual	status_t			Fire();
+protected:
+	virtual	void				DoDPC(DPCQueue* queue);
 
 private:
 								TeamSignalEvent(Team* team,
@@ -64,7 +69,8 @@ struct ThreadSignalEvent : SignalEvent {
 									int32 signalCode, int32 errorCode,
 									pid_t sendingTeam);
 
-	virtual	status_t			Fire();
+protected:
+	virtual	void				DoDPC(DPCQueue* queue);
 
 private:
 								ThreadSignalEvent(Thread* thread,
@@ -92,7 +98,7 @@ private:
 private:
 			ThreadCreationAttributes fCreationAttributes;
 			char				fThreadName[B_OS_NAME_LENGTH];
-			bool				fPendingDPC;
+			int32				fPendingDPC;
 };
 
 

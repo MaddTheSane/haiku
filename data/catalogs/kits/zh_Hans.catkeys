@@ -1,4 +1,4 @@
-1	english	x-vnd.Haiku-libbe	677628532
+1	english	x-vnd.Haiku-libbe	3504008668
 gamma	AboutWindow		伽马
 beta	AboutWindow		beta
 %3.2f GiB	StringForSize		%3.2f GiB
@@ -14,9 +14,11 @@ alpha	AboutWindow		测试
 Error	PrintJob		错误
 No Pages to print!	PrintJob		无打印页面！
 All Rights Reserved.	AboutWindow		保留所有权利
+About %app%	AboutWindow		关于 %app%
 OK	Dragger		确定
 OK	PrintJob		确定
 Green:	ColorControl		绿色:
+Ok	AboutWindow		确定
 Version history:	AboutWindow		版本历史：
 Remove replicant	Dragger		删除克隆控件
 OK	ZombieReplicantView		确定

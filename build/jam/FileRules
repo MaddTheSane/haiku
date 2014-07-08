@@ -1,3 +1,20 @@
+rule Copy
+{
+	if $(2) {
+		SEARCH on $(2) += $(SEARCH_SOURCE) ;
+		Depends $(1) : <build>copyattr $(2) ;
+		Copy1 $(1) : <build>copyattr $(2) ;
+	}
+}
+
+
+actions Copy1
+{
+	$(HOST_ADD_BUILD_COMPATIBILITY_LIB_DIR)
+	"$(2[1])" -d "$(2[2-])" "$(1)"
+}
+
+
 rule SymLink
 {
 	# SymLink <target> : <source> : <makeDefaultDependencies> ;
@@ -186,7 +203,8 @@ rule UnarchiveObjects
 
 actions UnarchiveObjects
 {
-	( cd $(1[1]:D) && $(TARGET_AR) $(TARGET_UNARFLAGS) "$(2)" $(1:BS) )
+	( cd $(1[1]:D) && $(TARGET_AR_$(TARGET_PACKAGING_ARCH)) \
+		$(TARGET_UNARFLAGS_$(TARGET_PACKAGING_ARCH)) "$(2)" $(1:BS) )
 }
 
 
@@ -220,7 +238,7 @@ rule ExtractArchive directory : entries : archiveFile : grist
 		targets += $(target) ;
 	}
 
-	LOCATE on $(targets) = $(directory) ;
+	LOCATE on $(targets) = $(directory:G=) ;
 	Depends $(targets) : $(directory) $(archiveFile) ;
 	NoUpdate $(targets) ;
 
@@ -235,39 +253,52 @@ rule ExtractArchive directory : entries : archiveFile : grist
 		Depends $(directory) : $(archiveFile) ;
 		switch $(archiveFile:S)
 		{
-			case .zip 	: ExtractZipArchive1 $(targets) : $(directory)
-							$(archiveFile) ;
-			case .tgz 	: ExtractTarArchive1 $(targets) : $(directory)
-							$(archiveFile) ;
-			case ""		: Exit "ExtractArchive: No archive passed" ;
-			case * 		: Exit "ExtractArchive: Unhandled archive extension:
-							$(archiveFile:S)" ;
+			case .zip :
+				ExtractZipArchive1 $(directory) : $(archiveFile) ;
+
+			case .tgz :
+				ExtractTarArchive1 $(directory) : $(archiveFile) ;
+
+			case .hpkg :
+				Depends $(directory) : <build>package ;
+				ExtractHPKGArchive1 $(directory)
+					: <build>package $(archiveFile) ;
+
+			case "" :
+				Exit "ExtractArchive: No archive passed" ;
+
+			case * :
+				Exit "ExtractArchive: Unhandled archive extension:"
+					"$(archiveFile:S)" ;
 		}
 		INITIALIZED on $(directory) = 1 ;
 	}
 
-	# Use a dummy rule so that it looks to jam like the targets are actually
-	# built from the directory target.
-	ExtractArchiveDummy $(targets) : $(directory) ;
-
 	return $(targets) ;
 }
 
+
 actions ExtractZipArchive1
 {
-	mkdir -p $(2[1])
-	unzip -q -u -o -d $(2[1]) $(2[2])
+	mkdir -p $(1)
+	unzip -q -u -o -d $(1) $(2)
 }
+
 
 actions ExtractTarArchive1
 {
-	mkdir -p $(2[1])
-	tar -C $(2[1]) -xf $(2[2])
+	mkdir -p $(1)
+	tar -C $(1) -xf $(2)
 }
 
-actions ExtractArchiveDummy
+
+actions ExtractHPKGArchive1
 {
+	mkdir -p "$(1)"
+	$(HOST_ADD_BUILD_COMPATIBILITY_LIB_DIR)
+	$(2[1]) extract -C "$(1)" "$(2[2])"
 }
+
 
 rule ObjectReference
 {
@@ -297,51 +328,111 @@ rule ObjectReferences
 	}
 }
 
+
 rule CopySetHaikuRevision target : source
 {
 	# CopySetHaikuRevision <target> : <source>
 	#
-	# Copy <source> to <target>, writing the SVN revision of the working root
+	# Copy <source> to <target>, writing the Git revision of the working
 	# directory into the haiku revision section of <target>.
 	#
 	# <target> - Output file target. Gristed and located target.
 	# <source> - ELF object to be copied. Gristed and located target.
 
-	# If existent, make the target depend on the .svn/entries file in the
-	# root directory, so it gets updated when the revision changes due to
-	# "svn up".
-	if [ Glob [ FDirName $(HAIKU_TOP) .svn ] : entries ] {
-		local svnEntries = <haiku-rootdir-svn>entries ;
-		SEARCH on $(svnEntries) = [ FDirName $(HAIKU_TOP) .svn ] ;
-		Depends $(target) : $(svnEntries) ;
-	} else if [ Glob [ FDirName $(HAIKU_TOP) .git ] : index ] {
-		local gitIndex = <haiku-rootdir-git>index ;
-		SEARCH on $(gitIndex) = [ FDirName $(HAIKU_TOP) .git ] ;
-		Depends $(target) : $(gitIndex) ;
-	} else if [ Glob [ FDirName $(HAIKU_TOP) .hg ] : store ] {
-		local hgStore = <haiku-rootdir-hg>store ;
-		SEARCH on $(hgStore) = [ FDirName $(HAIKU_TOP) .hg ] ;
-		Depends $(target) : $(hgStore) ;
-	}
+	PropagateContainerUpdateTargetFlags $(target) : $(source) ;
 
-	HAIKU_INCLUDE_IN_IMAGE on $(target)
-		= [ on $(source) return $(HAIKU_INCLUDE_IN_IMAGE) ] ;
+	HAIKU_TARGET_IS_EXECUTABLE on $(target) = [ on $(source)
+		return $(HAIKU_TARGET_IS_EXECUTABLE) ] ;
 
-	Depends $(target) : <build>copyattr <build>set_haiku_revision $(source) ;
+	local revisionFile = [ DetermineHaikuRevision ] ;
+
+	Depends $(target)
+		: <build>copyattr <build>set_haiku_revision $(source) $(revisionFile) ;
 	CopySetHaikuRevision1 $(target)
-		: <build>copyattr <build>set_haiku_revision $(source) ;
+		: <build>copyattr <build>set_haiku_revision $(source) $(revisionFile) ;
 }
+
 
 actions CopySetHaikuRevision1
 {
 	$(HOST_ADD_BUILD_COMPATIBILITY_LIB_DIR)
 
-	. $(HAIKU_TOP)/build/scripts/determine_haiku_revision
-	determineHaikuRevision $(HAIKU_TOP) $(HAIKU_BUILD_OUTPUT_DIR)
+	$(2[1]) --data $(2[3]) $(1) || exit 1
 
-	$(2[1]) --data $(2[3]) $(1) &&
-	$(2[2]) $(1) ${revision}
+	revision=0
+	if [ -n "$(2[4]:E=)" ]; then
+		revision="`cat $(2[4]:E=)`"
+	fi
+	$(2[2]) $(1) "$revision"
 }
+
+
+rule DetermineHaikuRevision
+{
+	# If existing, make the target depend on the .git/index file in the
+	# root directory, so it gets updated when the revision changes due to
+	# commits or merges.
+	local gitIndex = <haiku-rootdir-git>index ;
+	local revisionFile = <haiku-rootdir>haiku-revision ;
+	if ! [ on $(gitIndex) return $(HAIKU_GIT_REVISION_DETERMINED) ] {
+		HAIKU_GIT_REVISION_DETERMINED on $(gitIndex) = 1 ;
+		MakeLocate $(revisionFile) : $(HAIKU_BUILD_OUTPUT_DIR) ;
+		LocalClean clean : $(revisionFile) ;
+		if $(HAIKU_REVISION) {
+			DetermineHaikuRevision2 $(revisionFile) ;
+		} else if [ Glob [ FDirName $(HAIKU_TOP) .git ] : index ] {
+			SEARCH on $(gitIndex) = [ FDirName $(HAIKU_TOP) .git ] ;
+			Depends $(revisionFile) : $(gitIndex) ;
+			DetermineHaikuRevision1 $(revisionFile) : $(gitIndex) ;
+		} else {
+			revisionFile = ;
+		}
+	}
+
+	return $(revisionFile) ;
+}
+
+
+actions DetermineHaikuRevision1
+{
+	$(HAIKU_TOP)/build/scripts/determine_haiku_revision $(HAIKU_TOP) $(1)
+}
+
+
+actions DetermineHaikuRevision2
+{
+	echo $(HAIKU_REVISION) > $(1)
+}
+
+
+rule DetermineEffectiveHaikuRevision
+{
+	local revisionFile = <haiku-rootdir>effective-haiku-revision ;
+	if ! [ on $(revisionFile) return $(HAIKU_EFFECTIVE_REVISION_DETERMINED) ] {
+		HAIKU_EFFECTIVE_REVISION_DETERMINED on $(revisionFile) = 1 ;
+		MakeLocate $(revisionFile) : $(HAIKU_BUILD_OUTPUT_DIR) ;
+		local rawRevision = [ DetermineHaikuRevision ] ;
+		Depends $(revisionFile) : $(rawRevision) ;
+		DetermineEffectiveHaikuRevision1 $(revisionFile) : $(rawRevision) ;
+		LocalClean clean : $(revisionFile) ;
+	}
+
+	return $(revisionFile) ;
+}
+
+
+actions DetermineEffectiveHaikuRevision1
+{
+	revision=`sed -n 's,^\(hrev[0-9]*\).*,\1,p' "$(2:E=unknown-revision)"`
+	if [ -z "$revision" ]; then
+		echo "Error: unable to determine the effective Haiku revision."
+		echo "       If you are using a Haiku clone without tags, you can set"
+		echo "       the revision tag to use with e.g. HAIKU_REVISION=hrev43210"
+		exit 1
+	fi
+	echo "${revision:-0}" > "$(1)"
+}
+
 
 rule DataFileToSourceFile sourceFile : dataFile : dataVariable : sizeVariable
 {
@@ -364,20 +455,40 @@ actions DataFileToSourceFile1
 	$(2[1]) $(DATA_VARIABLE) $(SIZE_VARIABLE) $(2[2]) $(1)
 }
 
-rule DownloadLocatedFile target : url
+rule DownloadLocatedFile target : url : source
 {
+	# DownloadLocatedFile <target> : <url> [ : <source> ] ;
+	#
+	# <source> is an optional target that <target> will be made dependent on.
+	# Its resolved path can be used in <url> via '$source'.
+
 	URL on $(target) = $(url) ;
 
-	DownloadLocatedFile1 $(target) ;
+	if $(source) {
+		Depends $(target) : $(source) ;
+	}
+
+	DownloadLocatedFile1 $(target) : $(source) ;
 }
 
 actions DownloadLocatedFile1
 {
-	wget -O "$(1)" $(URL)
+	source="$(2)"
+	if [ "$(HAIKU_NO_DOWNLOADS)" = 1 ]; then
+		echo "ERROR: Would need to download $(URL), but HAIKU_NO_DOWNLOADS is set!"
+		exit 1
+	fi
+	wget --retry-connrefused -O "$(1)" $(URL) || exit 1
+	touch "$(1)"
 }
 
-rule DownloadFile file : url
+rule DownloadFile file : url : source
 {
+	# DownloadFile <file> : <url> [ : <source> ] ;
+	#
+	# <source> is an optional target that the target will be made dependent on.
+	# Its resolved path can be used in <url> via '$source'.
+
 	file = $(file:G=download) ;
 
 	# Request the download only once.
@@ -388,8 +499,151 @@ rule DownloadFile file : url
 	HAIKU_FILE_DOWNLOAD on $(file) = 1 ;
 
 	MakeLocate $(file) : $(HAIKU_DOWNLOAD_DIR) ;
-	DownloadLocatedFile $(file) : $(url) ;
+	DownloadLocatedFile $(file) : $(url) : $(source) ;
 
 	return $(file) ;
 }
 
+
+actions ChecksumFileSHA256
+{
+	$(HOST_SHA256) $(2) \
+		| $(HOST_EXTENDED_REGEX_SED) 's,([^[:space:]]*).*,\1,' > $(1)
+		# The sed part is only necessary for sha256sum, but it doesn't harm for
+		# sha256 either.
+}
+
+
+rule Sed target : source : substitutions : targetMap
+{
+	# Sed <target> : [ <source> ] : <substitutions> [ : <targetMap> ] ;
+	#
+	# Performs substitutions in a text file. If <source> is given, that is the
+	# input, otherwise the substitutions are performed in place on <target>. The
+	# caller is responsible for locating <target>, <source>, and any other used
+	# target.
+	#
+	# <target> - The target file.
+	# <source> - The source file. If not given, the substitutions are performed
+	#	in place on <target>. If given, a dependency of <target> to <source>
+	#	will be established.
+	# <substitutions> - List of substitutions to be performed. Each element
+	#	specifies a substitution. It's a partial sed "s" command of the form
+	#	"<pattern>,<replacement>".
+	# <targetMap> - A list of elements of the form "<variable>=<mappedTarget>".
+	#	<variable> specifies a name of a shell variable, <mappedTarget> a jam
+	#	target whose bound name will be assigned to the shell variable. The
+	#	variable can be used in <substitutions>. A dependency of <target> to
+	#	<mappedTarget> will be established.
+
+	# We need a temporary (shell) file to which we write the target variable
+	# mappings and the sed invocations. This is necessary, since multiple rule
+	# invocations are allowed for a target, so that we cannot use on-target
+	# variables.
+	local script = [ NextID ] ;
+	script = temp-sed-script-$(target:BS)-$(script) ;
+
+	# process the target variable mappings
+	local mappedTargets ;
+	local targetMapElement ;
+	for targetMapElement in $(targetMap) {
+		local split = [ Match ([^=]+)=(.*) : $(targetMapElement) ] ;
+		HAIKU_SED_SCRIPT_VARIABLE on $(script) += $(split[1]) ;
+		local mappedTarget = $(split[2]) ;
+		mappedTargets += $(mappedTarget) ;
+	}
+
+	HAIKU_SED_SCRIPT_SUBSTITUTIONS on $(script)
+		= "-e \"s,$(substitutions),g\"" ;
+	HAIKU_SED_SCRIPT_SOURCE on $(script) = $(source) ;
+	if $(source) {
+		HAIKU_SED_SCRIPT_SOURCE_ARGUMENTS on $(script) = ">" ;
+	} else {
+		HAIKU_SED_SCRIPT_SOURCE_ARGUMENTS on $(script) = -i ;
+	}
+
+	# build the script
+	MakeLocate $(script) : $(HAIKU_TMP_DIR) ;
+	Depends $(script) : $(mappedTargets) $(source) ;
+	SedCreateScript $(script) : $(mappedTargets) ;
+
+	# build the target
+	Depends $(target) : $(script) ;
+	Sed1 $(target) : $(script) ;
+	RmTemps $(target) : $(script) ;
+}
+
+
+actions SedCreateScript bind HAIKU_SED_SCRIPT_SOURCE
+{
+	set -o errexit
+
+	$(RM) "$(1)"
+	touch "$(1)"
+
+	set -- $(2)
+	for variable in "$(HAIKU_SED_SCRIPT_VARIABLE)" ; do
+		echo "$variable=\"$1\"" >> "$(1)"
+		shift
+	done
+
+	echo sed '$(HAIKU_SED_SCRIPT_SUBSTITUTIONS)' \
+		'"$(HAIKU_SED_SCRIPT_SOURCE)"' "$(HAIKU_SED_SCRIPT_SOURCE_ARGUMENTS)" \
+		'"$target"' >> "$(1)"
+}
+
+
+actions Sed1
+{
+	set -o errexit
+
+	target="$(1)"
+	. "$(2)"
+}
+
+
+rule StripFile target : source
+{
+	# Note: The caller is reponsible for matching TARGET_PACKAGING_ARCH with
+	# the architecture the target was built for.
+	STRIP on $(target) = $(HAIKU_STRIP_$(TARGET_PACKAGING_ARCH)) ;
+
+	PropagateContainerUpdateTargetFlags $(target) : $(source) ;
+
+	LocalClean clean : $(target) ;
+	Depends $(target) : $(source) <build>xres <build>copyattr ;
+	StripFile1 $(target) : $(source) <build>xres <build>copyattr ;
+}
+
+
+actions StripFile1
+{
+	$(HOST_ADD_BUILD_COMPATIBILITY_LIB_DIR)
+	"$(STRIP)" -o "$(1)" "$(2[1])"
+	"$(2[2])" -o "$(1)" "$(2[1])"
+	"$(2[3])" "$(2[1])" "$(1)"
+}
+
+
+rule StripFiles files
+{
+	# Note: The caller is reponsible for matching TARGET_PACKAGING_ARCH with
+	# the architecture the targets were built for.
+	local strippedFiles ;
+	local file ;
+	for file in $(files) {
+		local strippedFile = $(file:G=stripped_$(file:G)) ;
+		# Place the stripped file in a "stripped" subdirectory of the file's
+		# location.
+		local location = [ on $(file) return $(LOCATE) ] ;
+		if ! $(location) {
+			location
+				= $(TARGET_COMMON_DEBUG_OBJECT_DIR_$(TARGET_PACKAGING_ARCH)) ;
+		}
+		MakeLocateArch $(strippedFile) : [ FDirName $(location) stripped ] ;
+		StripFile $(strippedFile) : $(file) ;
+		strippedFiles += $(strippedFile) ;
+	}
+
+	return $(strippedFiles) ;
+}

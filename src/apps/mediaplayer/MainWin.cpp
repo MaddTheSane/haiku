@@ -160,6 +160,22 @@ static property_info sPropertyInfo[] = {
 		{ B_DIRECT_SPECIFIER, 0 },
 		B_TRANSLATE("Toggle fullscreen."), 0
 	},
+	{ B_TRANSLATE("Duration"), { B_GET_PROPERTY, 0 },
+		{ B_DIRECT_SPECIFIER, 0 },
+		B_TRANSLATE("Gets the duration of the currently playing item "
+			"in microseconds."), 0,
+		{ B_INT64_TYPE }
+	},
+	{ B_TRANSLATE("Position"), { B_GET_PROPERTY, B_SET_PROPERTY, 0 },
+		{ B_DIRECT_SPECIFIER, 0 },
+		B_TRANSLATE("Gets/sets the current playing position in microseconds."),
+		0, { B_INT64_TYPE }
+	},
+	{ B_TRANSLATE("Seek"), { B_SET_PROPERTY },
+		{ B_DIRECT_SPECIFIER, 0 },
+		B_TRANSLATE("Seek by the specified amounts of microseconds."), 0,
+		{ B_INT64_TYPE }
+	},
 	{ 0, { 0 }, { 0 }, 0, 0 }
 };
 
@@ -540,6 +556,43 @@ MainWin::MessageReceived(BMessage* msg)
 					PostMessage(M_TOGGLE_FULLSCREEN);
 					break;
 
+				case 10:
+					if (msg->what != B_GET_PROPERTY)
+						break;
+
+					result = reply.AddInt64("result",
+						fController->TimeDuration());
+					break;
+
+				case 11:
+				{
+					if (msg->what == B_GET_PROPERTY) {
+						result = reply.AddInt64("result",
+							fController->TimePosition());
+					} else if (msg->what == B_SET_PROPERTY) {
+						int64 newTime;
+						result = msg->FindInt64("data", &newTime);
+						if (result == B_OK)
+							fController->SetTimePosition(newTime);
+					}
+
+					break;
+				}
+
+				case 12:
+				{
+					if (msg->what != B_SET_PROPERTY)
+						break;
+
+					bigtime_t seekBy;
+					result = msg->FindInt64("data", &seekBy);
+					if (result != B_OK)
+						break;
+
+					_Wind(seekBy, 0);
+					break;
+				}
+
 				default:
 					return BWindow::MessageReceived(msg);
 			}
@@ -844,9 +897,6 @@ MainWin::MessageReceived(BMessage* msg)
 
 		case M_WIND:
 		{
-			if (!fAllowWinding)
-				break;
-
 			bigtime_t howMuch;
 			int64 frames;
 			if (msg->FindInt64("how much", &howMuch) != B_OK
@@ -854,25 +904,7 @@ MainWin::MessageReceived(BMessage* msg)
 				break;
 			}
 
-			if (fController->Lock()) {
-				if (fHasVideo && !fController->IsPlaying()) {
-					int64 newFrame = fController->CurrentFrame() + frames;
-					fController->SetFramePosition(newFrame);
-				} else {
-					bigtime_t seekTime = fController->TimePosition() + howMuch;
-					if (seekTime < 0) {
-						fInitialSeekPosition = seekTime;
-						PostMessage(M_SKIP_PREV);
-					} else if (seekTime > fController->TimeDuration()) {
-						fInitialSeekPosition = 0;
-						PostMessage(M_SKIP_NEXT);
-					} else
-						fController->SetTimePosition(seekTime);
-				}
-				fController->Unlock();
-
-				fAllowWinding = false;
-			}
+			_Wind(howMuch, frames);
 			break;
 		}
 
@@ -1255,6 +1287,9 @@ MainWin::ResolveSpecifier(BMessage* message, int32 index, BMessage* specifier,
 		case 7:
 		case 8:
 		case 9:
+		case 10:
+		case 11:
+		case 12:
 			return this;
 	}
 
@@ -1426,7 +1461,7 @@ void
 MainWin::_CreateMenu()
 {
 	fFileMenu = new BMenu(kApplicationName);
-	fPlaylistMenu = new BMenu(B_TRANSLATE("Playlist"B_UTF8_ELLIPSIS));
+	fPlaylistMenu = new BMenu(B_TRANSLATE("Playlist" B_UTF8_ELLIPSIS));
 	fAudioMenu = new BMenu(B_TRANSLATE("Audio"));
 	fVideoMenu = new BMenu(B_TRANSLATE("Video"));
 	fVideoAspectMenu = new BMenu(B_TRANSLATE("Aspect ratio"));
@@ -1442,7 +1477,7 @@ MainWin::_CreateMenu()
 	fMenuBar->AddItem(fVideoMenu);
 	fMenuBar->AddItem(fAttributesMenu);
 
-	BMenuItem* item = new BMenuItem(B_TRANSLATE("New player"B_UTF8_ELLIPSIS),
+	BMenuItem* item = new BMenuItem(B_TRANSLATE("New player" B_UTF8_ELLIPSIS),
 		new BMessage(M_NEW_PLAYER), 'N');
 	fFileMenu->AddItem(item);
 	item->SetTarget(be_app);
@@ -1450,14 +1485,14 @@ MainWin::_CreateMenu()
 	// Add recent files to "Open File" entry as sub-menu.
 	BRecentFilesList recentFiles(10, false, NULL, kAppSig);
 	item = new BMenuItem(recentFiles.NewFileListMenu(
-		B_TRANSLATE("Open file"B_UTF8_ELLIPSIS), NULL, NULL, this, 10, true,
+		B_TRANSLATE("Open file" B_UTF8_ELLIPSIS), NULL, NULL, this, 10, true,
 		NULL, kAppSig), new BMessage(M_FILE_OPEN));
 	item->SetShortcut('O', 0);
 	fFileMenu->AddItem(item);
 
 	fFileMenu->AddSeparatorItem();
 
-	fFileMenu->AddItem(new BMenuItem(B_TRANSLATE("File info"B_UTF8_ELLIPSIS),
+	fFileMenu->AddItem(new BMenuItem(B_TRANSLATE("File info" B_UTF8_ELLIPSIS),
 		new BMessage(M_FILE_INFO), 'I'));
 	fFileMenu->AddItem(fPlaylistMenu);
 	fPlaylistMenu->Superitem()->SetShortcut('P', B_COMMAND_KEY);
@@ -1471,7 +1506,7 @@ MainWin::_CreateMenu()
 	fFileMenu->AddItem(new BMenuItem(B_TRANSLATE("Always on top"),
 		new BMessage(M_TOGGLE_ALWAYS_ON_TOP), 'A'));
 
-	item = new BMenuItem(B_TRANSLATE("Settings"B_UTF8_ELLIPSIS),
+	item = new BMenuItem(B_TRANSLATE("Settings" B_UTF8_ELLIPSIS),
 		new BMessage(M_SETTINGS), 'S');
 	fFileMenu->AddItem(item);
 	item->SetTarget(be_app);
@@ -1671,7 +1706,7 @@ MainWin::_SetupTrackMenus(BMenu* audioTrackMenu, BMenu* videoTrackMenu,
 			new BMessage(M_DUMMY)));
 		subTitleTrackMenu->ItemAt(0)->SetMarked(true);
 	}
-	subTitleTrackMenu->SetEnabled(count > 1);
+	subTitleTrackMenu->SetEnabled(count > 0);
 }
 
 
@@ -2394,6 +2429,35 @@ MainWin::_ShowFullscreenControls(bool show, bool animate)
 		while (!fControls->IsHidden())
 			fControls->Hide();
 	}
+}
+
+
+// #pragma mark -
+
+
+void
+MainWin::_Wind(bigtime_t howMuch, int64 frames)
+{
+	if (!fAllowWinding || !fController->Lock())
+		return;
+
+	if (frames != 0 && fHasVideo && !fController->IsPlaying()) {
+		int64 newFrame = fController->CurrentFrame() + frames;
+		fController->SetFramePosition(newFrame);
+	} else {
+		bigtime_t seekTime = fController->TimePosition() + howMuch;
+		if (seekTime < 0) {
+			fInitialSeekPosition = seekTime;
+			PostMessage(M_SKIP_PREV);
+		} else if (seekTime > fController->TimeDuration()) {
+			fInitialSeekPosition = 0;
+			PostMessage(M_SKIP_NEXT);
+		} else
+			fController->SetTimePosition(seekTime);
+	}
+
+	fController->Unlock();
+	fAllowWinding = false;
 }
 
 

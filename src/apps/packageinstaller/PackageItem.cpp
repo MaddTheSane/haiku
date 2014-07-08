@@ -15,6 +15,7 @@
 #include <ByteOrder.h>
 #include <Catalog.h>
 #include <Directory.h>
+#include <FindDirectory.h>
 #include <fs_info.h>
 #include <Locale.h>
 #include <NodeInfo.h>
@@ -34,6 +35,8 @@ enum {
 
 static const uint32 kDefaultMode = 0777;
 static const uint8 padding[7] = { 0, 0, 0, 0, 0, 0, 0 };
+
+extern bool gVerbose;
 
 enum {
 	P_DATA = 0,
@@ -129,10 +132,8 @@ inflate_file_to_file(BFile *in, uint64 in_size, BFile *out, uint64 out_size)
 				(void)inflateEnd(&stream);
 				return B_ERROR;
 			}
-		}
-		while (stream.avail_out == 0);
-	}
-	while (bytes_read != in_size);
+		} while (stream.avail_out == 0);
+	} while (bytes_read != in_size);
 
 	(void)inflateEnd(&stream);
 
@@ -143,7 +144,7 @@ inflate_file_to_file(BFile *in, uint64 in_size, BFile *out, uint64 out_size)
 // #pragma mark - PackageItem
 
 
-PackageItem::PackageItem(BFile *parent, const BString &path, uint8 type,
+PackageItem::PackageItem(BFile* parent, const BString& path, uint8 type,
 	uint32 ctime, uint32 mtime, uint64 offset, uint64 size)
 {
 	SetTo(parent, path, type, ctime, mtime, offset, size);
@@ -156,7 +157,7 @@ PackageItem::~PackageItem()
 
 
 void
-PackageItem::SetTo(BFile *parent, const BString &path, uint8 type, uint32 ctime,
+PackageItem::SetTo(BFile* parent, const BString& path, uint8 type, uint32 ctime,
 	uint32 mtime, uint64 offset, uint64 size)
 {
 	fPackage = parent;
@@ -171,37 +172,80 @@ PackageItem::SetTo(BFile *parent, const BString &path, uint8 type, uint32 ctime,
 
 
 status_t
-PackageItem::InitPath(const char *path, BPath *destination)
+PackageItem::InitPath(const char* path, BPath* destination)
 {
 	status_t ret = B_OK;
 
 	if (fPathType == P_INSTALL_PATH) {
-		if (!path) {
+		if (gVerbose)
+			printf("InitPath - relative: %s + %s\n", path, fPath.String());
+		if (path == NULL) {
 			parser_debug("InitPath path is NULL\n");
 			return B_ERROR;
 		}
 		ret = destination->SetTo(path, fPath.String());
-	}
-	else if (fPathType == P_SYSTEM_PATH)
+	} else if (fPathType == P_SYSTEM_PATH) {
+		if (gVerbose)
+			printf("InitPath - absolute: %s\n", fPath.String());
 		ret = destination->SetTo(fPath.String());
-	else {
-		if (!path) {
+	} else {
+		if (gVerbose)
+			printf("InitPath - volume: %s + %s\n", path, fPath.String());
+		if (path == NULL) {
 			parser_debug("InitPath path is NULL\n");
 			return B_ERROR;
 		}
 
 		BVolume volume(dev_for_path(path));
 		ret = volume.InitCheck();
-		if (ret != B_OK)
-			return ret;
+		if (ret == B_OK) {
+			BDirectory temp;
+			ret = volume.GetRootDirectory(&temp);
+			if (ret == B_OK) {
+				BPath mountPoint(&temp, NULL);
+				ret = destination->SetTo(mountPoint.Path(), fPath.String());
+			}
+		}
+	}
 
-		BDirectory temp;
-		ret = volume.GetRootDirectory(&temp);
-		if (ret != B_OK)
-			return ret;
+	if (ret != B_OK) {
+		fprintf(stderr, "InitPath(%s): %s\n", path, strerror(ret));
+		return ret;
+	}
 
-		BPath mountPoint(&temp, NULL);
-		ret = destination->SetTo(mountPoint.Path(), fPath.String());
+	BString pathString(destination->Path());
+
+	// Hardcoded paths, the .pkg files hardcode this to the same
+	if (pathString.FindFirst("non-packaged") < 0) {
+		bool wasRewritten = false;
+
+		if (pathString.StartsWith("/boot/beos/system")) {
+			BPath systemNonPackagedDir;
+			find_directory(B_SYSTEM_NONPACKAGED_DIRECTORY,
+				&systemNonPackagedDir);
+			pathString.ReplaceFirst("/boot/beos/system",
+				systemNonPackagedDir.Path());
+			wasRewritten = true;
+		} else if (pathString.StartsWith("/boot/system")) {
+			BPath systemNonPackagedDir;
+			find_directory(B_SYSTEM_NONPACKAGED_DIRECTORY,
+				&systemNonPackagedDir);
+			pathString.ReplaceFirst("/boot/system",
+				systemNonPackagedDir.Path());
+			wasRewritten = true;
+		} else if (pathString.StartsWith("/boot/home/config")) {
+			BPath userNonPackagedDir;
+			find_directory(B_USER_NONPACKAGED_DIRECTORY, &userNonPackagedDir);
+			pathString.ReplaceFirst("/boot/home/config",
+				userNonPackagedDir.Path());
+			wasRewritten = true;
+		}
+
+		if (wasRewritten) {
+			if (gVerbose)
+				printf("rewritten: %s\n", pathString.String());
+			destination->SetTo(pathString.String());
+		}
 	}
 
 	return ret;
@@ -267,10 +311,10 @@ PackageItem::HandleAttributes(BPath *destination, BNode *node,
 
 
 status_t
-PackageItem::ParseAttribute(uint8 *buffer, BNode *node, char **attrName,
-	uint32 *nameSize, uint32 *attrType, uint8 **attrData, uint64 *dataSize,
-	uint8 **temp, uint64 *tempSize, uint64 *attrCSize, uint64 *attrOSize,
-	bool *attrStarted, bool *done)
+PackageItem::ParseAttribute(uint8* buffer, BNode* node, char** attrName,
+	uint32* nameSize, uint32* attrType, uint8** attrData, uint64* dataSize,
+	uint8** temp, uint64* tempSize, uint64* attrCSize, uint64* attrOSize,
+	bool* attrStarted, bool* done)
 {
 	status_t ret = B_OK;
 	uint32 length;
@@ -382,7 +426,7 @@ PackageItem::ParseAttribute(uint8 *buffer, BNode *node, char **attrName,
 
 
 status_t
-PackageItem::SkipAttribute(uint8 *buffer, bool *attrStarted, bool *done)
+PackageItem::SkipAttribute(uint8* buffer, bool* attrStarted, bool* done)
 {
 	status_t ret = B_OK;
 	uint32 length;
@@ -444,7 +488,7 @@ PackageItem::SkipAttribute(uint8 *buffer, bool *attrStarted, bool *done)
 
 
 status_t
-PackageItem::ParseData(uint8 *buffer, BFile *file, uint64 originalSize,
+PackageItem::ParseData(uint8* buffer, BFile* file, uint64 originalSize,
 	bool *done)
 {
 	status_t ret = B_OK;
@@ -480,12 +524,10 @@ PackageItem::ParseData(uint8 *buffer, BFile *file, uint64 originalSize,
 			return ret;
 		}
 		parser_debug(" File data inflation complete!\n");
-	}
-	else if (!memcmp(buffer, padding, 7)) {
+	} else if (!memcmp(buffer, padding, 7)) {
 		*done = true;
 		return ret;
-	}
-	else {
+	} else {
 		parser_debug("_ParseData unknown tag\n");
 		ret = B_ERROR;
 	}
@@ -497,10 +539,10 @@ PackageItem::ParseData(uint8 *buffer, BFile *file, uint64 originalSize,
 // #pragma mark - PackageScript
 
 
-PackageScript::PackageScript(BFile *parent, uint64 offset, uint64 size,
-		uint64 originalSize)
+PackageScript::PackageScript(BFile* parent, const BString& path, uint8 type,
+		uint64 offset, uint64 size, uint64 originalSize)
 	:
-	PackageItem(parent, NULL, 0, 0, 0, offset, size),
+	PackageItem(parent, path, type, 0, 0, offset, size),
 	fOriginalSize(originalSize),
 	fThreadId(-1)
 {
@@ -508,7 +550,7 @@ PackageScript::PackageScript(BFile *parent, uint64 offset, uint64 size,
 
 
 status_t
-PackageScript::DoInstall(const char *path, ItemState *state)
+PackageScript::DoInstall(const char* path, ItemState* state)
 {
 	status_t ret = B_OK;
 	parser_debug("Script: DoInstall() called!\n");
@@ -546,8 +588,57 @@ PackageScript::DoInstall(const char *path, ItemState *state)
 					break;
 
 				case P_DATA:
-					ret = _ParseScript(buffer, fOriginalSize, &done);
+				{
+					BString script;
+					ret = _ParseScript(buffer, fOriginalSize, script, &done);
+					if (ret == B_OK) {
+						// Rewrite Deskbar entry targets. NOTE: It would
+						// also work to Replace("/config/be", "/config...")
+						// but it would be less save. For example, an app
+						// could have a folder named "config/be..." inside
+						// its installation folder.
+						// TODO: Use find_paths() or we are no better than 
+						// these scripts.
+						script.ReplaceAll(
+							"~/config/be",
+							"~/config/settings/deskbar/menu");
+						script.ReplaceAll(
+							"/boot/home/config/be",
+							"/boot/home/config/settings/deskbar/menu");
+						// Rewrite all sorts of other old BeOS paths
+						script.ReplaceAll(
+							"/boot/preferences",
+							"/boot/system/preferences");
+						script.ReplaceAll(
+							"/boot/apps",
+							"/boot/system/non-packaged/apps");
+						script.ReplaceAll(
+							"~/config/add-ons/Screen\\ Savers",
+							"~/config/non-packaged/add-ons/Screen\\ Savers");
+						// TODO: More. These should also be put into a
+						// common source location, since it can also be used
+						// for the retargetting of install file locations.
+						// Packages seem to declare which system paths they
+						// use, and then package items can reference one of
+						// those global paths by index. A more elegent solution
+						// compared to what happens now in InitPath() would be
+						// to replace those global package paths. Or maybe
+						// that's more fragile... but a common source for
+						// the rewriting of BeOS paths is needed.
+
+						if (gVerbose)
+							printf("%s\n", script.String());
+
+						BPath workingDirectory;
+						if (path != NULL)
+							ret = InitPath(path, &workingDirectory);
+						else
+							ret = workingDirectory.SetTo(".");
+						if (ret == B_OK)
+							ret = _RunScript(workingDirectory.Path(), script);
+					}
 					break;
+				}
 
 				default:
 					return B_ERROR;
@@ -571,7 +662,8 @@ PackageScript::ItemKind()
 
 
 status_t
-PackageScript::_ParseScript(uint8 *buffer, uint64 originalSize, bool *done)
+PackageScript::_ParseScript(uint8 *buffer, uint64 originalSize,
+	BString& _script, bool *done)
 {
 	status_t ret = B_OK;
 
@@ -607,7 +699,7 @@ PackageScript::_ParseScript(uint8 *buffer, uint64 originalSize, bool *done)
 			return B_ERROR;
 		}
 
-		uint8 *script = new uint8[original];
+		uint8* script = new uint8[original];
 		ret = inflate_data(temp, compressed, script, original);
 		if (ret != B_OK) {
 			parser_debug(" inflate_data failed\n");
@@ -616,7 +708,8 @@ PackageScript::_ParseScript(uint8 *buffer, uint64 originalSize, bool *done)
 			return ret;
 		}
 
-		ret = _RunScript(script, originalSize);
+		_script.SetTo((char*)script, originalSize);
+
 		delete[] script;
 		delete[] temp;
 		parser_debug(" Script data inflation complete!\n");
@@ -633,18 +726,23 @@ PackageScript::_ParseScript(uint8 *buffer, uint64 originalSize, bool *done)
 
 
 status_t
-PackageScript::_RunScript(uint8 *script, uint32 len)
+PackageScript::_RunScript(const char* workingDirectory, const BString& script)
 {
 	// This function written by Peter Folk <pfolk@uni.uiuc.edu>
 	// and published in the BeDevTalk FAQ, modified for use in the
 	// PackageInstaller
 	// http://www.abisoft.com/faq/BeDevTalk_FAQ.html#FAQ-209
 
+	// Change current working directory to install path
+	char oldWorkingDirectory[B_PATH_NAME_LENGTH];
+	getcwd(oldWorkingDirectory, sizeof(oldWorkingDirectory));
+	chdir(workingDirectory);
+
 	// Save current FDs
 	int old_in  =  dup(0);
 	int old_out  =  dup(1);
 	int old_err  =  dup(2);
-
+	
 	int filedes[2];
 
 	/* Create new pipe FDs as stdin, stdout, stderr */
@@ -681,11 +779,15 @@ PackageScript::_RunScript(uint8 *script, uint32 len)
 	resume_thread(fThreadId);
 
 	// Write the script
-	if (write(in, script, len) != (int32)len || write(in, "\nexit\n", 6) != 6) {
+	if (write(in, script.String(), script.Length() - 1) != script.Length() - 1
+		|| write(in, "\nexit\n", 6) != 6) {
 		parser_debug("Writing script failed\n");
 		kill_thread(fThreadId);
 		return B_ERROR;
 	}
+
+	// Restore current working directory
+	chdir(oldWorkingDirectory);
 
 	return B_OK;
 }
@@ -694,7 +796,7 @@ PackageScript::_RunScript(uint8 *script, uint32 len)
 // #pragma mark - PackageDirectory
 
 
-PackageDirectory::PackageDirectory(BFile *parent, const BString &path,
+PackageDirectory::PackageDirectory(BFile* parent, const BString& path,
 		uint8 type, uint32 ctime, uint32 mtime, uint64 offset, uint64 size)
 	:
 	PackageItem(parent, path, type, ctime, mtime, offset, size)
@@ -703,7 +805,7 @@ PackageDirectory::PackageDirectory(BFile *parent, const BString &path,
 
 
 status_t
-PackageDirectory::DoInstall(const char *path, ItemState *state)
+PackageDirectory::DoInstall(const char* path, ItemState* state)
 {
 	BPath &destination = state->destination;
 	status_t ret;
@@ -765,12 +867,12 @@ PackageFile::PackageFile(BFile *parent, const BString &path, uint8 type,
 
 
 status_t
-PackageFile::DoInstall(const char *path, ItemState *state)
+PackageFile::DoInstall(const char* path, ItemState* state)
 {
 	if (state == NULL)
 		return B_ERROR;
 
-	BPath &destination = state->destination;
+	BPath& destination = state->destination;
 	status_t ret = B_OK;
 	parser_debug("File: %s DoInstall() called!\n", fPath.String());
 

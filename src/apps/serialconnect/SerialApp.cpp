@@ -12,6 +12,8 @@
 #include <Directory.h>
 #include <Entry.h>
 #include <File.h>
+#include <FindDirectory.h>
+#include <Path.h>
 
 #include "SerialWindow.h"
 
@@ -37,6 +39,7 @@ SerialApp::~SerialApp()
 
 void SerialApp::ReadyToRun()
 {
+	LoadSettings();
 	fWindow->Show();
 }
 
@@ -47,10 +50,9 @@ void SerialApp::MessageReceived(BMessage* message)
 	{
 		case kMsgOpenPort:
 		{
-			const char* portName;
-			if(message->FindString("port name", &portName) == B_OK)
+			if(message->FindString("port name", &fPortPath) == B_OK)
 			{
-				fSerialPort.Open(portName);
+				fSerialPort.Open(fPortPath);
 				release_sem(fSerialLock);
 			} else {
 				fSerialPort.Close();
@@ -82,7 +84,9 @@ void SerialApp::MessageReceived(BMessage* message)
 			const char* bytes;
 			ssize_t size;
 
-			message->FindData("data", B_RAW_TYPE, (const void**)&bytes, &size);
+			if (message->FindData("data", B_RAW_TYPE, (const void**)&bytes,
+					&size) != B_OK)
+				break;
 
 			if (bytes[0] == '\n') {
 				size = 2;
@@ -111,6 +115,7 @@ void SerialApp::MessageReceived(BMessage* message)
 			} else {
 				debugger("Invalid BMessage received");
 			}
+			break;
 		}
 		case kMsgSettings:
 		{
@@ -133,69 +138,7 @@ void SerialApp::MessageReceived(BMessage* message)
 				fSerialPort.SetFlowControl(flowcontrol);
 
 			if(message->FindInt32("baudrate", &baudrate) == B_OK) {
-				data_rate rate;
-				switch(baudrate) {
-					case 50:
-						rate = B_50_BPS;
-						break;
-					case 75:
-						rate = B_75_BPS;
-						break;
-					case 110:
-						rate = B_110_BPS;
-						break;
-					case 134:
-						rate = B_134_BPS;
-						break;
-					case 150:
-						rate = B_150_BPS;
-						break;
-					case 200:
-						rate = B_200_BPS;
-						break;
-					case 300:
-						rate = B_300_BPS;
-						break;
-					case 600:
-						rate = B_600_BPS;
-						break;
-					case 1200:
-						rate = B_1200_BPS;
-						break;
-					case 1800:
-						rate = B_1800_BPS;
-						break;
-					case 2400:
-						rate = B_2400_BPS;
-						break;
-					case 4800:
-						rate = B_4800_BPS;
-						break;
-					case 9600:
-						rate = B_9600_BPS;
-						break;
-					case 19200:
-						rate = B_19200_BPS;
-						break;
-					case 31250:
-						rate = B_31250_BPS;
-						break;
-					case 38400:
-						rate = B_38400_BPS;
-						break;
-					case 57600:
-						rate = B_57600_BPS;
-						break;
-					case 115200:
-						rate = B_115200_BPS;
-						break;
-					case 230400:
-						rate = B_230400_BPS;
-						break;
-					default:
-						rate = B_0_BPS;
-						break;
-				}
+				data_rate rate = (data_rate)baudrate;
 				fSerialPort.SetDataRate(rate);
 			}
 
@@ -204,6 +147,62 @@ void SerialApp::MessageReceived(BMessage* message)
 		default:
 			BApplication::MessageReceived(message);
 	}
+}
+
+
+bool SerialApp::QuitRequested()
+{
+	if(BApplication::QuitRequested()) {
+		SaveSettings();
+		return true;
+	}
+	return false;
+}
+
+
+const BString& SerialApp::GetPort()
+{
+	return fPortPath;
+}
+
+
+void SerialApp::LoadSettings()
+{
+	BPath path;
+	find_directory(B_USER_SETTINGS_DIRECTORY, &path);
+	path.Append("SerialConnect");
+
+	BFile file(path.Path(), B_READ_ONLY);
+	BMessage message(kMsgSettings);
+	if(message.Unflatten(&file) != B_OK)
+	{
+		message.AddInt32("parity", fSerialPort.ParityMode());
+		message.AddInt32("databits", fSerialPort.DataBits());
+		message.AddInt32("stopbits", fSerialPort.StopBits());
+		message.AddInt32("baudrate", fSerialPort.DataRate());
+		message.AddInt32("flowcontrol", fSerialPort.FlowControl());
+	}
+
+	be_app->PostMessage(&message);
+	fWindow->PostMessage(&message);
+}
+
+
+void SerialApp::SaveSettings()
+{
+	BMessage message(kMsgSettings);
+	message.AddInt32("parity", fSerialPort.ParityMode());
+	message.AddInt32("databits", fSerialPort.DataBits());
+	message.AddInt32("stopbits", fSerialPort.StopBits());
+	message.AddInt32("baudrate", fSerialPort.DataRate());
+	message.AddInt32("flowcontrol", fSerialPort.FlowControl());
+
+	BPath path;
+	find_directory(B_USER_SETTINGS_DIRECTORY, &path);
+	path.Append("SerialConnect");
+
+	BFile file(path.Path(), B_WRITE_ONLY | B_CREATE_FILE);
+	message.Flatten(&file);
 }
 
 
@@ -217,7 +216,7 @@ status_t SerialApp::PollSerial(void*)
 	{
 		ssize_t bytesRead;
 
-		bytesRead = application->fSerialPort.Read(buffer, 256);
+		bytesRead = application->fSerialPort.Read(buffer, sizeof(buffer));
 		if (bytesRead == B_FILE_ERROR)
 		{
 			// Port is not open - wait for it and start over

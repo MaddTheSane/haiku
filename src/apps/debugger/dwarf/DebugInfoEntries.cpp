@@ -1,6 +1,6 @@
 /*
  * Copyright 2009, Ingo Weinhold, ingo_weinhold@gmx.de.
- * Copyright 2011-2013, Rene Gollent, rene@gollent.com.
+ * Copyright 2011-2014, Rene Gollent, rene@gollent.com.
  * Distributed under the terms of the MIT License.
  */
 
@@ -115,6 +115,9 @@ DIECompileUnitBase::AddAttribute_high_pc(uint16 attributeName,
 	const AttributeValue& value)
 {
 	fHighPC = value.address;
+	if (fLowPC != 0 && fHighPC < fLowPC)
+		fHighPC += fLowPC;
+
 	return B_OK;
 }
 
@@ -311,6 +314,7 @@ DIEDeclaredType::DIEDeclaredType()
 	:
 	fDescription(NULL),
 	fAbstractOrigin(NULL),
+	fSignatureType(NULL),
 	fAccessibility(0),
 	fDeclaration(false)
 {
@@ -328,6 +332,13 @@ DebugInfoEntry*
 DIEDeclaredType::AbstractOrigin() const
 {
 	return fAbstractOrigin;
+}
+
+
+DebugInfoEntry*
+DIEDeclaredType::SignatureType() const
+{
+	return fSignatureType;
 }
 
 
@@ -370,6 +381,15 @@ DIEDeclaredType::AddAttribute_abstract_origin(uint16 attributeName,
 	const AttributeValue& value)
 {
 	fAbstractOrigin = value.reference;
+	return B_OK;
+}
+
+
+status_t
+DIEDeclaredType::AddAttribute_signature(uint16 attributeName,
+	const AttributeValue& value)
+{
+	fSignatureType = value.reference;
 	return B_OK;
 }
 
@@ -999,6 +1019,9 @@ DIELexicalBlock::AddAttribute_high_pc(uint16 attributeName,
 	const AttributeValue& value)
 {
 	fHighPC = value.address;
+	if (fLowPC != 0 && fHighPC < fLowPC)
+		fHighPC += fLowPC;
+
 	return B_OK;
 }
 
@@ -1948,6 +1971,9 @@ DIESubprogram::AddAttribute_high_pc(uint16 attributeName,
 	const AttributeValue& value)
 {
 	fHighPC = value.address;
+	if (fLowPC != 0 && fHighPC < fLowPC)
+		fHighPC += fLowPC;
+
 	return B_OK;
 }
 
@@ -2573,6 +2599,21 @@ DIETypeUnit::Tag() const
 }
 
 
+// #pragma mark - DIERValueReferenceType
+
+
+DIERValueReferenceType::DIERValueReferenceType()
+{
+}
+
+
+uint16
+DIERValueReferenceType::Tag() const
+{
+	return DW_TAG_rvalue_reference_type;
+}
+
+
 // #pragma mark - DIETemplateTemplateParameter
 
 
@@ -2968,6 +3009,9 @@ DebugInfoEntryFactory::CreateDebugInfoEntry(uint16 tag, DebugInfoEntry*& _entry)
 			break;
 		case DW_TAG_type_unit:
 			entry = new(std::nothrow) DIETypeUnit;
+			break;
+		case DW_TAG_rvalue_reference_type:
+			entry = new(std::nothrow) DIERValueReferenceType;
 			break;
 		case DW_TAG_GNU_template_template_param:
 			entry = new(std::nothrow) DIETemplateTemplateParameter;

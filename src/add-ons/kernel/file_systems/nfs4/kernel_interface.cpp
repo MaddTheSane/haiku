@@ -74,8 +74,8 @@ CreateNFS4Server(RPC::Server* serv)
 //	dirtime=X	- attempt revalidate directory cache not more often than each X
 //				  seconds
 static status_t
-ParseArguments(const char* _args, AddressResolver** address, char** _path,
-	MountConfiguration* conf)
+ParseArguments(const char* _args, AddressResolver** address, char** _server,
+	char** _path, MountConfiguration* conf)
 {
 	if (_args == NULL)
 		return B_BAD_VALUE;
@@ -94,12 +94,18 @@ ParseArguments(const char* _args, AddressResolver** address, char** _path,
 		return B_MISMATCHED_VALUES;
 	*path++ = '\0';
 
-	*address = new AddressResolver(args);
-	if (*address == NULL)
+	*_server = strdup(args);
+	if (*_server == NULL)
 		return B_NO_MEMORY;
+	*address = new AddressResolver(args);
+	if (*address == NULL) {
+		free(*_server);
+		return B_NO_MEMORY;
+	}
 
 	*_path = strdup(path);
 	if (*_path == NULL) {
+		free(*_server);
 		delete *address;
 		return B_NO_MEMORY;
 	}
@@ -161,25 +167,29 @@ nfs4_mount(fs_volume* volume, const char* device, uint32 flags,
 
 	/* prepare idmapper server */
 	MutexLocker locker(gIdMapperLock);
-	gIdMapper = new(std::nothrow) IdMap;
-	if (gIdMapper == NULL)
-		return B_NO_MEMORY;
+	if (gIdMapper == NULL) {
+		gIdMapper = new(std::nothrow) IdMap;
+		if (gIdMapper == NULL)
+			return B_NO_MEMORY;
 
-	result = gIdMapper->InitStatus();
-	if (result != B_OK) {
-		delete gIdMapper;
-		gIdMapper = NULL;
-		return result;
+		result = gIdMapper->InitStatus();
+		if (result != B_OK) {
+			delete gIdMapper;
+			gIdMapper = NULL;
+			return result;
+		}
 	}
 	locker.Unlock();
 
 	AddressResolver* resolver;
 	MountConfiguration config;
 	char* path;
-	result = ParseArguments(args, &resolver, &path, &config);
+	char* serverName;
+	result = ParseArguments(args, &resolver, &serverName, &path, &config);
 	if (result != B_OK)
 		return result;
 	MemoryDeleter pathDeleter(path);
+	MemoryDeleter serverNameDeleter(serverName);
 
 	RPC::Server* server;
 	result = gRPCServerManager->Acquire(&server, resolver, CreateNFS4Server);
@@ -188,7 +198,8 @@ nfs4_mount(fs_volume* volume, const char* device, uint32 flags,
 		return result;
 	
 	FileSystem* fs;
-	result = FileSystem::Mount(&fs, server, path, volume->id, config);
+	result = FileSystem::Mount(&fs, server, serverName, path, volume->id,
+		config);
 	if (result != B_OK) {
 		gRPCServerManager->Release(server);
 		return result;

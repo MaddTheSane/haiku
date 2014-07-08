@@ -1,5 +1,5 @@
 /*
- * Copyright 2001-2010, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2001-2013, Axel Dörfler, axeld@pinc-software.de.
  * This file may be used under the terms of the MIT License.
  */
 
@@ -20,7 +20,9 @@
 // TODO: temporary solution as long as there is no public I/O requests API
 #ifndef BFS_SHELL
 #	include <io_requests.h>
+#	include <util/fs_trim_support.h>
 #endif
+
 
 #define BFS_IO_SIZE	65536
 
@@ -623,6 +625,33 @@ bfs_ioctl(fs_volume* _volume, fs_vnode* _node, void* _cookie, uint32 cmd,
 	Volume* volume = (Volume*)_volume->private_volume;
 
 	switch (cmd) {
+#ifndef BFS_SHELL
+		case B_TRIM_DEVICE:
+		{
+			fs_trim_data* trimData;
+			MemoryDeleter deleter;
+			status_t status = get_trim_data_from_user(buffer, bufferLength,
+				deleter, trimData);
+			if (status != B_OK)
+				return status;
+
+			trimData->trimmed_size = 0;
+
+			for (uint32 i = 0; i < trimData->range_count; i++) {
+				uint64 trimmedSize = 0;
+				status_t status = volume->Allocator().Trim(
+					trimData->ranges[i].offset, trimData->ranges[i].size,
+					trimmedSize);
+				if (status != B_OK)
+					return status;
+
+				trimData->trimmed_size += trimmedSize;
+			}
+
+			return copy_trim_data_to_user(buffer, trimData);
+		}
+#endif
+
 		case BFS_IOCTL_VERSION:
 		{
 			uint32 version = 0x10000;

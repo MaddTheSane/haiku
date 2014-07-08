@@ -346,7 +346,7 @@ FlangerNode::Connected(const media_source& source,
 	media_input* poInput)
 {
 	PRINT(("FlangerNode::Connected()\n"
-		"\tto source %ld\n", source.id));
+		"\tto source %" B_PRId32 "\n", source.id));
 
 	// sanity check
 	if(destination != m_input.destination) {
@@ -377,13 +377,13 @@ void FlangerNode::Disconnected(
 
 	// sanity checks
 	if(m_input.source != source) {
-		PRINT(("\tsource mismatch: expected ID %ld, got %ld\n",
-			m_input.source.id, source.id));
+		PRINT(("\tsource mismatch: expected ID %" B_PRId32 ", got %" B_PRId32
+				"\n", m_input.source.id, source.id));
 		return;
 	}
 	if(destination != m_input.destination) {
-		PRINT(("\tdestination mismatch: expected ID %ld, got %ld\n",
-			m_input.destination.id, destination.id));
+		PRINT(("\tdestination mismatch: expected ID %" B_PRId32 ", got %"
+				B_PRId32 "\n", m_input.destination.id, destination.id));
 		return;
 	}
 
@@ -438,7 +438,7 @@ status_t FlangerNode::GetLatencyFor(
 	}
 
 	*poLatency = m_downstreamLatency + m_processingLatency;
-	PRINT(("\treturning %Ld\n", *poLatency));
+	PRINT(("\treturning %" B_PRIdBIGTIME "\n", *poLatency));
 	*poTimeSource = TimeSource()->ID();
 	return B_OK;
 }
@@ -550,14 +550,14 @@ void FlangerNode::Connect(
 	if(err < B_OK) {
 		PRINT(("\t!!! FindLatencyFor(): %s\n", strerror(err)));
 	}
-	PRINT(("\tdownstream latency = %Ld\n", m_downstreamLatency));
+	PRINT(("\tdownstream latency = %" B_PRIdBIGTIME "\n", m_downstreamLatency));
 
 	// prepare the filter
 	initFilter();
 
 	// figure processing time
 	m_processingLatency = calcProcessingLatency();
-	PRINT(("\tprocessing latency = %Ld\n", m_processingLatency));
+	PRINT(("\tprocessing latency = %" B_PRIdBIGTIME "\n", m_processingLatency));
 
 	// store summed latency
 	SetEventLatency(m_downstreamLatency + m_processingLatency);
@@ -685,7 +685,7 @@ status_t FlangerNode::GetLatency(
 
 	PRINT(("FlangerNode::GetLatency()\n"));
 	*poLatency = EventLatency() + SchedulingLatency();
-	PRINT(("\treturning %Ld\n", *poLatency));
+	PRINT(("\treturning %" B_PRIdBIGTIME "\n", *poLatency));
 
 	return B_OK;
 }
@@ -747,8 +747,8 @@ void FlangerNode::LateNoticeReceived(
 	bigtime_t tpWhen) {
 
 	PRINT(("FlangerNode::LateNoticeReceived()\n"
-		"\thowLate == %Ld\n"
-		"\twhen    == %Ld\n", howLate, tpWhen));
+		"\thowLate == %" B_PRIdBIGTIME "\n"
+		"\twhen    == %" B_PRIdBIGTIME "\n", howLate, tpWhen));
 
 	if(source != m_output.source) {
 		PRINT(("\tBad source.\n"));
@@ -1453,7 +1453,7 @@ void FlangerNode::filterBuffer(
 	for(uint32 inPos = 0; inPos < samples; ++inPos) {
 
 		// read from input buffer
-		_frame inFrame;
+		_frame inFrame = {};
 		inFrame.channel[0] = ((float*)input.data())[inPos];
 		if(stereo)
 			inFrame.channel[1] = ((float*)input.data())[inPos + 1];
@@ -1468,7 +1468,7 @@ void FlangerNode::filterBuffer(
 
 
 		// read low-index (possibly only) frame
-		_frame delayedFrame;
+		_frame delayedFrame = {};
 
 		int32 readFrameLo = (int32)floor(fReadFrame);
 		uint32 pos = readFrameLo * channels;

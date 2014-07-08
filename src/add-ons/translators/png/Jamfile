@@ -2,29 +2,38 @@ SubDir HAIKU_TOP src add-ons translators png ;
 
 SetSubDirSupportedPlatformsBeOSCompatible ;
 
-UseHeaders $(HAIKU_ZLIB_HEADERS) : true ;
-UseHeaders $(HAIKU_LIBPNG_HEADERS) : true ;
 SubDirHdrs [ FDirName $(SUBDIR) $(DOTDOT) shared ] ;
 
 AddResources PNGTranslator : PNGTranslator.rdef ;
 
-if $(HAIKU_GCC_VERSION[1]) = 2 {
+if $(TARGET_GCC_VERSION_$(TARGET_PACKAGING_ARCH)[1]) = 2 {
 	SubDirCcFlags -DPNG_NO_PEDANTIC_WARNINGS ;
 }
 
-Includes [ FGristFiles PNGTranslator.cpp PNGView.cpp ]
-	: $(HAIKU_LIBPNG_HEADERS_DEPENDENCY) ;
+local architectureObject ;
+for architectureObject in [ MultiArchSubDirSetup ] {
+	on $(architectureObject) {
+		UseBuildFeatureHeaders libpng ;
+		UseBuildFeatureHeaders zlib ;
 
-Translator PNGTranslator : 
-	PNGMain.cpp
-	PNGTranslator.cpp
-	PNGView.cpp
+		Includes [ FGristFiles PNGTranslator.cpp PNGView.cpp ]
+			: [ BuildFeatureAttribute libpng : headers ] ;
 
-	: be translation $(HAIKU_LIBPNG_LIB) $(HAIKU_ZLIB_LIB)
-		$(TARGET_LIBSUPC++) libtranslatorsutils.a 
-		$(HAIKU_LOCALE_LIBS)
-	: true
-;
+		Translator [ MultiArchDefaultGristFiles PNGTranslator ] : 
+			PNGMain.cpp
+			PNGTranslator.cpp
+			PNGView.cpp
+
+		: be translation
+			[ BuildFeatureAttribute libpng : library ]
+			[ BuildFeatureAttribute zlib : library ]
+			$(TARGET_LIBSUPC++)
+			[ MultiArchDefaultGristFiles libtranslatorsutils.a ]
+			localestub
+		: true
+		;
+	}
+}
 
 DoCatalogs PNGTranslator :
 	x-vnd.Haiku-PNGTranslator
@@ -33,8 +42,3 @@ DoCatalogs PNGTranslator :
 	PNGTranslator.cpp
 	PNGView.cpp
 ;
-
-Package haiku-translationkit-cvs :
-	PNGTranslator :
-	boot home config add-ons Translators ;
-

@@ -1,10 +1,11 @@
 /*
- * Copyright 2003-2006, Haiku.
+ * Copyright 2003-2013 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- * 		Michael Phipps
  *		Jérôme Duval, jerome.duval@free.fr
+ * 		Michael Phipps
+ *		John Scipione, jscipione@gmail.com
  */
 #ifndef SCREEN_SAVER_APP_H
 #define SCREEN_SAVER_APP_H
@@ -23,36 +24,37 @@ const static uint32 kMsgResumeSaver = 'RSSV';
 
 
 class ScreenBlanker : public BApplication {
-	public:
-		ScreenBlanker();
-		~ScreenBlanker();
+public:
+								ScreenBlanker();
+								~ScreenBlanker();
 
-		virtual void ReadyToRun();
+	virtual	void				ReadyToRun();
 
-		virtual bool QuitRequested();
-		virtual void MessageReceived(BMessage* message);
+	virtual	bool				QuitRequested();
+	virtual	void				MessageReceived(BMessage* message);
 
-	private:
-		bool _LoadAddOn();
-		void _ShowPasswordWindow();
-		void _QueueResumeScreenSaver();
-		void _TurnOnScreen();
-		void _SetDPMSMode(uint32 mode);
-		void _QueueTurnOffScreen();
-		void _Shutdown();
+			bool				IsPasswordWindowShown() const;
 
-		ScreenSaverSettings fSettings;
-		ScreenSaverWindow *fWindow;
-		BScreenSaver *fSaver;
-		ScreenSaverRunner *fRunner;
-		PasswordWindow *fPasswordWindow;
+private:
+			bool				_LoadAddOn();
+			void				_ShowPasswordWindow();
+			void				_QueueResumeScreenSaver();
+			void				_TurnOnScreen();
+			void				_SetDPMSMode(uint32 mode);
+			void				_QueueTurnOffScreen();
+			void				_Shutdown();
 
-		bigtime_t fBlankTime;
-		BMessageRunner* fResumeRunner;
+			ScreenSaverSettings	fSettings;
+			ScreenSaverWindow*	fWindow;
+			ScreenSaverRunner*	fSaverRunner;
+			PasswordWindow*		fPasswordWindow;
 
-		BMessageRunner* fStandByScreenRunner;
-		BMessageRunner* fSuspendScreenRunner;
-		BMessageRunner* fTurnOffScreenRunner;
+			bigtime_t			fBlankTime;
+			BMessageRunner*		fResumeRunner;
+
+			BMessageRunner*		fStandByScreenRunner;
+			BMessageRunner*		fSuspendScreenRunner;
+			BMessageRunner*		fTurnOffScreenRunner;
 };
 
 #endif	// SCREEN_SAVER_APP_H

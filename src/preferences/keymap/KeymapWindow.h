@@ -1,12 +1,13 @@
 /*
- * Copyright 2004-2009 Haiku Inc. All rights reserved.
+ * Copyright 2004-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  *
  * Authors:
- *		Sandor Vroemisse
- *		Jérôme Duval
  *		Alexandre Deckner, alex@zappotek.com
- *		Axel Dörfler, axeld@pinc-software.de.
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		Jérôme Duval
+ *		John Scipione, jscipione@gmai.com
+ *		Sandor Vroemisse
  */
 #ifndef KEYMAP_WINDOW_H
 #define KEYMAP_WINDOW_H
@@ -51,6 +52,7 @@ protected:
 			void				_SwitchShortcutKeys();
 
 			void				_UseKeymap();
+			void				_DefaultKeymap();
 			void				_RevertKeymap();
 
 			BMenuField*			_CreateDeadKeyMenuField();
@@ -62,7 +64,7 @@ protected:
 
 			status_t			_GetCurrentKeymap(entry_ref& ref);
 			BString				_GetActiveKeymapName();
-			bool				_SelectCurrentMap(BListView *list);
+			bool				_SelectCurrentMap(BListView* list);
 			void				_SelectCurrentMap();
 
 			status_t			_GetSettings(BFile& file, int mode) const;
@@ -74,6 +76,7 @@ protected:
 private:
 			BListView*			fSystemListView;
 			BListView*			fUserListView;
+			BButton*			fDefaultsButton;
 			BButton*			fRevertButton;
 			BMenu*				fLayoutMenu;
 			BMenu*				fFontMenu;

@@ -1,9 +1,10 @@
 /*
- * Copyright 2001-2009, Haiku, Inc. All rights reserved.
+ * Copyright 2001-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
 #ifndef _CHECK_BOX_H
 #define _CHECK_BOX_H
+
 
 #include <Control.h>
 
@@ -20,13 +21,12 @@ public:
 										= B_WILL_DRAW | B_NAVIGABLE);
 								BCheckBox(const char* label,
 									BMessage* message = NULL);
-								BCheckBox(BMessage* archive);
+								BCheckBox(BMessage* data);
 
 	virtual						~BCheckBox();
 
-	static	BArchivable*		Instantiate(BMessage* archive);
-	virtual	status_t			Archive(BMessage* archive,
-									bool deep = true) const;
+	static	BArchivable*		Instantiate(BMessage* data);
+	virtual	status_t			Archive(BMessage* data, bool deep = true) const;
 
 	virtual	void				Draw(BRect updateRect);
 
@@ -35,17 +35,17 @@ public:
 	virtual	void				AllAttached();
 	virtual	void				AllDetached();
 
-	virtual	void				FrameMoved(BPoint newLocation);
-	virtual	void				FrameResized(float width, float height);
+	virtual	void				FrameMoved(BPoint newPosition);
+	virtual	void				FrameResized(float newWidth, float newHeight);
 	virtual	void				WindowActivated(bool active);
 
 	virtual	void				MessageReceived(BMessage* message);
 
 	virtual	void				KeyDown(const char* bytes, int32 numBytes);
 
-	virtual	void				MouseDown(BPoint point);
-	virtual	void				MouseUp(BPoint point);
-	virtual	void				MouseMoved(BPoint point, uint32 transit,
+	virtual	void				MouseDown(BPoint where);
+	virtual	void				MouseUp(BPoint where);
+	virtual	void				MouseMoved(BPoint where, uint32 code,
 									const BMessage* dragMessage);
 
 	virtual	void				GetPreferredSize(float* _width,
@@ -69,6 +69,11 @@ public:
 
 	virtual	status_t			Perform(perform_code code, void* data);
 
+	virtual	status_t			SetIcon(const BBitmap* icon, uint32 flags = 0);
+
+			bool				IsPartialStateToOff() const;
+			void				SetPartialStateToOff(bool partialToOff);
+
 protected:
 	virtual	void				LayoutInvalidated(bool descendants = false);
 
@@ -79,8 +84,11 @@ private:
 	virtual	void				_ReservedCheckBox3();
 
 private:
+	inline	BRect				_CheckBoxFrame(const font_height& fontHeight)
+									const;
 			BRect				_CheckBoxFrame() const;
 			BSize				_ValidatePreferredSize();
+			int32				_NextState() const;
 
 private:
 	// Forbidden
@@ -89,7 +97,8 @@ private:
 private:
 			BSize				fPreferredSize;
 			bool				fOutlined;
+			bool				fPartialToOff;
 };
 
-#endif // _CHECK_BOX_H
 
+#endif // _CHECK_BOX_H

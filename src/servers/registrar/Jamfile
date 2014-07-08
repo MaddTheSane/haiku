@@ -27,6 +27,7 @@ Server registrar
 	MessageRunnerManager.cpp
 	MessagingService.cpp
 	MIMEManager.cpp
+	PackageWatchingManager.cpp
 	PriorityMessageQueue.cpp
 	RecentApps.cpp
 	RecentEntries.cpp
@@ -34,29 +35,21 @@ Server registrar
 	RosterAppInfo.cpp
 	RosterSettingsCharStream.cpp
 	ShutdownProcess.cpp
-	TextSnifferAddon.cpp
 	TRoster.cpp
 	Watcher.cpp
 	WatchingService.cpp
 
 	# mime
-	AssociatedTypes.cpp
 	CreateAppMetaMimeThread.cpp
-	Database.cpp
-	InstalledTypes.cpp
-	MimeSnifferAddon.cpp
-	MimeSnifferAddonManager.cpp
 	MimeUpdateThread.cpp
 	RegistrarThread.cpp
 	RegistrarThreadManager.cpp
-	SnifferRules.cpp
-	Supertype.cpp
-	SupportingApps.cpp
 	UpdateMimeInfoThread.cpp
 	:
+	libstorage_kit_mime.a
 	be
 	$(TARGET_LIBSTDC++)
-	$(HAIKU_LOCALE_LIBS)
+	localestub
 	:
 	registrar.rdef
 ;

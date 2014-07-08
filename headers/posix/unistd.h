@@ -104,10 +104,8 @@
 /* TODO: check */
 #define _SC_IOV_MAX						32
 #define _SC_UIO_MAXIOV					_SC_IOV_MAX
-#define _SC_NPROCESSORS_MAX				33
 #define _SC_NPROCESSORS_CONF			34
 #define _SC_NPROCESSORS_ONLN			35
-#define _SC_CPUID_MAX					36
 #define _SC_ATEXIT_MAX					37
 #define _SC_PASS_MAX					39
 #define _SC_PHYS_PAGES					40
@@ -189,7 +187,7 @@ extern ssize_t  write_pos(int fd, off_t pos, const void *buffer,size_t count);
 extern ssize_t	pwrite(int fd, const void *buffer, size_t count, off_t pos);
 extern off_t	lseek(int fd, off_t offset, int whence);
 
-extern int		sync(void);
+extern void		sync(void);
 extern int		fsync(int fd);
 
 extern int		chown(const char *path, uid_t owner, gid_t group);

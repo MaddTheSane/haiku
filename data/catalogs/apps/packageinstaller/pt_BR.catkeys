@@ -1,25 +1,25 @@
-1	portuguese (brazil)	x-vnd.Haiku-PackageInstaller	1396489627
+1	portuguese (brazil)	x-vnd.Haiku-PackageInstaller	2033288398
 Install to:	PackageView		Instalar em:
 OK	PackageView		OK
 Accept	PackageTextViewer		Aceitar
 Continue	PackageInstall		Continuar
 The requested package failed to install on your system. This might be a problem with the target package file. Please consult this issue with the package distributor.	PackageView		O pacote selecionado não pode ser instalado em seu sistema. Provavelmente, houve um problema com o arquivo. Consulte o distribuidor do pacote.
 Image not loaded correctly	PackageImageViewer		Imagem não carregada corretamen
-Install 	PackageView		Instalar 
 No package selected.	PackageInfo		Nenhum pacote selecionado.
-Install	PackageView		Instalar
 The given package seems to be already installed on your system. Would you like to uninstall the existing one and continue the installation?	PackageInstall		O pacote escolhido parece já ter sido instalado no seu sistema. Gostaria de desinstalar o programa existente e continuar o processo?
 Do you want to remember this decision for the rest of this installation?\n	PackageView		Você quer guardar esta decisão pelo resto da instalação?\n
 There seems to be a file size mismatch in the package file. The package might be corrupted or have been modified after its creation. Do you still wish to continue?	PackageInfo		Parece haver um erro no tamanho do arquivo do pacote. O pacote pode estar quebrado ou ter sido modificado após sua criação. Quer continuar?
 Error while installing the package\n	PackageView		Erro instalando o pacote\n
 Disclaimer	PackageTextViewer		Aviso
 %.1f GiB	PackageView		%.1f GB
+%name% (%size% free)	PackageView		%name% (%size% livre)
 The installation of the package has been aborted.	PackageView		A instalação do pacote foi cancelada.
 Done	PackageInstall		Feito
 All existing files will be replaced?	PackageView		Todos os arquivos existentes serão substituídos?
 Preparing package	PackageInstall		Preparando pacote
 No package available.	PackageInfo		Nenhum pacote disponível.
 none	PackageView		nenhum
+Install %name%	PackageView		Instalar %name%
 Stop	PackageStatus		Parar
 Other…	PackageView		Outro…
 No installation type selected	PackageView		Nenhum tipo de instalação selecionado
@@ -47,12 +47,14 @@ Decline	PackageTextViewer		Desistir
 The file named '%s' already exits in the given path.\nReplace the file with the one from this package or skip it?	PackageView		O arquivo de nome '%s' já existe no caminho especificado.\nSubstituir o arquivo existente pelo deste pacote ou pular esta etapa? 
 All existing files will be skipped?	PackageView		Todos os arquivos existentes serão pulados?
 Continue	PackageInfo		Continuar
+%index% of %total%	PackageInstall		%index% de %total%
 %.1f KiB	PackageView		%.1f kB
-(%s free)	PackageView		(%s livre)
 Abort	PackageInfo		Cancelar
 PackageInstaller	System name		Instalador de pacotes
 Abort	PackageInstall		Cancelar
+%name% (%size%)	PackageView		%name% (%size%)
 Continue	PackageTextViewer		Continuar
+Begin	PackageView		Começar
 Replace	PackageView		Substituir
 Installation progress	PackageView		Progresso da instalação
 The package file is not readable.\nOne of the possible reasons for this might be that the requested file is not a valid BeOS .pkg package.	PackageView		O arquivo do pacote é ilegível.\nUma das possíveis razões é que este não é um arquivo .pkg do BeOS válido.

@@ -1,7 +1,14 @@
 /*
- * Copyright 2011, Jérôme Duval, korli@users.berlios.de.
  * Copyright 2008-2010, Axel Dörfler, axeld@pinc-software.de.
- * This file may be used under the terms of the MIT License.
+ * Copyright 2011, Jérôme Duval, korli@users.berlios.de.
+ * Copyright 2014 Haiku, Inc. All rights reserved.
+ *
+ * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		Jérôme Duval, korli@users.berlios.de
+ *		John Scipione, jscipione@gmail.com
  */
 
 
@@ -11,6 +18,7 @@
 #include "Volume.h"
 
 #include <errno.h>
+#include <unistd.h>
 #include <new>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,8 +30,8 @@
 #include <util/AutoLock.h>
 
 #include "CachedBlock.h"
-#include "encodings.h"
 #include "Inode.h"
+#include "Utility.h"
 
 
 //#define TRACE_EXFAT
@@ -66,6 +74,9 @@ private:
 			int					fMode;
 			void*				fBlockCache;
 };
+
+
+//	#pragma mark - DeviceOpener
 
 
 DeviceOpener::DeviceOpener(const char* device, int mode)
@@ -196,7 +207,7 @@ DeviceOpener::GetSize(off_t* _size, uint32* _blockSize)
 }
 
 
-//	#pragma mark -
+//	#pragma mark - LabelVisitor
 
 
 class LabelVisitor : public EntryVisitor {
@@ -219,16 +230,17 @@ bool
 LabelVisitor::VisitLabel(struct exfat_entry* entry)
 {
 	TRACE("LabelVisitor::VisitLabel()\n");
-	char utfName[30];
-	size_t utfLength = 30;
-	unicode_to_utf8((const uchar*)entry->name_label.name,
-		entry->name_label.length * 2, (uint8*)utfName, &utfLength);
-	fVolume->SetName(utfName);
+	char name[B_FILE_NAME_LENGTH];
+	status_t result = get_volume_name(entry, name, sizeof(name));
+	if (result != B_OK)
+		return false;
+
+	fVolume->SetName(name);
 	return true;
 }
 
 
-//	#pragma mark -
+//	#pragma mark - exfat_super_block::IsValid()
 
 
 bool
@@ -248,7 +260,7 @@ exfat_super_block::IsValid()
 }
 
 
-//	#pragma mark -
+//	#pragma mark - Volume
 
 
 Volume::Volume(fs_volume* volume)
@@ -292,7 +304,7 @@ Volume::Mount(const char* deviceName, uint32 flags)
 {
 	flags |= B_MOUNT_READ_ONLY;
 		// we only support read-only for now
-	
+
 	if ((flags & B_MOUNT_READ_ONLY) != 0) {
 		TRACE("Volume::Mount(): Read only\n");
 	} else {
@@ -316,23 +328,26 @@ Volume::Mount(const char* deviceName, uint32 flags)
 		ERROR("Volume::Mount(): Identify() failed\n");
 		return status;
 	}
-	
+
 	fBlockSize = 1 << fSuperBlock.BlockShift();
 	TRACE("block size %" B_PRIu32 "\n", fBlockSize);
 	fEntriesPerBlock = (fBlockSize / sizeof(struct exfat_entry));
-		
-	// check if the device size is large enough to hold the file system
-	off_t diskSize;
-	status = opener.GetSize(&diskSize);
+
+	// check that the device is large enough to hold the partition
+	off_t deviceSize;
+	status = opener.GetSize(&deviceSize);
 	if (status != B_OK)
 		return status;
-	if (diskSize < (off_t)fSuperBlock.NumBlocks() << fSuperBlock.BlockShift())
+
+	off_t partitionSize = (off_t)fSuperBlock.NumBlocks()
+		<< fSuperBlock.BlockShift();
+	if (deviceSize < partitionSize)
 		return B_BAD_VALUE;
 
 	fBlockCache = opener.InitCache(fSuperBlock.NumBlocks(), fBlockSize);
 	if (fBlockCache == NULL)
 		return B_ERROR;
-	
+
 	TRACE("Volume::Mount(): Initialized block cache: %p\n", fBlockCache);
 
 	ino_t rootIno;
@@ -348,8 +363,8 @@ Volume::Mount(const char* deviceName, uint32 flags)
 		return status;
 	}
 
-	TRACE("Volume::Mount(): Found root node: %" B_PRIdINO " (%s)\n", fRootNode->ID(),
-		strerror(fRootNode->InitCheck()));
+	TRACE("Volume::Mount(): Found root node: %" B_PRIdINO " (%s)\n",
+		fRootNode->ID(), strerror(fRootNode->InitCheck()));
 
 	// all went fine
 	opener.Keep();
@@ -358,25 +373,8 @@ Volume::Mount(const char* deviceName, uint32 flags)
 	LabelVisitor visitor(this);
 	iterator.Iterate(visitor);
 
-	if (fName[0] == '\0') {
-		// generate a more or less descriptive volume name
-		off_t divisor = 1ULL << 40;
-		char unit = 'T';
-		if (diskSize < divisor) {
-			divisor = 1UL << 30;
-			unit = 'G';
-			if (diskSize < divisor) {
-				divisor = 1UL << 20;
-				unit = 'M';
-			}
-		}
-
-		double size = double((10 * diskSize + divisor - 1) / divisor);
-			// %g in the kernel does not support precision...
-
-		snprintf(fName, sizeof(fName), "%g %cB ExFAT Volume",
-			size / 10, unit);
-	}
+	if (fName[0] == '\0')
+		get_default_volume_name(partitionSize, fName, sizeof(fName));
 
 	return B_OK;
 }
@@ -512,4 +510,3 @@ Volume::Identify(int fd, exfat_super_block* superBlock)
 
 	return B_OK;
 }
-

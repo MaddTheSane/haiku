@@ -1,6 +1,11 @@
 /*
  * Copyright 2009-2010, Axel Dörfler, axeld@pinc-software.de.
+ * Copyright 2013-2014 Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
+ *
+ * Authors:
+ *		Axel Dörfler, axeld@pinc-software.de
+ *		John Scipione, jscipione@gmail.com
  */
 
 
@@ -13,10 +18,17 @@
 #include <Bitmap.h>
 #include <ControlLook.h>
 #include <LayoutUtils.h>
+#include <MenuItem.h>
+#include <PopUpMenu.h>
 #include <Region.h>
 #include <Window.h>
 
 #include "Keymap.h"
+#include "KeymapApplication.h"
+
+
+#undef B_TRANSLATION_CONTEXT
+#define B_TRANSLATION_CONTEXT "Keyboard Layout View"
 
 
 static const rgb_color kBrightColor = {230, 230, 230, 255};
@@ -24,6 +36,48 @@ static const rgb_color kDarkColor = {200, 200, 200, 255};
 static const rgb_color kSecondDeadKeyColor = {240, 240, 150, 255};
 static const rgb_color kDeadKeyColor = {152, 203, 255, 255};
 static const rgb_color kLitIndicatorColor = {116, 212, 83, 255};
+
+
+static bool
+is_left_modifier_key(uint32 keyCode)
+{
+	return keyCode == 0x4b	// left shift
+		|| keyCode == 0x5d	// left command
+		|| keyCode == 0x5c	// left control
+		|| keyCode == 0x66;	// left option
+}
+
+
+static bool
+is_right_modifier_key(uint32 keyCode)
+{
+	return keyCode == 0x56	// right shift
+		|| keyCode == 0x5f	// right command
+		|| keyCode == 0x60	// right control
+		|| keyCode == 0x67	// right option
+		|| keyCode == 0x68;	// menu
+}
+
+
+static bool
+is_lock_key(uint32 keyCode)
+{
+	return keyCode == 0x3b	// caps lock
+		|| keyCode == 0x22	// num lock
+		|| keyCode == 0x0f;	// scroll lock
+}
+
+
+static bool
+is_mappable_to_modifier(uint32 keyCode)
+{
+	return is_left_modifier_key(keyCode)
+		|| is_right_modifier_key(keyCode)
+		|| is_lock_key(keyCode);
+}
+
+
+//	#pragma mark - KeyboardLayoutView
 
 
 KeyboardLayoutView::KeyboardLayoutView(const char* name)
@@ -146,28 +200,139 @@ KeyboardLayoutView::MouseDown(BPoint point)
 	fDragKey = NULL;
 	fDropPoint.x = -1;
 
-	Key* key = _KeyAt(point);
-	if (key == NULL)
-		return;
-
 	int32 buttons = 0;
 	if (Looper() != NULL && Looper()->CurrentMessage() != NULL)
 		Looper()->CurrentMessage()->FindInt32("buttons", &buttons);
 
-	if ((buttons & B_TERTIARY_MOUSE_BUTTON) != 0
+	Key* key = _KeyAt(point);
+	if (fKeymap == NULL || key == NULL) {
+		fButtons = buttons;
+		return;
+	}
+
+	if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0
+			|| ((buttons & B_PRIMARY_MOUSE_BUTTON) != 0
+		&& (modifiers() & B_CONTROL_KEY) != 0)) {
+		// secondary mouse button, pop up a swap context menu
+		if (!is_mappable_to_modifier(key->code)) {
+			// ToDo: pop up a list of alternative characters
+			fButtons = buttons;
+			return;
+		}
+
+		// pop up the modifier keys menu
+		BPopUpMenu* modifiersPopUp = new BPopUpMenu("Modifiers pop up",
+			true, true, B_ITEMS_IN_COLUMN);
+		const key_map& map = fKeymap->Map();
+		bool isLockKey = is_lock_key(key->code);
+		BMenuItem* item = NULL;
+
+		if (is_left_modifier_key(key->code) || isLockKey) {
+			item = _CreateSwapModifiersMenuItem(B_LEFT_SHIFT_KEY,
+				isLockKey ? B_LEFT_SHIFT_KEY : B_SHIFT_KEY,
+				map.left_shift_key, key->code);
+			modifiersPopUp->AddItem(item);
+			if (key->code == map.left_shift_key)
+				item->SetMarked(true);
+
+			item = _CreateSwapModifiersMenuItem(B_LEFT_CONTROL_KEY,
+				isLockKey ? B_LEFT_CONTROL_KEY : B_CONTROL_KEY,
+				map.left_control_key, key->code);
+			modifiersPopUp->AddItem(item);
+			if (key->code == map.left_control_key)
+				item->SetMarked(true);
+
+			item = _CreateSwapModifiersMenuItem(B_LEFT_OPTION_KEY,
+				isLockKey ? B_LEFT_OPTION_KEY : B_OPTION_KEY,
+				map.left_option_key, key->code);
+			modifiersPopUp->AddItem(item);
+			if (key->code == map.left_option_key)
+				item->SetMarked(true);
+
+			item = _CreateSwapModifiersMenuItem(B_LEFT_COMMAND_KEY,
+				isLockKey ? B_LEFT_COMMAND_KEY : B_COMMAND_KEY,
+				map.left_command_key, key->code);
+			modifiersPopUp->AddItem(item);
+			if (key->code == map.left_command_key)
+				item->SetMarked(true);
+		}
+
+		if (is_right_modifier_key(key->code) || isLockKey) {
+			if (isLockKey)
+				modifiersPopUp->AddSeparatorItem();
+
+			item = _CreateSwapModifiersMenuItem(B_RIGHT_SHIFT_KEY,
+				isLockKey ? B_RIGHT_SHIFT_KEY : B_SHIFT_KEY,
+				map.right_shift_key, key->code);
+			modifiersPopUp->AddItem(item);
+			if (key->code == map.right_shift_key)
+				item->SetMarked(true);
+
+			item = _CreateSwapModifiersMenuItem(B_RIGHT_CONTROL_KEY,
+				isLockKey ? B_RIGHT_CONTROL_KEY : B_CONTROL_KEY,
+				map.right_control_key, key->code);
+			modifiersPopUp->AddItem(item);
+			if (key->code == map.right_control_key)
+				item->SetMarked(true);
+		}
+
+		item = _CreateSwapModifiersMenuItem(B_MENU_KEY, B_MENU_KEY,
+			map.menu_key, key->code);
+		modifiersPopUp->AddItem(item);
+		if (key->code == map.menu_key)
+			item->SetMarked(true);
+
+		if (is_right_modifier_key(key->code) || isLockKey) {
+			item = _CreateSwapModifiersMenuItem(B_RIGHT_OPTION_KEY,
+				isLockKey ? B_RIGHT_OPTION_KEY : B_OPTION_KEY,
+				map.right_option_key, key->code);
+			modifiersPopUp->AddItem(item);
+			if (key->code == map.right_option_key)
+				item->SetMarked(true);
+
+			item = _CreateSwapModifiersMenuItem(B_RIGHT_COMMAND_KEY,
+				isLockKey ? B_RIGHT_COMMAND_KEY : B_COMMAND_KEY,
+				map.right_command_key, key->code);
+			modifiersPopUp->AddItem(item);
+			if (key->code == map.right_command_key)
+				item->SetMarked(true);
+		}
+
+		modifiersPopUp->AddSeparatorItem();
+
+		item = _CreateSwapModifiersMenuItem(B_CAPS_LOCK, B_CAPS_LOCK,
+			map.caps_key, key->code);
+		modifiersPopUp->AddItem(item);
+		if (key->code == map.caps_key)
+			item->SetMarked(true);
+
+		item = _CreateSwapModifiersMenuItem(B_NUM_LOCK, B_NUM_LOCK,
+			map.num_key, key->code);
+		modifiersPopUp->AddItem(item);
+		if (key->code == map.num_key)
+			item->SetMarked(true);
+
+		item = _CreateSwapModifiersMenuItem(B_SCROLL_LOCK, B_SCROLL_LOCK,
+			map.scroll_key, key->code);
+		modifiersPopUp->AddItem(item);
+		if (key->code == map.scroll_key)
+			item->SetMarked(true);
+
+		modifiersPopUp->SetAsyncAutoDestruct(true);
+		if (modifiersPopUp->SetTargetForItems(Window()) == B_OK)
+			modifiersPopUp->Go(ConvertToScreen(point), true);
+	} else if ((buttons & B_TERTIARY_MOUSE_BUTTON) != 0
 		&& (fButtons & B_TERTIARY_MOUSE_BUTTON) == 0) {
-		// toggle the "deadness" of dead keys via middle mouse button
-		if (fKeymap != NULL) {
-			bool isEnabled = false;
-			uint8 deadKey
-				= fKeymap->DeadKey(key->code, fModifiers, &isEnabled);
-			if (deadKey > 0) {
-				fKeymap->SetDeadKeyEnabled(key->code, fModifiers, !isEnabled);
-				_InvalidateKey(key);
-			}
+		// tertiary mouse button, toggle the "deadness" of dead keys
+		bool isEnabled = false;
+		uint8 deadKey = fKeymap->DeadKey(key->code, fModifiers, &isEnabled);
+		if (deadKey > 0) {
+			fKeymap->SetDeadKeyEnabled(key->code, fModifiers, !isEnabled);
+			_InvalidateKey(key);
 		}
 	} else {
-		if (fKeymap != NULL && fKeymap->IsModifierKey(key->code)) {
+		// primary mouse button
+		if (fKeymap->IsModifierKey(key->code)) {
 			if (_KeyState(key->code)) {
 				uint32 modifier = fKeymap->Modifier(key->code);
 				if ((modifier & modifiers()) == 0) {
@@ -201,32 +366,40 @@ KeyboardLayoutView::MouseUp(BPoint point)
 	if (Looper() != NULL && Looper()->CurrentMessage() != NULL)
 		Looper()->CurrentMessage()->FindInt32("buttons", &buttons);
 
-	if (key != NULL) {
-		if ((fButtons & B_TERTIARY_MOUSE_BUTTON) != 0
-			&& (buttons & B_TERTIARY_MOUSE_BUTTON) == 0) {
-			_SetKeyState(key->code, false);
-			_InvalidateKey(key);
-			fButtons = buttons;
-		} else {
-			fButtons = buttons;
-
-			// modifier keys are sticky when used with the mouse
-			if (fKeymap != NULL && fKeymap->IsModifierKey(key->code))
-				return;
-
-			_SetKeyState(key->code, false);
-
-			if (_HandleDeadKey(key->code, fModifiers) && fDeadKey != 0)
-				return;
-
-			_InvalidateKey(key);
-
-			if (fDragKey == NULL && fKeymap != NULL) {
-				// Send fake key down message to target
-				_SendFakeKeyDown(key);
-			}
-		}
+	if (fKeymap == NULL || key == NULL) {
+		fDragKey = NULL;
+		return;
 	}
+
+	if ((buttons & B_SECONDARY_MOUSE_BUTTON) != 0
+		|| ((buttons & B_PRIMARY_MOUSE_BUTTON) != 0
+			&& (modifiers() & B_CONTROL_KEY) != 0)) {
+		; // do nothing
+	} else if ((buttons & B_TERTIARY_MOUSE_BUTTON) != 0
+		&& (fButtons & B_TERTIARY_MOUSE_BUTTON) == 0) {
+		// toggle the "deadness" of dead keys via middle mouse button
+		_SetKeyState(key->code, false);
+		_InvalidateKey(key);
+		fButtons = buttons;
+	} else {
+		// primary mouse button
+		fButtons = buttons;
+
+		// modifier keys are sticky when used with the mouse
+		if (fKeymap->IsModifierKey(key->code))
+			return;
+
+		_SetKeyState(key->code, false);
+
+		if (_HandleDeadKey(key->code, fModifiers) && fDeadKey != 0)
+			return;
+
+		_InvalidateKey(key);
+
+		if (fDragKey == NULL)
+			_SendFakeKeyDown(key);
+	}
+
 	fDragKey = NULL;
 }
 
@@ -256,59 +429,62 @@ KeyboardLayoutView::MouseMoved(BPoint point, uint32 transit,
 	int32 buttons;
 	if (Window()->CurrentMessage() == NULL
 		|| Window()->CurrentMessage()->FindInt32("buttons", &buttons) != B_OK
-		|| buttons == 0)
+		|| buttons == 0) {
+		return;
+	}
+
+	if (fDragKey != NULL || !(fabs(point.x - fClickPoint.x) > 4
+		|| fabs(point.y - fClickPoint.y) > 4)) {
+		return;
+	}
+
+	// start dragging
+	Key* key = _KeyAt(fClickPoint);
+	if (key == NULL)
 		return;
 
-	if (fDragKey == NULL && (fabs(point.x - fClickPoint.x) > 4
-		|| fabs(point.y - fClickPoint.y) > 4)) {
-		// start dragging
-		Key* key = _KeyAt(fClickPoint);
-		if (key == NULL)
-			return;
+	BRect frame = _FrameFor(key);
+	BPoint offset = fClickPoint - frame.LeftTop();
+	frame.OffsetTo(B_ORIGIN);
 
-		BRect frame = _FrameFor(key);
-		BPoint offset = fClickPoint - frame.LeftTop();
-		frame.OffsetTo(B_ORIGIN);
+	BRect rect = frame;
+	rect.right--;
+	rect.bottom--;
+	BBitmap* bitmap = new BBitmap(rect, B_RGBA32, true);
+	bitmap->Lock();
 
-		BRect rect = frame;
-		rect.right--;
-		rect.bottom--;
-		BBitmap* bitmap = new BBitmap(rect, B_RGBA32, true);
-		bitmap->Lock();
+	BView* view = new BView(rect, "drag", B_FOLLOW_NONE, 0);
+	bitmap->AddChild(view);
 
-		BView* view = new BView(rect, "drag", B_FOLLOW_NONE, 0);
-		bitmap->AddChild(view);
+	view->SetHighColor(0, 0, 0, 0);
+	view->FillRect(view->Bounds());
+	view->SetDrawingMode(B_OP_ALPHA);
+	view->SetHighColor(0, 0, 0, 128);
+	// set the level of transparency by value
+	view->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_COMPOSITE);
+	_DrawKey(view, frame, key, frame, false);
 
-		view->SetHighColor(0, 0, 0, 0);
-		view->FillRect(view->Bounds());
-		view->SetDrawingMode(B_OP_ALPHA);
-		view->SetHighColor(0, 0, 0, 128);
-		// set the level of transparency by value
-		view->SetBlendingMode(B_CONSTANT_ALPHA, B_ALPHA_COMPOSITE);
-		_DrawKey(view, frame, key, frame, false);
+	view->Sync();
+	bitmap->Unlock();
 
-		view->Sync();
-		bitmap->Unlock();
+	BMessage drag(B_MIME_DATA);
+	drag.AddInt32("key", key->code);
 
-		BMessage drag(B_MIME_DATA);
-		drag.AddInt32("key", key->code);
-
-		char* string;
-		int32 numBytes;
-		fKeymap->GetChars(key->code, fModifiers, fDeadKey, &string,
-			&numBytes);
-		if (string != NULL) {
-			drag.AddData("text/plain", B_MIME_DATA, string, numBytes);
-			delete[] string;
-		}
-
-		DragMessage(&drag, bitmap, B_OP_ALPHA, offset);
-		fDragKey = key;
-		fDragModifiers = fModifiers;
-
-		fKeyState[key->code / 8] &= ~(1 << (7 - (key->code & 7)));
-		_InvalidateKey(key);
+	char* string;
+	int32 numBytes;
+	fKeymap->GetChars(key->code, fModifiers, fDeadKey, &string,
+		&numBytes);
+	if (string != NULL) {
+		drag.AddData("text/plain", B_MIME_DATA, string, numBytes);
+		delete[] string;
 	}
+
+	DragMessage(&drag, bitmap, B_OP_ALPHA, offset);
+	fDragKey = key;
+	fDragModifiers = fModifiers;
+
+	fKeyState[key->code / 8] &= ~(1 << (7 - (key->code & 7)));
+	_InvalidateKey(key);
 }
 
 
@@ -411,13 +587,14 @@ KeyboardLayoutView::MessageReceived(BMessage* message)
 			int32 buttons;
 			if (!message->IsSourceRemote()
 				&& message->FindInt32("buttons", &buttons) == B_OK
-				&& (buttons & B_SECONDARY_MOUSE_BUTTON) != 0
+				&& (buttons & B_PRIMARY_MOUSE_BUTTON) != 0
 				&& message->FindInt32("key", &keyCode) == B_OK) {
 				// switch keys if the dropped object came from us
 				Key* key = _KeyForCode(keyCode);
 				if (key == NULL
-					|| (key == fDropTarget && fDragModifiers == fModifiers))
+					|| (key == fDropTarget && fDragModifiers == fModifiers)) {
 					return;
+				}
 
 				char* string;
 				int32 numBytes;
@@ -659,12 +836,12 @@ KeyboardLayoutView::_DrawKey(BView* view, BRect updateRect, const Key* key,
 			0.0f, 0.0f, 4.0f, 4.0f, base, background,
 			pressed ? BControlLook::B_ACTIVATED : 0,
 			BControlLook::B_LEFT_BORDER | BControlLook::B_RIGHT_BORDER
-				 | BControlLook::B_BOTTOM_BORDER);
+				| BControlLook::B_BOTTOM_BORDER);
 		be_control_look->DrawButtonBackground(view, bottomRight, updateRect,
 			0.0f, 0.0f, 4.0f, 4.0f, base,
 			pressed ? BControlLook::B_ACTIVATED : 0,
 			BControlLook::B_LEFT_BORDER | BControlLook::B_RIGHT_BORDER
-				 | BControlLook::B_BOTTOM_BORDER);
+				| BControlLook::B_BOTTOM_BORDER);
 
 		// clip out the bottom left corner
 		bottomLeft.right += 1;
@@ -915,7 +1092,7 @@ KeyboardLayoutView::_GetKeyLabel(const Key* key, char* text, size_t textSize,
 bool
 KeyboardLayoutView::_IsKeyPressed(uint32 code)
 {
-	if (fDropTarget != NULL && fDropTarget->code == (int32)code)
+	if (fDropTarget != NULL && fDropTarget->code == code)
 		return true;
 
 	return _KeyState(code);
@@ -952,7 +1129,7 @@ KeyboardLayoutView::_KeyForCode(uint32 code)
 
 	for (int32 i = 0; i < fLayout->CountKeys(); i++) {
 		Key* key = fLayout->KeyAt(i);
-		if (key->code == (int32)code)
+		if (key->code == code)
 			return key;
 	}
 
@@ -1009,10 +1186,11 @@ KeyboardLayoutView::_KeyChanged(const BMessage* message)
 	const uint8* state;
 	ssize_t size;
 	int32 key;
-	if (message->FindData("states", B_UINT8_TYPE, (const void**)&state, &size)
-			!= B_OK
-		|| message->FindInt32("key", &key) != B_OK)
+	if (message->FindInt32("key", &key) != B_OK
+		|| message->FindData("states", B_UINT8_TYPE,
+			(const void**)&state, &size) != B_OK) {
 		return;
+	}
 
 	// Update key state, and invalidate change keys
 
@@ -1054,7 +1232,7 @@ KeyboardLayoutView::_KeyAt(BPoint point)
 	keyPoint.x /= fFactor;
 	keyPoint.y /= fFactor;
 
-	for (int32 i = 0; i < fLayout->CountKeys(); i++) {
+	for (int32 i = fLayout->CountKeys() - 1; i >= 0; i--) {
 		Key* key = fLayout->KeyAt(i);
 		if (key->frame.Contains(keyPoint)) {
 			BRect frame = _FrameFor(key);
@@ -1073,10 +1251,10 @@ BRect
 KeyboardLayoutView::_FrameFor(BRect keyFrame)
 {
 	BRect rect;
-	rect.left   = ceilf(keyFrame.left * fFactor);
-	rect.top    = ceilf(keyFrame.top * fFactor);
-	rect.right  = floorf((keyFrame.Width()) * fFactor + rect.left - fGap - 1);
-	rect.bottom = floorf((keyFrame.Height()) * fFactor + rect.top - fGap - 1);
+	rect.left	= ceilf(keyFrame.left * fFactor);
+	rect.top	= ceilf(keyFrame.top * fFactor);
+	rect.right	= floorf((keyFrame.Width()) * fFactor + rect.left - fGap - 1);
+	rect.bottom	= floorf((keyFrame.Height()) * fFactor + rect.top - fGap - 1);
 	rect.OffsetBy(fOffset);
 
 	return rect;
@@ -1167,4 +1345,72 @@ KeyboardLayoutView::_SendFakeKeyDown(const Key* key)
 	}
 
 	fTarget.SendMessage(&message);
+}
+
+
+BMenuItem*
+KeyboardLayoutView::_CreateSwapModifiersMenuItem(uint32 modifier,
+	uint32 displayModifier, uint32 oldCode, uint32 newCode)
+{
+	int32 mask = B_SHIFT_KEY | B_COMMAND_KEY | B_CONTROL_KEY | B_OPTION_KEY;
+	const char* oldName = _NameForModifier(oldCode == 0x00 ? modifier
+		: fKeymap->Modifier(oldCode) & ~mask, false);
+	const char* newName = _NameForModifier(newCode == 0x00 ? modifier
+		: fKeymap->Modifier(newCode) & ~mask, false);
+
+	BMessage* message = new BMessage(kMsgUpdateModifierKeys);
+	if (newName != NULL)
+		message->AddUInt32(newName, oldCode);
+
+	if (oldName != NULL)
+		message->AddUInt32(oldName, newCode);
+
+	if (oldCode == newCode)
+		message->AddBool("unset", true);
+
+	return new BMenuItem(_NameForModifier(displayModifier, true), message);
+}
+
+
+const char*
+KeyboardLayoutView::_NameForModifier(uint32 modifier, bool pretty)
+{
+	if (modifier == B_CAPS_LOCK)
+		return pretty ? B_TRANSLATE("Caps lock") : "caps_key";
+	else if (modifier == B_NUM_LOCK)
+		return pretty ? B_TRANSLATE("Num lock") : "num_key";
+	else if (modifier == B_SCROLL_LOCK)
+		return pretty ? B_TRANSLATE("Scroll lock") : "scroll_key";
+	else if (modifier == B_SHIFT_KEY) {
+		return pretty ? B_TRANSLATE_COMMENT("Shift", "Shift key")
+			: "shift_key";
+	} else if (modifier == B_LEFT_SHIFT_KEY)
+		return pretty ? B_TRANSLATE("Left shift") : "left_shift_key";
+	else if (modifier == B_RIGHT_SHIFT_KEY)
+		return pretty ? B_TRANSLATE("Right shift") : "right_shift_key";
+	else if (modifier == B_COMMAND_KEY) {
+		return pretty ? B_TRANSLATE_COMMENT("Command", "Command key")
+			: "command_key";
+	} else if (modifier == B_LEFT_COMMAND_KEY)
+		return pretty ? B_TRANSLATE("Left command") : "left_command_key";
+	else if (modifier == B_RIGHT_COMMAND_KEY)
+		return pretty ? B_TRANSLATE("Right command") : "right_command_key";
+	else if (modifier == B_CONTROL_KEY) {
+		return pretty ? B_TRANSLATE_COMMENT("Control", "Control key")
+			: "control_key";
+	} else if (modifier == B_LEFT_CONTROL_KEY)
+		return pretty ? B_TRANSLATE("Left control") : "left_control_key";
+	else if (modifier == B_RIGHT_CONTROL_KEY)
+		return pretty ? B_TRANSLATE("Right control") : "right_control_key";
+	else if (modifier == B_OPTION_KEY) {
+		return pretty ? B_TRANSLATE_COMMENT("Option", "Option key")
+			: "option_key";
+	} else if (modifier == B_LEFT_OPTION_KEY)
+		return pretty ? B_TRANSLATE("Left option") : "left_option_key";
+	else if (modifier == B_RIGHT_OPTION_KEY)
+		return pretty ? B_TRANSLATE("Right option") : "right_option_key";
+	else if (modifier == B_MENU_KEY)
+		return pretty ? B_TRANSLATE_COMMENT("Menu", "Menu key") : "menu_key";
+
+	return NULL;
 }

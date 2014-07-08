@@ -7,18 +7,24 @@
  */
 
 
+#include <Url.h>
+
 #include <ctype.h>
 #include <cstdio>
 #include <cstdlib>
 #include <new>
 
-#include <Url.h>
+#include <MimeType.h>
+#include <Roster.h>
+
+#include <RegExp.h>
+
 
 static const char* kArchivedUrl = "be:url string";
 
 
 BUrl::BUrl(const char* url)
-	: 
+	:
 	fUrlString(),
 	fProtocol(),
 	fUser(),
@@ -27,14 +33,15 @@ BUrl::BUrl(const char* url)
 	fPort(0),
 	fPath(),
 	fRequest(),
-	fHasAuthority(false)
+	fHasHost(false),
+	fHasFragment(false)
 {
 	SetUrlString(url);
 }
 
 
 BUrl::BUrl(BMessage* archive)
-	: 
+	:
 	fUrlString(),
 	fProtocol(),
 	fUser(),
@@ -43,17 +50,20 @@ BUrl::BUrl(BMessage* archive)
 	fPort(0),
 	fPath(),
 	fRequest(),
-	fHasAuthority(false)
+	fHasHost(false),
+	fHasFragment(false)
 {
 	BString url;
 
 	if (archive->FindString(kArchivedUrl, &url) == B_OK)
 		SetUrlString(url);
+	else
+		_ResetFields();
 }
 
 
 BUrl::BUrl(const BUrl& other)
-	: 
+	:
 	BArchivable(),
 	fUrlString(),
 	fProtocol(),
@@ -63,14 +73,15 @@ BUrl::BUrl(const BUrl& other)
 	fPort(0),
 	fPath(),
 	fRequest(),
-	fHasAuthority(false)
+	fHasHost(false),
+	fHasFragment(false)
 {
 	*this = other;
 }
 
 
-BUrl::BUrl()
-	: 
+BUrl::BUrl(const BUrl& base, const BString& location)
+	:
 	fUrlString(),
 	fProtocol(),
 	fUser(),
@@ -79,8 +90,88 @@ BUrl::BUrl()
 	fPort(0),
 	fPath(),
 	fRequest(),
-	fHasAuthority(false)
+	fAuthorityValid(false),
+	fUserInfoValid(false),
+	fHasUserName(false),
+	fHasPassword(false),
+	fHasHost(false),
+	fHasPort(false),
+	fHasFragment(false)
 {
+	// This implements the algorithm in RFC3986, Section 5.2.
+
+	BUrl relative(location);
+	if (relative.HasProtocol()) {
+		SetProtocol(relative.Protocol());
+		if (relative.HasAuthority())
+			SetAuthority(relative.Authority());
+		SetPath(relative.Path());
+		SetRequest(relative.Request());
+	} else {
+		if (relative.HasAuthority()) {
+			SetAuthority(relative.Authority());
+			SetPath(relative.Path());
+			SetRequest(relative.Request());
+		} else {
+			if (relative.Path().IsEmpty()) {
+				_SetPathUnsafe(base.Path());
+				if (relative.HasRequest())
+					SetRequest(relative.Request());
+				else
+					SetRequest(base.Request());
+			} else {
+				if (relative.Path()[0] == '/')
+					SetPath(relative.Path());
+				else {
+					BString path = base._MergePath(relative.Path());
+					SetPath(path);
+				}
+				SetRequest(relative.Request());
+			}
+
+			if (base.HasAuthority())
+				SetAuthority(base.Authority());
+		}
+		SetProtocol(base.Protocol());
+	}
+
+	if (relative.HasFragment())
+		SetFragment(relative.Fragment());
+}
+
+
+BUrl::BUrl()
+	:
+	fUrlString(),
+	fProtocol(),
+	fUser(),
+	fPassword(),
+	fHost(),
+	fPort(0),
+	fPath(),
+	fRequest(),
+	fHasHost(false),
+	fHasFragment(false)
+{
+	_ResetFields();
+}
+
+
+BUrl::BUrl(const BPath& path)
+	:
+	fUrlString(),
+	fProtocol(),
+	fUser(),
+	fPassword(),
+	fHost(),
+	fPort(0),
+	fPath(),
+	fRequest(),
+	fHasHost(false),
+	fHasFragment(false)
+{
+	SetUrlString(UrlEncode(path.Path(), true, true));
+	SetProtocol("file");
 }
 
 
@@ -104,7 +195,7 @@ BUrl&
 BUrl::SetProtocol(const BString& protocol)
 {
 	fProtocol = protocol;
-	fHasProtocol = true;
+	fHasProtocol = !fProtocol.IsEmpty();
 	fUrlStringValid = false;
 	return *this;
 }
@@ -114,7 +205,7 @@ BUrl&
 BUrl::SetUserName(const BString& user)
 {
 	fUser = user;
-	fHasUserName = true;
+	fHasUserName = !fUser.IsEmpty();
 	fUrlStringValid = false;
 	fAuthorityValid = false;
 	fUserInfoValid = false;
@@ -126,7 +217,7 @@ BUrl&
 BUrl::SetPassword(const BString& password)
 {
 	fPassword = password;
-	fHasPassword = true;
+	fHasPassword = !fPassword.IsEmpty();
 	fUrlStringValid = false;
 	fAuthorityValid = false;
 	fUserInfoValid = false;
@@ -138,7 +229,7 @@ BUrl&
 BUrl::SetHost(const BString& host)
 {
 	fHost = host;
-	fHasHost = true;
+	fHasHost = !fHost.IsEmpty();
 	fUrlStringValid = false;
 	fAuthorityValid = false;
 	return *this;
@@ -149,7 +240,7 @@ BUrl&
 BUrl::SetPort(int port)
 {
 	fPort = port;
-	fHasPort = true;
+	fHasPort = (port != 0);
 	fUrlStringValid = false;
 	fAuthorityValid = false;
 	return *this;
@@ -159,9 +250,80 @@ BUrl::SetPort(int port)
 BUrl&
 BUrl::SetPath(const BString& path)
 {
-	fPath = path;
-	fHasPath = true;
-	fUrlStringValid = false;
+	// Implements RFC3986 section 5.2.4, "Remove dot segments"
+
+	// 1.
+	BString output;
+	BString input(path);
+
+	// 2.
+	while(!input.IsEmpty())
+	{
+		// 2.A.
+		if (input.StartsWith("./"))
+		{
+			input.Remove(0, 2);
+			continue;
+		}
+
+		if (input.StartsWith("../"))
+		{
+			input.Remove(0, 3);
+			continue;
+		}
+
+		// 2.B.
+		if (input.StartsWith("/./"))
+		{
+			input.Remove(0, 2);
+			continue;
+		}
+
+		if (input == "/.")
+		{
+			input.Remove(1, 1);
+			continue;
+		}
+
+		// 2.C.
+		if (input.StartsWith("/../"))
+		{
+			input.Remove(0, 3);
+			output.Truncate(output.FindLast('/'));
+			continue;
+		}
+
+		if (input == "/..")
+		{
+			input.Remove(1, 2);
+			output.Truncate(output.FindLast('/'));
+			continue;
+		}
+
+		// 2.D.
+		if (input == "." || input == "..")
+		{
+			break;
+		}
+
+		if (input == "/.")
+		{
+			input.Remove(1, 1);
+			continue;
+		}
+
+		// 2.E.
+		int slashpos = input.FindFirst('/', 1);
+		if (slashpos > 0) {
+			output.Append(input, slashpos);
+			input.Remove(0, slashpos);
+		} else {
+			output.Append(input);
+			break;
+		}
+	}
+
+	_SetPathUnsafe(output);
 	return *this;
 }
 
@@ -170,7 +332,7 @@ BUrl&
 BUrl::SetRequest(const BString& request)
 {
 	fRequest = request;
-	fHasRequest = true;
+	fHasRequest = !fRequest.IsEmpty();
 	fUrlStringValid = false;
 	return *this;
 }
@@ -280,7 +442,7 @@ BUrl::Authority() const
 
 		if (HasPort())
 			fAuthority << ':' << fPort;
-			
+
 		fAuthorityValid = true;
 	}
 	return fAuthority;
@@ -314,8 +476,8 @@ BUrl::Fragment() const
 bool
 BUrl::IsValid() const
 {
-	// TODO
-	return false;
+	// TODO: Implement for real!
+	return fHasProtocol && (fHasHost || fHasPath);
 }
 
 
@@ -329,7 +491,7 @@ BUrl::HasProtocol() const
 bool
 BUrl::HasAuthority() const
 {
-	return fHasAuthority;
+	return fHasHost || fHasUserName;
 }
 
 
@@ -350,7 +512,7 @@ BUrl::HasPassword() const
 bool
 BUrl::HasUserInfo() const
 {
-	return fHasUserInfo;
+	return fHasUserName || fHasPassword;
 }
 
 
@@ -414,6 +576,76 @@ BUrl::UrlDecode(bool strict)
 }
 
 
+// #pragma mark - utility functionality
+
+
+bool
+BUrl::HasPreferredApplication() const
+{
+	BString appSignature = PreferredApplication();
+	BMimeType mime(appSignature.String());
+
+	if (appSignature.IFindFirst("application/") == 0
+		&& mime.IsValid())
+		return true;
+
+	return false;
+}
+
+
+BString
+BUrl::PreferredApplication() const
+{
+	BString appSignature;
+	BMimeType mime(_UrlMimeType().String());
+	mime.GetPreferredApp(appSignature.LockBuffer(B_MIME_TYPE_LENGTH));
+	appSignature.UnlockBuffer();
+
+	return BString(appSignature);
+}
+
+
+status_t
+BUrl::OpenWithPreferredApplication(bool onProblemAskUser) const
+{
+	if (!IsValid())
+		return B_BAD_VALUE;
+
+	BString urlString = UrlString();
+	if (urlString.Length() > B_PATH_NAME_LENGTH) {
+		// TODO: BAlert
+		//	if (onProblemAskUser)
+		//		BAlert ... Too long URL!
+#if DEBUG
+		fprintf(stderr, "URL too long");
+#endif
+		return B_NAME_TOO_LONG;
+	}
+
+	char* argv[] = {
+		const_cast<char*>("BUrlInvokedApplication"),
+		const_cast<char*>(urlString.String()),
+		NULL
+	};
+
+#if DEBUG
+	if (HasPreferredApplication())
+		printf("HasPreferredApplication() == true\n");
+	else
+		printf("HasPreferredApplication() == false\n");
+#endif
+
+	status_t status = be_roster->Launch(_UrlMimeType().String(), 1, argv+1);
+	if (status != B_OK) {
+#if DEBUG
+		fprintf(stderr, "Opening URL failed: %s\n", strerror(status));
+#endif
+	}
+
+	return status;
+}
+
+
 // #pragma mark Url encoding/decoding of string
 
 
@@ -441,7 +673,7 @@ BUrl::Archive(BMessage* into, bool deep) const
 
 	if (ret == B_OK)
 		ret = into->AddString(kArchivedUrl, UrlString());
-	
+
 	return ret;
 }
 
@@ -463,7 +695,7 @@ BUrl::operator==(BUrl& other) const
 {
 	UrlString();
 	other.UrlString();
-	
+
 	return fUrlString == other.fUrlString;
 }
 
@@ -484,15 +716,15 @@ BUrl::operator=(const BUrl& other)
 	fUrlStringValid		= other.fUrlStringValid;
 	if (fUrlStringValid)
 		fUrlString			= other.fUrlString;
-	
+
 	fAuthorityValid		= other.fAuthorityValid;
 	if (fAuthorityValid)
 		fAuthority			= other.fAuthority;
-	
+
 	fUserInfoValid		= other.fUserInfoValid;
 	if (fUserInfoValid)
 		fUserInfo			= other.fUserInfo;
-	
+
 	fProtocol			= other.fProtocol;
 	fUser				= other.fUser;
 	fPassword			= other.fPassword;
@@ -501,18 +733,16 @@ BUrl::operator=(const BUrl& other)
 	fPath				= other.fPath;
 	fRequest			= other.fRequest;
 	fFragment			= other.fFragment;
-	
+
 	fHasProtocol		= other.fHasProtocol;
 	fHasUserName		= other.fHasUserName;
 	fHasPassword		= other.fHasPassword;
-	fHasUserInfo		= other.fHasUserInfo;
 	fHasHost			= other.fHasHost;
 	fHasPort			= other.fHasPort;
-	fHasAuthority		= other.fHasAuthority;
 	fHasPath			= other.fHasPath;
 	fHasRequest			= other.fHasRequest;
 	fHasFragment		= other.fHasFragment;
-	
+
 	return *this;
 }
 
@@ -548,10 +778,8 @@ BUrl::_ResetFields()
 	fHasProtocol = false;
 	fHasUserName = false;
 	fHasPassword = false;
-	fHasUserInfo = false;
 	fHasHost = false;
 	fHasPort = false;
-	fHasAuthority = false;
 	fHasPath = false;
 	fHasRequest = false;
 	fHasFragment = false;
@@ -575,167 +803,169 @@ BUrl::_ResetFields()
 void
 BUrl::_ExplodeUrlString(const BString& url)
 {
-	int16 urlIndex = 0;
+	// The regexp is provided in RFC3986 (URI generic syntax), Appendix B
+	static RegExp urlMatcher(
+		"^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?");
 
 	_ResetFields();
 
-	_ExtractProtocol(url, &urlIndex);
-	_ExtractAuthority(url, &urlIndex);
-	_ExtractPath(url, &urlIndex);
-	_ExtractRequestAndFragment(url, &urlIndex);
-}
+	RegExp::MatchResult match = urlMatcher.Match(url.String());
 
+	if (!match.HasMatched())
+		return; // TODO error reporting
 
-void
-BUrl::_ExtractProtocol(const BString& urlString, int16* origin)
-{
-	int16 firstColon = urlString.FindFirst(':', *origin);
-
-	// If no colon is found, assume the protocol
-	// is not present
-	if (firstColon == -1) 
-		return;
-	else {
-		urlString.CopyInto(fProtocol, *origin, firstColon - *origin);
-		*origin = firstColon + 1;
-	}
-
+	// Scheme/Protocol
+	url.CopyInto(fProtocol, match.GroupStartOffsetAt(1),
+		match.GroupEndOffsetAt(1) - match.GroupStartOffsetAt(1));
 	if (!_IsProtocolValid()) {
 		fHasProtocol = false;
 		fProtocol.Truncate(0);
 	} else
 		fHasProtocol = true;
+
+	// Authority (including user credentials, host, and port
+	if (match.GroupEndOffsetAt(2) - match.GroupStartOffsetAt(2) > 0)
+	{
+		url.CopyInto(fAuthority, match.GroupStartOffsetAt(3),
+			match.GroupEndOffsetAt(3) - match.GroupStartOffsetAt(3));
+		SetAuthority(fAuthority);
+	} else {
+		fHasHost = false;
+		fHasPort = false;
+		fHasUserName = false;
+		fHasPassword = false;
+	}
+
+	// Path
+	url.CopyInto(fPath, match.GroupStartOffsetAt(4),
+		match.GroupEndOffsetAt(4) - match.GroupStartOffsetAt(4));
+	if (!fPath.IsEmpty())
+		fHasPath = true;
+
+	// Query
+	if (match.GroupEndOffsetAt(5) - match.GroupStartOffsetAt(5) > 0)
+	{
+		url.CopyInto(fRequest, match.GroupStartOffsetAt(6),
+			match.GroupEndOffsetAt(6) - match.GroupStartOffsetAt(6));
+		fHasRequest = true;
+	} else {
+		fRequest = "";
+		fHasRequest = false;
+	}
+
+	// Fragment
+	if (match.GroupEndOffsetAt(7) - match.GroupStartOffsetAt(7) > 0)
+	{
+		url.CopyInto(fFragment, match.GroupStartOffsetAt(8),
+			match.GroupEndOffsetAt(8) - match.GroupStartOffsetAt(8));
+		fHasFragment = true;
+	} else {
+		fFragment = "";
+		fHasFragment = false;
+	}
+}
+
+
+BString
+BUrl::_MergePath(const BString& relative) const
+{
+	// This implements RFC3986, Section 5.2.3.
+	if (HasAuthority() && fPath == "")
+	{
+		BString result("/");
+		result << relative;
+		return result;
+	}
+
+	BString result(fPath);
+	result.Truncate(result.FindLast("/") + 1);
+	result << relative;
+
+	return result;
+}
+
+
+// This sets the path without normalizing it. If fed with a path that has . or
+// .. segments, this would make the URL invalid.
+void
+BUrl::_SetPathUnsafe(const BString& path)
+{
+	fPath = path;
+	fHasPath = true; // RFC says an empty path is still a path
+	fUrlStringValid = false;
 }
 
 
 void
-BUrl::_ExtractAuthority(const BString& urlString, int16* origin)
+BUrl::SetAuthority(const BString& authority)
 {
-	// URI doesn't contain an authority field
-	if (urlString.FindFirst("//", *origin) != *origin)
+	fAuthority = authority;
+
+	fHasPort = false;
+	fHasUserName = false;
+	fHasPassword = false;
+
+	// An empty authority is still an authority, making it possible to have
+	// URLs such as file:///path/to/file.
+	// TODO however, there is no way to unset the authority once it is set...
+	// We may want to take a const char* parameter and allow NULL.
+	fHasHost = true;
+
+	if (fAuthority.IsEmpty())
 		return;
 
-	fHasAuthority = true;
-
-//	while (urlString.ByteAt(*origin) == '/')
-//		(*origin)++;
-
-	(*origin) += 2;
-
-
-	int16 userInfoEnd = urlString.FindFirst('@', *origin);
+	int32 userInfoEnd = fAuthority.FindFirst('@');
 
 	// URL contains userinfo field
 	if (userInfoEnd != -1) {
 		BString userInfo;
-		urlString.CopyInto(userInfo, *origin, userInfoEnd - *origin);
+		fAuthority.CopyInto(userInfo, 0, userInfoEnd);
 
 		int16 colonDelimiter = userInfo.FindFirst(':', 0);
 
-		if (colonDelimiter == *origin) {
-			fHasPassword = true;
-			fPassword = userInfo;
+		if (colonDelimiter == 0) {
+			SetPassword(userInfo);
 		} else if (colonDelimiter != -1) {
-			fHasUserName = true;
-			fHasPassword = true;
-
 			userInfo.CopyInto(fUser, 0, colonDelimiter);
 			userInfo.CopyInto(fPassword, colonDelimiter + 1,
 				userInfo.Length() - colonDelimiter);
+			SetUserName(fUser);
+			SetPassword(fPassword);
 		} else {
-			fHasUserName = true;
-			fUser = userInfo;
+			SetUserName(fUser);
 		}
-
-		fHasUserInfo = true;
-		*origin = userInfoEnd + 1;
 	}
 
 
 	// Extract the host part
-	int16 hostEnd = *origin;
+	int16 hostEnd = fAuthority.FindFirst(':', userInfoEnd);
+	userInfoEnd++;
 
-	while (hostEnd < urlString.Length()
-		&& !_IsAuthorityTerminator(urlString.ByteAt(hostEnd))
-		&& urlString.ByteAt(hostEnd) != ':') {
-		hostEnd++;
+	if (hostEnd < 0) {
+		// no ':' found, the host extends to the end of the URL
+		hostEnd = fAuthority.Length() + 1;
 	}
 
 	// The host is likely to be present if an authority is
 	// defined, but in some weird cases, it's not.
-	if (hostEnd != *origin) {
-		urlString.CopyInto(fHost, *origin, hostEnd - *origin);
-
-		*origin = hostEnd;
-		fHasHost = true;
+	if (hostEnd != userInfoEnd) {
+		fAuthority.CopyInto(fHost, userInfoEnd, hostEnd - userInfoEnd);
+		SetHost(fHost);
 	}
 
 	// Extract the port part
 	fPort = 0;
-	if (urlString.ByteAt(*origin) == ':') {
-		int16 portEnd = ++(*origin);
-
-		while (portEnd < urlString.Length()
-			&& !_IsAuthorityTerminator(urlString.ByteAt(portEnd)))
-			portEnd++;
+	if (fAuthority.ByteAt(hostEnd) == ':') {
+		hostEnd++;
+		int16 portEnd = fAuthority.Length();
 
 		BString portString;
-		urlString.CopyInto(portString, *origin, portEnd - *origin);
+		fAuthority.CopyInto(portString, hostEnd, portEnd - hostEnd);
 		fPort = atoi(portString.String());
 
 		//  Even if the port is invalid, the URL is considered to
 		// have a port.
 		fHasPort = portString.Length() > 0;
-		*origin = portEnd;
-	}
-}
-
-
-void
-BUrl::_ExtractPath(const BString& urlString, int16* origin)
-{
-	// Extract path from URL
-	if (urlString.ByteAt(*origin) == '/' || !HasAuthority()) {
-		int16 pathEnd = *origin;
-
-		while (pathEnd < urlString.Length()
-				&& !_IsPathTerminator(urlString.ByteAt(pathEnd))) {
-				pathEnd++;
-		}
-
-		urlString.CopyInto(fPath, *origin, pathEnd - *origin);
-
-		*origin = pathEnd;
-		fHasPath = true;
-	}
-}
-
-
-void
-BUrl::_ExtractRequestAndFragment(const BString& urlString, int16* origin)
-{
-	// Extract request field from URL
-	if (urlString.ByteAt(*origin) == '?') {
-		(*origin)++;
-		int16 requestEnd = urlString.FindFirst('#', *origin);
-
-		fHasRequest = true;
-
-		if (requestEnd == -1) {
-			urlString.CopyInto(fRequest, *origin, urlString.Length() - *origin);
-			return;
-		} else {
-			urlString.CopyInto(fRequest, *origin, requestEnd - *origin);
-			*origin = requestEnd;
-		}
-	}
-
-	// Extract fragment field if needed
-	if (urlString.ByteAt(*origin) == '#') {
-		(*origin)++;
-		urlString.CopyInto(fFragment, *origin, urlString.Length() - *origin);
-
-		fHasFragment = true;
 	}
 }
 
@@ -744,24 +974,24 @@ BUrl::_ExtractRequestAndFragment(const BString& urlString, int16* origin)
 BUrl::_DoUrlEncodeChunk(const BString& chunk, bool strict, bool directory)
 {
 	BString result;
-	
+
 	for (int32 i = 0; i < chunk.Length(); i++) {
 		if (_IsUnreserved(chunk[i])
-			|| (directory && (chunk[i] == '/' || chunk[i] == '\\')))
+				|| (directory && (chunk[i] == '/' || chunk[i] == '\\'))) {
 			result << chunk[i];
-		else {
+		} else {
 			if (chunk[i] == ' ' && !strict) {
 				result << '+';
 					// In non-strict mode, spaces are encoded by a plus sign
 			} else {
 				char hexString[5];
 				snprintf(hexString, 5, "%X", chunk[i]);
-				
+
 				result << '%' << hexString;
 			}
 		}
 	}
-	
+
 	return result;
 }
 
@@ -770,16 +1000,16 @@ BUrl::_DoUrlEncodeChunk(const BString& chunk, bool strict, bool directory)
 BUrl::_DoUrlDecodeChunk(const BString& chunk, bool strict)
 {
 	BString result;
-	
+
 	for (int32 i = 0; i < chunk.Length(); i++) {
 		if (chunk[i] == '+' && !strict)
 			result << ' ';
 		else if (chunk[i] != '%')
 			result << chunk[i];
 		else {
-			char hexString[] = { chunk[i+1], chunk[i+2], 0 };
+			char hexString[] = { chunk[i + 1], chunk[i + 2], 0 };
 			result << (char)strtol(hexString, NULL, 16);
-			
+
 			i += 2;
 		}
 	}
@@ -799,68 +1029,39 @@ BUrl::_IsProtocolValid()
 			return false;
 	}
 
-	return true;
-}
-
-
-bool
-BUrl::_IsAuthorityTerminator(char c)
-{
-	if (c == '/' || _IsPathTerminator(c))
-		return true;
-	else
-		return false;
-}
-
-
-bool
-BUrl::_IsPathTerminator(char c)
-{
-	if (c == '?' || _IsRequestTerminator(c))
-		return true;
-	else
-		return false;
-}
-
-
-bool
-BUrl::_IsRequestTerminator(char c)
-{
-	if (c == '#')
-		return true;
-	else
-		return false;
+	return fProtocol.Length() > 0;
 }
 
 
 bool
 BUrl::_IsUnreserved(char c)
 {
-	if (isalnum(c) || c == '-' || c == '.' || c == '_' || c == '~')
-		return true;
-	else
-		return false;
+	return isalnum(c) || c == '-' || c == '.' || c == '_' || c == '~';
 }
 
 
 bool
 BUrl::_IsGenDelim(char c)
 {
-	if (c == ':' || c == '/' || c == '?' || c == '#' || c == '[' 
-		|| c == ']' || c == '@')
-		return true;
-	else
-		return false;
+	return c == ':' || c == '/' || c == '?' || c == '#' || c == '['
+		|| c == ']' || c == '@';
 }
 
 
 bool
 BUrl::_IsSubDelim(char c)
 {
-	if (c == '!' || c == '$' || c == '&' || c == '\'' || c == '(' 
+	return c == '!' || c == '$' || c == '&' || c == '\'' || c == '('
 		|| c == ')' || c == '*' || c == '+' || c == ',' || c == ';'
-		|| c == '=')
-		return true;
-	else
-		return false;
+		|| c == '=';
+}
+
+
+BString
+BUrl::_UrlMimeType() const
+{
+	BString mime;
+	mime << "application/x-vnd.Be.URL." << fProtocol;
+
+	return BString(mime);
 }
